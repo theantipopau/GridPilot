@@ -1,0 +1,38 @@
+# --- Real school data: never commit ---
+/Timetabler Export/
+*.tfx
+*.sfx
+!tester.tfx
+/data/
+/working/
+/output/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+build/
+.vite/
+
+# --- Env / secrets ---
+.env
+.env.*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Ollama local model cache (if pulled into project dir) ---
+.ollama/

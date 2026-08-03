@@ -1,0 +1,32 @@
+{
+  "File ID":"Timetabling Solutions X TD 10.1.1.86",
+  "Settings":  
+  [
+    {
+      "TeacherProposedLoad":      0,
+      "PeriodsTeacherOff":      0,
+      "DefaultSuffixLength":      1,
+      "LoadMinutes":      0,
+      "Sites":      1,
+      "OptimiseSpread":true,
+      "MaxDaySpread":true,
+      "TimetableNotice":"",
+      "StudentSpareField1":"Spare Field 1",
+      "AcademicPeriods":0,
+      "DateModified":0,
+      "DOStartDate":0,
+      "LastAllocation":0,
+      "LastBlocking":0,
+      "PublishedTimetableGroup":"",
+      "SchoolName":      0    
+    }  
+  ],
+  "Days":  
+  [
+  
+  ],
+  "Periods":  
+  [
+  
+  ]
+}
