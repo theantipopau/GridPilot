@@ -264,12 +264,16 @@ Still open (default assumption noted, revisit if wrong):
    Option/Core/Support given the school runs elective lines, but treated
    as an opaque passthrough field in v1 rather than relied upon for any
    check.
-6. **`Master Timetable Cycle.csv` (2,143 rows) vs `.tfx` `Timetable[]`
-   (2,181 entries)** — small count mismatch between the two exports of
-   what should be the same grid. The `.tfx` is being treated as the
-   primary source (it's the richer, canonical export); the CSV is used
-   for cross-validation, and any row present in one but not the other
-   will be surfaced as a discrepancy rather than silently dropped.
+6. ~~**`Master Timetable Cycle.csv` (2,143 rows) vs `.tfx` `Timetable[]`
+   (2,181 entries)**~~ — **Resolved by cross-validation** (see
+   `backend/app/ingest/csv_validate.py`). The gap is exactly the 38
+   `Timetable[]` entries with no `ClassNameID` assigned at all — the CSV
+   export omits these, the `.tfx` doesn't. Ingesting the `.tfx` and
+   diffing against the CSV leaves zero unexplained rows on either side.
+   One extra quirk found in the process: `Master Timetable Cycle.csv`
+   writes the literal string `<Blank>` (not an empty cell) for a missing
+   Teacher Code or Room Code in a handful of rows — the ingester
+   normalises this to match the `.tfx`'s empty-string convention.
 7. **Cycle semantics**: assuming the A/B week alternates on a fixed
    calendar pattern (e.g. odd/even ISO week number) until told otherwise
    — needed to map "Mon A"/"Mon B" onto real calendar dates.

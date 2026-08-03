@@ -119,6 +119,23 @@ in v1.
   same format Timetabling Solutions uses, and the validation step diffs
   the regenerated file's structure against the original.
 
+## Architecture decisions (confirmed 2026-08-03)
+
+- **Publishing stays file-only.** The app produces a validated,
+  correctly-formatted export for Timetabling Solutions re-import and for
+  eMinerva. It does **not** connect to eMinerva or any other platform to
+  push changes live — you import/upload through those systems' own
+  interface, as today. This keeps the tool offline-capable and avoids
+  needing stored credentials for school platforms.
+- **The AI advisor can draft direct edits**, not just suggest them for
+  one-by-one accept/reject. It produces a modified draft timetable (a set
+  of proposed `TimetableEntry` changes), which you review as a whole diff
+  against the current state before any of it is committed. Every change
+  in the diff still cites the rule-engine finding(s) that justify it
+  (per the original brief's 4.4), and nothing is written back to the
+  working data model until you approve the diff (or individual entries
+  within it).
+
 ## What I'd build first (proposed order)
 
 1. SQLite schema mirroring the above (one migration file).
