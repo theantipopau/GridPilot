@@ -9,6 +9,7 @@ import sqlite3
 
 from app.analysis.clash_rules import run_clash_rules
 from app.analysis.composite_review import sync_composite_candidates
+from app.analysis.load_rules import run_load_rules
 from app.analysis.models import Finding
 from app.config import DB_PATH
 
@@ -41,7 +42,7 @@ def run_analysis(db_path=None) -> dict:
     conn.execute("PRAGMA foreign_keys = ON")
     try:
         composite_sync = sync_composite_candidates(conn)
-        findings = run_clash_rules(conn)
+        findings = [*run_clash_rules(conn), *run_load_rules(conn)]
         _persist(conn, findings)
 
         by_rule: dict[str, int] = {}
