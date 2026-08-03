@@ -1,7 +1,7 @@
 [project]
-name = "sophia-tt"
+name = "gridpilot-backend"
 version = "0.1.0"
-description = "Sophia College timetable analysis & AI advisor tool"
+description = "GridPilot - Sophia College timetable analysis & AI advisor tool"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111",

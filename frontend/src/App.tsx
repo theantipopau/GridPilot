@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchReference, fetchTimetable } from "./api";
+import gridPilotLogo from "./assets/gridpilot-logo.png";
 import FilterBar from "./components/FilterBar";
 import TimetableGrid from "./components/TimetableGrid";
 import type { ReferenceData, TimetableResponse, ViewType } from "./types";
@@ -42,9 +43,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">Sophia College Timetable</h1>
-        <p className="text-sm text-slate-500">{timetable ? timetable.label : "Loading timetable…"}</p>
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+        <img src={gridPilotLogo} alt="GridPilot" className="h-8 w-auto" />
+        <div className="text-right">
+          <p className="text-sm font-medium text-slate-700">Sophia College</p>
+          <p className="text-sm text-slate-500">{timetable ? timetable.label : "Loading timetable…"}</p>
+        </div>
       </header>
       <FilterBar
         reference={reference}

@@ -1,6 +1,6 @@
-# Sophia College Timetable Tool
+# GridPilot
 
-A local, offline-first tool that ingests Sophia College's Timetabling
+A local, offline-first tool for Sophia College that ingests Timetabling
 Solutions export and eMinerva roll-marking files, builds a normalised
 internal model, runs deterministic checks over it (clashes, room
 utilisation, teacher load), and layers a locally-run AI advisor on top
@@ -53,6 +53,12 @@ npm install
   confirmed against the real data.
 - `docs/data-model.md` - the internal schema those files get ingested
   into, and why.
+- `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
+  `docs/staffing-ux-workflows.md` - mapping for the staff teaching
+  capability/allocation addendum against the schema above. Documentation
+  only so far - no new tables built yet.
+- `docs/design/` - UI mockup and logo assets supplied for GridPilot's
+  visual direction.
 
 ## Running the ingestion pipeline
 
