@@ -5,6 +5,7 @@ import type {
   FindingsResponse,
   ReferenceData,
   ReviewStatus,
+  SuggestionsResponse,
   TimetableEntryLookup,
   TimetableResponse,
   ValidationResult,
@@ -55,6 +56,10 @@ export function fetchTimetable(view: ViewType, code: string): Promise<TimetableR
 
 export function fetchFindings(): Promise<FindingsResponse> {
   return getJson(`${BASE}/findings`);
+}
+
+export function fetchSuggestions(findingId: number): Promise<SuggestionsResponse> {
+  return getJson(`${BASE}/findings/${findingId}/suggestions`);
 }
 
 export function fetchCompositeCandidates(reviewStatus?: ReviewStatus): Promise<{ candidates: CompositeCandidate[] }> {

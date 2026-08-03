@@ -73,7 +73,8 @@ def teacher_double_booking(entries: list[dict], composites: ApprovedComposites) 
             slot_refs=(SlotRef(sample["day_code"], sample["period_code"]),),
             evidence={
                 "entries": [
-                    {"class_code": r["class_code"], "room_code": r["room_code"], "roll_class_code": r["roll_class_code"]}
+                    {"entry_id": r["entry_id"], "class_code": r["class_code"], "room_code": r["room_code"],
+                     "roll_class_code": r["roll_class_code"]}
                     for r in rows
                 ],
                 "spans_multiple_rooms": len(room_ids) > 1,
@@ -113,7 +114,8 @@ def room_double_booking(entries: list[dict], composites: ApprovedComposites) -> 
             slot_refs=(SlotRef(sample["day_code"], sample["period_code"]),),
             evidence={
                 "entries": [
-                    {"class_code": r["class_code"], "teacher_code": r["teacher_code"], "roll_class_code": r["roll_class_code"]}
+                    {"entry_id": r["entry_id"], "class_code": r["class_code"], "teacher_code": r["teacher_code"],
+                     "roll_class_code": r["roll_class_code"]}
                     for r in rows
                 ],
                 "spans_multiple_teachers": len(teacher_ids) > 1,

@@ -15,9 +15,11 @@ built against.
 **Status**: data ingestion + cross-validation, a timetable grid view
 (filterable by teacher/room/roll class), a deterministic rules engine
 (clash/capacity/load rules, with human-reviewed composite-class handling),
-and safe change sets (propose an edit, validate it against a what-if
-re-run of the clash rules, approve/reject - the imported timetable is
-never mutated) are built and tested against the real export in
+safe change sets (propose an edit, validate it against a what-if re-run
+of the clash rules, approve/reject - the imported timetable is never
+mutated), and algorithmic fix suggestions (search every valid alternate
+room/time, reject anything that fails a hard constraint, rank the rest -
+no AI involved) are built and tested against the real export in
 `Timetabler Export/`. AI advisor and actual export are not built yet -
 this README will grow as those land.
 
@@ -61,6 +63,9 @@ npm install
 - `docs/change-sets.md` - how proposed edits are represented, validated
   (a what-if re-run of the clash rules, never a real write), and
   approved, and why the source timetable is never mutated.
+- `docs/suggestions.md` - the algorithmic fix-suggestion engine: search
+  space, hard-constraint validation, scoring, and what's deliberately
+  out of scope (student clashes, teacher reassignment).
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
@@ -130,9 +135,11 @@ npm run dev
 
 Then open http://localhost:5173. Four tabs: **Timetable** (filter by
 teacher/room/roll class), **Findings** (every issue the rules engine
-found, with a "Propose a fix" action per finding), **Composite Review**
-(approve or reject detected composite classes - see `docs/rules.md`), and
-**Change Sets** (propose, validate, and approve/reject edits - see
+found - "Suggest fixes" shows ranked, pre-validated candidate moves with
+a one-click "Use this" per candidate, or "Propose a fix manually" to pick
+your own - see `docs/suggestions.md`), **Composite Review** (approve or
+reject detected composite classes - see `docs/rules.md`), and **Change
+Sets** (validate and approve/reject a proposed edit - see
 `docs/change-sets.md`). Run `python -m app.analysis.run` first so there's
 something for Findings/Composite Review to show.
 

@@ -1,8 +1,9 @@
 import json
 import sqlite3
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.analysis.suggestions import suggest_fixes
 from app.api.deps import get_db
 
 router = APIRouter()
@@ -49,3 +50,16 @@ def list_findings(
         counts_by_severity[f["severity"]] += 1
 
     return {"findings": findings, "total": len(findings), "counts_by_severity": counts_by_severity}
+
+
+@router.get("/findings/{finding_id}/suggestions")
+def get_suggestions(finding_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Algorithmic candidate fixes (PROJECT_ROADMAP.md Milestone 4) - every
+    candidate has already been validated against the same clash rules used
+    everywhere else in this API; nothing here is AI-generated. Can take a
+    couple of seconds (searches every free slot/room); computed on demand,
+    never precomputed for all findings."""
+    row = conn.execute("SELECT id FROM finding WHERE id = ?", (finding_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No finding {finding_id}")
+    return suggest_fixes(conn, finding_id)

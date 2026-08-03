@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchReference } from "./api";
+import { addProposedChange, createChangeSet, fetchReference } from "./api";
 import gridPilotLogo from "./assets/gridpilot-logo.png";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import FindingsPage from "./pages/FindingsPage";
 import TimetablePage from "./pages/TimetablePage";
-import type { Finding, ReferenceData } from "./types";
+import type { Finding, ReferenceData, SuggestionCandidate } from "./types";
 
 type Tab = "timetable" | "findings" | "composites" | "changes";
 
@@ -35,10 +35,25 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("timetable");
   const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
+  const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchReference().then(setReference).catch((e) => setError(String(e)));
   }, []);
+
+  const handleApplySuggestion = async (finding: Finding, candidate: SuggestionCandidate) => {
+    const { id } = await createChangeSet(`${finding.title} (suggested fix)`, undefined, "you");
+    await addProposedChange(id, {
+      timetable_entry_id: candidate.entry_id,
+      after_day_code: candidate.after.day_code,
+      after_period_code: candidate.after.period_code,
+      after_room_code: candidate.after.room_code ?? undefined,
+      reason: "Applied from a suggested fix",
+      finding_ids: [finding.id],
+    });
+    setOpenChangeSetId(id);
+    setTab("changes");
+  };
 
   if (error) {
     return (
@@ -80,6 +95,7 @@ export default function App() {
             setProposeFixContext(buildProposeFixContext(finding));
             setTab("changes");
           }}
+          onApplySuggestion={handleApplySuggestion}
         />
       )}
       {tab === "composites" && <CompositeReviewPage />}
@@ -88,6 +104,7 @@ export default function App() {
           reference={reference}
           proposeFixContext={proposeFixContext}
           onConsumeProposeFixContext={() => setProposeFixContext(null)}
+          openChangeSetId={openChangeSetId}
         />
       )}
     </div>

@@ -26,6 +26,7 @@ interface Props {
   reference: ReferenceData;
   proposeFixContext: ProposeFixContext | null;
   onConsumeProposeFixContext: () => void;
+  openChangeSetId?: number | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED: "bg-slate-400 text-white",
 };
 
-export default function ChangeSetsPage({ reference, proposeFixContext, onConsumeProposeFixContext }: Props) {
+export default function ChangeSetsPage({ reference, proposeFixContext, onConsumeProposeFixContext, openChangeSetId }: Props) {
   const [list, setList] = useState<ChangeSetSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChangeSetDetailType | null>(null);
@@ -60,6 +61,14 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
       setNewName(proposeFixContext.suggestedName);
     }
   }, [proposeFixContext]);
+
+  useEffect(() => {
+    if (openChangeSetId != null) {
+      setSelectedId(openChangeSetId);
+      loadList();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openChangeSetId]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

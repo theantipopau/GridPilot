@@ -192,3 +192,19 @@ export interface ChangeSetDetail extends ChangeSetSummary {
   reviewed_by: string | null;
   changes: ProposedChange[];
 }
+
+export interface SuggestionCandidate {
+  entry_id: number;
+  class_code: string | null;
+  before: { day_code: string; period_code: string; room_code: string | null };
+  after: { day_code: string; period_code: string; room_code: string | null };
+  movement_cost: number;
+  resolves_finding_count: number;
+}
+
+export interface SuggestionsResponse {
+  finding_id: number;
+  supported: boolean;
+  note: string | null;
+  candidates: SuggestionCandidate[];
+}

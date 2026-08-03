@@ -52,6 +52,30 @@ def build_synthetic_db() -> sqlite3.Connection:
     return conn
 
 
+def build_richer_synthetic_db() -> sqlite3.Connection:
+    """Wider fixture for tests that need a real search space (the
+    suggestion engine) - 3 days x 2 lesson periods, 3 rooms (one with a
+    tiny confirmed capacity, to test capacity rejection)."""
+    conn = build_synthetic_db()
+
+    conn.execute("INSERT INTO day (id, code, day_no, week_label) VALUES (3, 'Day 3 A', 3, 'A')")
+    conn.execute(
+        "INSERT INTO period (id, code, name, day_id, period_no, load_minutes, entry_kind) "
+        "VALUES (4, 'P2', 'Period 2', 1, 3, 60, 'LESSON_SLOT')"
+    )
+    conn.execute(
+        "INSERT INTO period (id, code, name, day_id, period_no, load_minutes, entry_kind) "
+        "VALUES (5, 'P2', 'Period 2', 2, 3, 60, 'LESSON_SLOT')"
+    )
+    conn.execute(
+        "INSERT INTO period (id, code, name, day_id, period_no, load_minutes, entry_kind) "
+        "VALUES (6, 'P1', 'Period 1', 3, 1, 60, 'LESSON_SLOT')"
+    )
+    conn.execute("INSERT INTO room (id, code, name, seats) VALUES (3, 'R3', 'Room 3', 1)")
+    conn.commit()
+    return conn
+
+
 def add_lesson(conn: sqlite3.Connection, *, day_id: int, period_id: int, roll_class_id: int,
                 class_name_id: int, teacher_id: int | None, room_id: int | None) -> None:
     conn.execute(

@@ -13,14 +13,10 @@ import datetime as dt
 import json
 import sqlite3
 
-from app.analysis.clash_rules import (
-    lesson_entries,
-    room_double_booking,
-    student_double_booking,
-    teacher_double_booking,
-)
+from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.models import Finding
+from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 
 class ChangeSetError(Exception):
@@ -110,36 +106,6 @@ def remove_proposed_change(conn: sqlite3.Connection, change_set_id: int, propose
     conn.commit()
 
 
-def _apply_overrides(entries: list[dict], changes: list[sqlite3.Row], code_lookups: dict) -> list[dict]:
-    overrides = {c["timetable_entry_id"]: c for c in changes}
-    modified = []
-    for e in entries:
-        change = overrides.get(e["entry_id"])
-        if change is None:
-            modified.append(e)
-            continue
-        new_entry = dict(e)
-        new_entry["day_id"] = change["after_day_id"]
-        new_entry["day_code"] = code_lookups["day"][change["after_day_id"]]
-        new_entry["period_id"] = change["after_period_id"]
-        new_entry["period_code"] = code_lookups["period"][change["after_period_id"]]
-        new_entry["room_id"] = change["after_room_id"]
-        new_entry["room_code"] = code_lookups["room"].get(change["after_room_id"])
-        new_entry["teacher_id"] = change["after_teacher_id"]
-        new_entry["teacher_code"] = code_lookups["teacher"].get(change["after_teacher_id"])
-        modified.append(new_entry)
-    return modified
-
-
-def _run_clash_findings(conn: sqlite3.Connection, entries: list[dict]) -> list[Finding]:
-    composites = load_approved_composites(conn)
-    return [
-        *teacher_double_booking(entries, composites),
-        *room_double_booking(entries, composites),
-        *student_double_booking(conn, entries, composites),
-    ]
-
-
 def validate_change_set(conn: sqlite3.Connection, change_set_id: int) -> dict:
     change_set = conn.execute("SELECT * FROM change_set WHERE id = ?", (change_set_id,)).fetchone()
     if change_set is None:
@@ -154,18 +120,21 @@ def validate_change_set(conn: sqlite3.Connection, change_set_id: int) -> dict:
         _store_validation(conn, change_set_id, result)
         return result
 
-    code_lookups = {
-        "day": {r["id"]: r["code"] for r in conn.execute("SELECT id, code FROM day")},
-        "period": {r["id"]: r["code"] for r in conn.execute("SELECT id, code FROM period")},
-        "room": {r["id"]: r["code"] for r in conn.execute("SELECT id, code FROM room")},
-        "teacher": {r["id"]: r["code"] for r in conn.execute("SELECT id, code FROM teacher")},
+    code_lookups = load_code_lookups(conn)
+    overrides = {
+        c["timetable_entry_id"]: {
+            "after_day_id": c["after_day_id"], "after_period_id": c["after_period_id"],
+            "after_room_id": c["after_room_id"], "after_teacher_id": c["after_teacher_id"],
+        }
+        for c in changes
     }
 
     before_entries = lesson_entries(conn)
-    after_entries = _apply_overrides(before_entries, changes, code_lookups)
+    after_entries = apply_overrides(before_entries, overrides, code_lookups)
 
-    before_findings = {f.dedupe_key(): f for f in _run_clash_findings(conn, before_entries)}
-    after_findings = {f.dedupe_key(): f for f in _run_clash_findings(conn, after_entries)}
+    composites = load_approved_composites(conn)
+    before_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, before_entries, composites)}
+    after_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, after_entries, composites)}
 
     introduced = [f for k, f in after_findings.items() if k not in before_findings]
     resolved = [f for k, f in before_findings.items() if k not in after_findings]
