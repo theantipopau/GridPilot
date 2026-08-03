@@ -236,38 +236,46 @@ no separate ID scheme, no fuzzy matching needed. The eMinerva files are a
 strict subset/re-projection of the Timetabling Solutions master data, not
 an independently-sourced system.
 
-## 5. Ambiguities to confirm before building the data model
+## 5. Ambiguities
 
-1. **`Teacher Details.csv` `Spare1`** (`T`, `GC`, `SO`, `CLT`) — guessed as
-   a staff-category flag; needs confirming, and full meaning of each code.
-2. **Room `Seats = 0`** (13 of 51 rooms) — does this mean "no fixed
-   capacity / not used for capacity checks" (e.g. meeting rooms, quiet
-   study, engineering workshops), or is it just unentered data? Affects
-   whether room-capacity-mismatch checks (4.3) should skip these rooms.
-3. **`RURs[]` and `MRCGs[]`** in the `.tfx` — field shapes suggest "Room
-   Utilisation Requirements" and "Multi-Roll-Class Groups" but the actual
-   semantics/purpose aren't confirmed from the data alone.
-4. **`StudentLessons[].LessonType`** — three values occur (`O`, `C`, `S`);
-   need to know what they mean (e.g. Option/Core/Support?) before relying
-   on this field to distinguish lesson types.
-5. **`Master Timetable Cycle.csv` (2,143 rows) vs `.tfx` `Timetable[]`
+Resolved with the school (2026-08-03):
+
+1. **`Teacher Details.csv` `Spare1`** — confirmed staff-category flag:
+   `T` = Teacher, `GC` = Guidance Counsellor, `SO` = Support Officer,
+   `CLT` = College Leadership Team.
+2. **Non-teaching period codes** — confirmed meanings: `BREAK-*` = break
+   time, `ASM-*` = assembly, `GP-*` = "general purpose" (used as an
+   early-leave/study block for Year 11/12), `"Rengagement Room"` roll
+   class = the school's detention room. These are real, schedulable
+   entries but are **not lessons** — the data model needs an explicit
+   category (see `EntryType` in `docs/data-model.md`) rather than
+   inferring "is this teaching" from the code text.
+
+Still open (default assumption noted, revisit if wrong):
+
+3. **Room `Seats = 0`** (13 of 51 rooms) — assuming this means "no fixed
+   capacity / not used for capacity checks" (meeting rooms, quiet study,
+   engineering workshops) rather than unentered data. Room-capacity-
+   mismatch checks (4.3) will skip these rooms under this assumption.
+4. **`RURs[]` and `MRCGs[]`** in the `.tfx` — field shapes suggest "Room
+   Utilisation Requirements" and "Multi-Roll-Class Groups". Not required
+   for v1's core checks (4.3); deferred rather than guessed at further.
+5. **`StudentLessons[].LessonType`** (`O`, `C`, `S`) — likely
+   Option/Core/Support given the school runs elective lines, but treated
+   as an opaque passthrough field in v1 rather than relied upon for any
+   check.
+6. **`Master Timetable Cycle.csv` (2,143 rows) vs `.tfx` `Timetable[]`
    (2,181 entries)** — small count mismatch between the two exports of
-   what should be the same grid. Needs reconciling (likely the JSON
-   includes rows the CSV export filters out, e.g. unassigned/incomplete
-   entries) before treating either as sole ground truth.
-6. **Non-teaching period codes** (`BREAK-*`, `ASM-*`, `GP-*`, and the
-   `"Rengagement Room"` roll class) appear in the same fields as real
-   classes throughout — the data model needs an explicit
-   is-this-a-real-lesson flag rather than inferring it from code
-   patterns, since the pattern isn't formally documented anywhere in the
-   files.
-7. **Cycle semantics**: confirm the A/B week actually alternates on a
-   fixed calendar pattern (e.g. odd/even week number) — needed to map
-   "Mon A" vs "Mon B" onto real calendar dates for the UI and for any
-   date-aware features.
-8. **Yard duty data** — confirm whether yard duty/meeting/unscheduled-duty
-   load should count toward "teacher load" in the analysis engine (4.3),
-   or stay a separate concern.
+   what should be the same grid. The `.tfx` is being treated as the
+   primary source (it's the richer, canonical export); the CSV is used
+   for cross-validation, and any row present in one but not the other
+   will be surfaced as a discrepancy rather than silently dropped.
+7. **Cycle semantics**: assuming the A/B week alternates on a fixed
+   calendar pattern (e.g. odd/even ISO week number) until told otherwise
+   — needed to map "Mon A"/"Mon B" onto real calendar dates.
+8. **Yard duty data** — kept as a separate concern from teaching load in
+   v1's teacher load analysis (4.3), not summed into it, since it's a
+   distinct sub-system. Easy to fold in later if wanted.
 
 ## 6. Anonymised sample snippets (fabricated, illustrative only)
 
