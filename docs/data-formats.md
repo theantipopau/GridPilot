@@ -257,9 +257,16 @@ Still open (default assumption noted, revisit if wrong):
    capacity / not used for capacity checks" (meeting rooms, quiet study,
    engineering workshops) rather than unentered data. Room-capacity-
    mismatch checks (4.3) will skip these rooms under this assumption.
-4. **`RURs[]` and `MRCGs[]`** in the `.tfx` — field shapes suggest "Room
-   Utilisation Requirements" and "Multi-Roll-Class Groups". Not required
-   for v1's core checks (4.3); deferred rather than guessed at further.
+4. ~~**`RURs[]` and `MRCGs[]`** in the `.tfx`~~ — **MRCGs partially
+   resolved** by cross-referencing `Timetabler Export/import data/2026
+   Blocking Pattern.xlsx` (added 2026-08-03): the spreadsheet's "LINE 1",
+   "LINE 2"... column structure (subjects that run in parallel so
+   students can pick one per line) matches the MRCG `DefaultCode` naming
+   pattern exactly (`"12 A"`, `"12 B"`, `"10A B"`, etc. = year level +
+   line letter). MRCGs are **option-line/blocking-column groupings**, not
+   composite-class markers (see item 9 below - a different, real
+   phenomenon this file doesn't explicitly encode). `RURs[]` still
+   unconfirmed; still not required for v1's core checks (4.3).
 5. **`StudentLessons[].LessonType`** (`O`, `C`, `S`) — likely
    Option/Core/Support given the school runs elective lines, but treated
    as an opaque passthrough field in v1 rather than relied upon for any
@@ -280,6 +287,27 @@ Still open (default assumption noted, revisit if wrong):
 8. **Yard duty data** — kept as a separate concern from teaching load in
    v1's teacher load analysis (4.3), not summed into it, since it's a
    distinct sub-system. Easy to fold in later if wanted.
+9. **Composite classes** (flagged by the school 2026-08-04, e.g. `9GEO`
+   and `10GEO`) — confirmed real and not rare: scanning the `.tfx`
+   `Timetable[]` for slots where the same teacher + room are shared
+   across periods but the `ClassNameID`/roll class differ finds **101
+   period-slots across ~14 distinct class-code groupings** (e.g.
+   `09GEO1`+`10GEO1` both taught by the same teacher in the same room at
+   five matching periods across the cycle; similar patterns for STU/STUX
+   study blocks, PE, Drama, and several Year 11/12 VET subjects pairing
+   with Year 12/11 equivalents). Nothing in the `.tfx` marks these as a
+   single physical lesson — they're stored as fully separate
+   `ClassGroupCourse`/`Timetable[]` records that happen to coincide on
+   teacher+room+period, which is exactly what happens when small-enrolment
+   classes across year levels are physically merged. Cross-checked
+   against `2026 Blocking Pattern.xlsx`: it confirms low individual class
+   sizes for the `GEO` pair (9 and 11 students) consistent with why
+   they'd be merged, but the spreadsheet doesn't explicitly flag the
+   merge either — it has to be inferred from the resolved schedule.
+   **Data model impact**: clash detection, teacher load, and room
+   utilisation all need to treat a detected composite group as one unit,
+   not double/triple-count it as simultaneous separate bookings. See
+   `docs/data-model.md`'s composite-class section.
 
 ## 6. Anonymised sample snippets (fabricated, illustrative only)
 

@@ -79,6 +79,42 @@ place (a lookup table in the ingestion layer) so it's easy to extend if
 new non-teaching codes appear in future exports, rather than being
 guessed inline wherever entry type matters.
 
+### Composite classes (co-taught under separate class codes)
+
+Confirmed real by the school and in the data (see `docs/data-formats.md`
+#5.9): e.g. `09GEO1` and `10GEO1` run as one physical lesson - same
+teacher, same room, same periods - but are stored as two entirely
+separate `ClassGroupCourse`/`TimetableEntry` records because they're
+different official class codes (different year-level curriculum codes,
+likely merged due to low enrolment in each). Nothing in the source data
+marks this explicitly; it has to be detected from the resolved schedule.
+
+**`CompositeGroup`** — `id, teacherId, roomId, detectedAt`
+**`CompositeGroupMember`** — `compositeGroupId, classGroupCourseId`
+
+Populated by a post-ingestion detection pass, not a source field:
+`ClassGroupCourse` records that share the same `teacherId` and `roomId`
+**and** whose full set of scheduled periods (via their `TimetableEntry`
+rows) substantially overlaps get grouped together. The repetition across
+multiple periods in the cycle (5-8 matching slots for the groups found so
+far) is what separates a genuine composite from a coincidental one-off
+double-booking - a real scheduling clash wouldn't consistently repeat
+identically across the whole cycle.
+
+This matters because every downstream check needs to treat a composite
+group as **one** unit, not double/triple-count it:
+- Clash detection must not flag a composite group's members against each
+  other (same teacher/room/period is *expected* within a group).
+- Teacher load and room utilisation must count a composite group once,
+  not once per member class code.
+- The timetable grid UI should show composite members merged into one
+  cell (e.g. `09GEO1 + 10GEO1`) rather than as a false clash.
+
+Because this is inferred rather than sourced, the detection pass should
+be reviewable before it's trusted to suppress clash findings - I'll show
+the detected list for confirmation before wiring it into the rules
+engine, rather than assume the heuristic is always right.
+
 ### Enrolment
 
 **`Enrolment`** — `id, studentId, classNameId, source (which export(s) confirmed this — for cross-validation, not shown in normal UI)`
