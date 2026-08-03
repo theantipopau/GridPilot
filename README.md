@@ -12,13 +12,16 @@ Section 3's privacy note and the project brief
 (`claude-code-timetabling-tool-prompt.md`) for the constraints this is
 built against.
 
-**Status**: data ingestion + cross-validation is built and tested against
-the real export in `Timetabler Export/`. Analysis engine, AI advisor, and
-UI are not built yet - this README will grow as those land.
+**Status**: data ingestion + cross-validation and a read-only timetable
+grid view (filterable by teacher/room/roll class) are built and tested
+against the real export in `Timetabler Export/`. Analysis engine, AI
+advisor, and edit/export are not built yet - this README will grow as
+those land.
 
 ## Prerequisites
 
 - **Python 3.11+**
+- **Node.js 20+** (for the frontend)
 - **Ollama** (for the AI advisor layer, once built) - https://ollama.com.
   Already installed and running on this machine with three models pulled:
   `qwen3.5:9b` (recommended default - matches the brief's 7-8B guidance),
@@ -33,6 +36,8 @@ UI are not built yet - this README will grow as those land.
 ```bash
 cd backend
 pip install -e ".[dev]"
+cd ../frontend
+npm install
 ```
 
 ## Data layout
@@ -74,6 +79,25 @@ real files):
 cd backend
 python -m pytest tests/ -v
 ```
+
+## Running the app
+
+Two servers, run in separate terminals:
+
+```bash
+# Terminal 1 - API (reads data/sophia_tt.sqlite3, built by the ingest step above)
+cd backend
+python -m uvicorn app.api.main:app --port 8000
+
+# Terminal 2 - frontend (proxies /api to the server above)
+cd frontend
+npm run dev
+```
+
+Then open http://localhost:5173. Filter the timetable by teacher, room,
+or roll class; each cell shows what's on, and a cell with more than one
+entry is flagged as a clash - a first hint of what the analysis engine
+(next up) will check systematically.
 
 ## Overriding data locations
 
