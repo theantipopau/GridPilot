@@ -1,32 +1,27 @@
 import { useEffect, useState } from "react";
-import { fetchReference, fetchTimetable } from "./api";
+import { fetchReference } from "./api";
 import gridPilotLogo from "./assets/gridpilot-logo.png";
-import FilterBar from "./components/FilterBar";
-import TimetableGrid from "./components/TimetableGrid";
-import type { ReferenceData, TimetableResponse, ViewType } from "./types";
+import CompositeReviewPage from "./pages/CompositeReviewPage";
+import FindingsPage from "./pages/FindingsPage";
+import TimetablePage from "./pages/TimetablePage";
+import type { ReferenceData } from "./types";
+
+type Tab = "timetable" | "findings" | "composites";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "timetable", label: "Timetable" },
+  { id: "findings", label: "Findings" },
+  { id: "composites", label: "Composite Review" },
+];
 
 export default function App() {
   const [reference, setReference] = useState<ReferenceData | null>(null);
-  const [view, setView] = useState<ViewType>("teacher");
-  const [code, setCode] = useState<string>("");
-  const [timetable, setTimetable] = useState<TimetableResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("timetable");
 
   useEffect(() => {
-    fetchReference()
-      .then((data) => {
-        setReference(data);
-        if (data.teachers[0]) setCode(data.teachers[0].code);
-      })
-      .catch((e) => setError(String(e)));
+    fetchReference().then(setReference).catch((e) => setError(String(e)));
   }, []);
-
-  useEffect(() => {
-    if (!code) return;
-    fetchTimetable(view, code)
-      .then(setTimetable)
-      .catch((e) => setError(String(e)));
-  }, [view, code]);
 
   if (error) {
     return (
@@ -45,23 +40,25 @@ export default function App() {
     <div className="min-h-screen bg-slate-50">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
         <img src={gridPilotLogo} alt="GridPilot" className="h-8 w-auto" />
-        <div className="text-right">
-          <p className="text-sm font-medium text-slate-700">Sophia College</p>
-          <p className="text-sm text-slate-500">{timetable ? timetable.label : "Loading timetable…"}</p>
-        </div>
+        <p className="text-sm font-medium text-slate-700">Sophia College</p>
       </header>
-      <FilterBar
-        reference={reference}
-        view={view}
-        code={code}
-        onChange={(v, c) => {
-          setView(v);
-          setCode(c);
-        }}
-      />
-      {timetable && (
-        <TimetableGrid view={view} days={reference.days} periods={reference.periods} entries={timetable.entries} />
-      )}
+      <nav className="flex gap-1 border-b border-slate-200 bg-white px-6">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-2 text-sm font-medium ${
+              tab === t.id ? "border-b-2 border-sky-600 text-sky-700" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      {tab === "timetable" && <TimetablePage reference={reference} />}
+      {tab === "findings" && <FindingsPage />}
+      {tab === "composites" && <CompositeReviewPage />}
     </div>
   );
 }

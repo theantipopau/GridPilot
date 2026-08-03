@@ -12,11 +12,12 @@ Section 3's privacy note and the project brief
 (`claude-code-timetabling-tool-prompt.md`) for the constraints this is
 built against.
 
-**Status**: data ingestion + cross-validation and a read-only timetable
-grid view (filterable by teacher/room/roll class) are built and tested
-against the real export in `Timetabler Export/`. Analysis engine, AI
-advisor, and edit/export are not built yet - this README will grow as
-those land.
+**Status**: data ingestion + cross-validation, a timetable grid view
+(filterable by teacher/room/roll class), and a deterministic rules engine
+(teacher/room/student double-booking, with human-reviewed composite-class
+handling) are built and tested against the real export in
+`Timetabler Export/`. AI advisor and edit/export are not built yet - this
+README will grow as those land.
 
 ## Prerequisites
 
@@ -53,12 +54,20 @@ npm install
   confirmed against the real data.
 - `docs/data-model.md` - the internal schema those files get ingested
   into, and why.
+- `docs/rules.md` - the deterministic rules engine: what each rule
+  checks, its evidence, and how composite-class review affects it.
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
   only so far - no new tables built yet.
 - `docs/design/` - UI mockup and logo assets supplied for GridPilot's
   visual direction.
+- `PROJECT_ROADMAP.md`, `claude-code-complementary-timetabling-builder.md`,
+  `claude-code-full-timetabling-product-spec.md`,
+  `claude-code-staff-capability-and-allocation.md` - the planning
+  documents behind GridPilot's larger direction, in ascending order of
+  scope. Only `PROJECT_ROADMAP.md` is being actively built against right
+  now; the others are read and mapped but not yet under construction.
 
 ## Running the ingestion pipeline
 
@@ -74,6 +83,20 @@ python -m app.ingest.run
 
 Prints aggregate table counts only - no student or staff names are ever
 printed to the console by this tool.
+
+## Running the rules engine
+
+After ingesting, syncs composite-class candidates and runs every rule,
+persisting structured findings (see `docs/rules.md`):
+
+```bash
+cd backend
+python -m app.analysis.run
+```
+
+Findings and composite candidates are then queryable via the API
+(`GET /api/findings`, `GET /api/composites/candidates`) or the
+Findings / Composite Review tabs in the app itself.
 
 ## Running the tests
 
@@ -100,10 +123,11 @@ cd frontend
 npm run dev
 ```
 
-Then open http://localhost:5173. Filter the timetable by teacher, room,
-or roll class; each cell shows what's on, and a cell with more than one
-entry is flagged as a clash - a first hint of what the analysis engine
-(next up) will check systematically.
+Then open http://localhost:5173. Three tabs: **Timetable** (filter by
+teacher/room/roll class), **Findings** (every clash the rules engine
+found), and **Composite Review** (approve or reject detected composite
+classes - see `docs/rules.md`). Run `python -m app.analysis.run` first
+so there's something for Findings/Composite Review to show.
 
 ## Overriding data locations
 

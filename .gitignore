@@ -1,8 +1,9 @@
 # --- Real school data: never commit ---
+# No exceptions: even an empty/stub .tfx risks becoming a real-data leak
+# path if it's ever overwritten locally without updating this file.
 /Timetabler Export/
 *.tfx
 *.sfx
-!tester.tfx
 /data/
 /working/
 /output/

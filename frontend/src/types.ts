@@ -85,3 +85,48 @@ export interface TimetableResponse {
   label: string;
   entries: TimetableEntry[];
 }
+
+export type Severity = "info" | "warning" | "critical";
+
+export interface EntityRef {
+  type: "teacher" | "room" | "class" | "student" | "roll_class" | "composite_group";
+  code: string;
+}
+
+export interface SlotRef {
+  day_code: string;
+  period_code: string;
+}
+
+export interface Finding {
+  id: number;
+  rule_id: string;
+  severity: Severity;
+  title: string;
+  entity_refs: EntityRef[];
+  slot_refs: SlotRef[];
+  evidence: Record<string, unknown>;
+  status: string;
+  computed_at: string;
+}
+
+export interface FindingsResponse {
+  findings: Finding[];
+  total: number;
+  counts_by_severity: Record<Severity, number>;
+}
+
+export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface CompositeCandidate {
+  id: number;
+  teacher_code: string;
+  room_code: string;
+  class_codes: string[];
+  review_status: ReviewStatus;
+  slot_count: number;
+  detected_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+}

@@ -219,3 +219,51 @@ CREATE TABLE IF NOT EXISTS yard_duty_allocation (
     yard_duty_session_id INTEGER NOT NULL REFERENCES yard_duty_session(id),
     load_minutes REAL NOT NULL DEFAULT 0
 );
+
+-- Composite classes: human-reviewed, not silently trusted -------------------
+-- Detected candidates (see app/analysis/composite.py) are upserted here as
+-- PENDING. A clash rule only suppresses a clash for an APPROVED group - a
+-- PENDING or REJECTED group still produces a clash finding. Re-running
+-- detection must never clobber an existing review decision - see
+-- app/analysis/composite_review.py for the upsert-by-member-set logic.
+
+CREATE TABLE IF NOT EXISTS composite_group (
+    id INTEGER PRIMARY KEY,
+    teacher_id INTEGER NOT NULL REFERENCES teacher(id),
+    room_id INTEGER NOT NULL REFERENCES room(id),
+    review_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (review_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    slot_count INTEGER NOT NULL,
+    detected_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    review_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS composite_group_member (
+    composite_group_id INTEGER NOT NULL REFERENCES composite_group(id),
+    class_name_id INTEGER NOT NULL REFERENCES class_name(id),
+    PRIMARY KEY (composite_group_id, class_name_id)
+);
+
+-- Findings ---------------------------------------------------------------
+-- Structured output of the deterministic rules engine. entity/slot refs are
+-- codes and internal ids only - never names or emails (see
+-- docs/rules.md and PROJECT_ROADMAP.md's privacy correction). Recomputed
+-- from scratch on every rules-engine run (app/analysis/run.py clears and
+-- repopulates this table), same pattern as ingest_discrepancy.
+
+CREATE TABLE IF NOT EXISTS finding (
+    id INTEGER PRIMARY KEY,
+    rule_id TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
+    title TEXT NOT NULL,
+    entity_refs_json TEXT NOT NULL,
+    slot_refs_json TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    suggested_actions_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ACCEPTED_RISK')),
+    computed_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_finding_rule ON finding(rule_id);
+CREATE INDEX IF NOT EXISTS idx_finding_severity ON finding(severity);
