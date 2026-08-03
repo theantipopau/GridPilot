@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS composite_group_member (
 
 CREATE TABLE IF NOT EXISTS finding (
     id INTEGER PRIMARY KEY,
+    dedupe_key TEXT NOT NULL UNIQUE,
     rule_id TEXT NOT NULL,
     severity TEXT NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
     title TEXT NOT NULL,
@@ -262,8 +263,59 @@ CREATE TABLE IF NOT EXISTS finding (
     evidence_json TEXT NOT NULL,
     suggested_actions_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ACCEPTED_RISK')),
+    first_seen_at TEXT NOT NULL,
     computed_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_finding_rule ON finding(rule_id);
 CREATE INDEX IF NOT EXISTS idx_finding_severity ON finding(severity);
+CREATE INDEX IF NOT EXISTS idx_finding_status ON finding(status);
+
+-- Change sets ---------------------------------------------------------------
+-- Proposed edits, kept entirely separate from the imported timetable_entry
+-- rows - approving a change set never mutates timetable_entry (see
+-- PROJECT_ROADMAP.md's "Separate source truth from proposed changes").
+-- validation_status and approval_status are deliberately distinct: a change
+-- set can be re-validated repeatedly while still in draft, and can only be
+-- approved once it is VALID.
+
+CREATE TABLE IF NOT EXISTS change_set (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    validation_status TEXT NOT NULL DEFAULT 'NOT_VALIDATED'
+        CHECK (validation_status IN ('NOT_VALIDATED', 'VALID', 'INVALID')),
+    validation_result_json TEXT,
+    validated_at TEXT,
+    approval_status TEXT NOT NULL DEFAULT 'DRAFT'
+        CHECK (approval_status IN ('DRAFT', 'APPROVED', 'REJECTED')),
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS proposed_change (
+    id INTEGER PRIMARY KEY,
+    change_set_id INTEGER NOT NULL REFERENCES change_set(id),
+    timetable_entry_id INTEGER NOT NULL REFERENCES timetable_entry(id),
+    before_day_id INTEGER NOT NULL REFERENCES day(id),
+    before_period_id INTEGER NOT NULL REFERENCES period(id),
+    before_room_id INTEGER REFERENCES room(id),
+    before_teacher_id INTEGER REFERENCES teacher(id),
+    after_day_id INTEGER NOT NULL REFERENCES day(id),
+    after_period_id INTEGER NOT NULL REFERENCES period(id),
+    after_room_id INTEGER REFERENCES room(id),
+    after_teacher_id INTEGER REFERENCES teacher(id),
+    reason TEXT
+);
+
+-- Which findings this change is meant to address - the "originating
+-- finding IDs" the roadmap asks for. Safe to reference finding.id long
+-- term because findings are now upserted by dedupe_key (see
+-- app/analysis/run.py), not wiped and recreated every run.
+CREATE TABLE IF NOT EXISTS proposed_change_finding (
+    proposed_change_id INTEGER NOT NULL REFERENCES proposed_change(id),
+    finding_id INTEGER NOT NULL REFERENCES finding(id),
+    PRIMARY KEY (proposed_change_id, finding_id)
+);

@@ -2,22 +2,39 @@ import { useEffect, useState } from "react";
 import { fetchReference } from "./api";
 import gridPilotLogo from "./assets/gridpilot-logo.png";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
+import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import FindingsPage from "./pages/FindingsPage";
 import TimetablePage from "./pages/TimetablePage";
-import type { ReferenceData } from "./types";
+import type { Finding, ReferenceData } from "./types";
 
-type Tab = "timetable" | "findings" | "composites";
+type Tab = "timetable" | "findings" | "composites" | "changes";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "timetable", label: "Timetable" },
   { id: "findings", label: "Findings" },
   { id: "composites", label: "Composite Review" },
+  { id: "changes", label: "Change Sets" },
 ];
+
+function buildProposeFixContext(finding: Finding): ProposeFixContext {
+  const byType = (type: string) => finding.entity_refs.find((r) => r.type === type)?.code;
+  const slot = finding.slot_refs[0];
+  return {
+    findingId: finding.id,
+    suggestedName: finding.title,
+    dayCode: slot?.day_code,
+    periodCode: slot?.period_code,
+    teacherCode: byType("teacher"),
+    roomCode: byType("room"),
+    classCode: byType("class"),
+  };
+}
 
 export default function App() {
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("timetable");
+  const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
 
   useEffect(() => {
     fetchReference().then(setReference).catch((e) => setError(String(e)));
@@ -57,8 +74,22 @@ export default function App() {
         ))}
       </nav>
       {tab === "timetable" && <TimetablePage reference={reference} />}
-      {tab === "findings" && <FindingsPage />}
+      {tab === "findings" && (
+        <FindingsPage
+          onProposeFix={(finding) => {
+            setProposeFixContext(buildProposeFixContext(finding));
+            setTab("changes");
+          }}
+        />
+      )}
       {tab === "composites" && <CompositeReviewPage />}
+      {tab === "changes" && (
+        <ChangeSetsPage
+          reference={reference}
+          proposeFixContext={proposeFixContext}
+          onConsumeProposeFixContext={() => setProposeFixContext(null)}
+        />
+      )}
     </div>
   );
 }

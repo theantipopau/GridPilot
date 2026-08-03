@@ -12,6 +12,7 @@ router = APIRouter()
 def list_findings(
     severity: str | None = Query(None, pattern="^(info|warning|critical)$"),
     rule_id: str | None = None,
+    status: str | None = Query("OPEN", pattern="^(OPEN|ACKNOWLEDGED|RESOLVED|ACCEPTED_RISK|ALL)$"),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     sql = "SELECT id, rule_id, severity, title, entity_refs_json, slot_refs_json, evidence_json, status, computed_at FROM finding WHERE 1=1"
@@ -22,6 +23,9 @@ def list_findings(
     if rule_id:
         sql += " AND rule_id = ?"
         params.append(rule_id)
+    if status and status != "ALL":
+        sql += " AND status = ?"
+        params.append(status)
     sql += " ORDER BY severity, rule_id, id"
 
     rows = conn.execute(sql, params).fetchall()

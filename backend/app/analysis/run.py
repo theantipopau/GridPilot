@@ -1,7 +1,10 @@
 """Orchestrates the deterministic rules engine: sync composite candidates,
-run every rule, persist findings. Recomputed from scratch each run (old
-findings are cleared first) - same pattern as ingestion, so a finding
-never lingers after the condition that caused it is fixed."""
+run every rule, persist findings. Findings are upserted by a stable
+dedupe_key rather than wiped and recreated - a finding keeps its id and
+any status a human has set across re-runs, as long as the same underlying
+issue still reproduces. A finding that no longer reproduces is marked
+RESOLVED, not deleted, so anything referencing its id (a proposed_change,
+see Milestone 3) stays valid."""
 
 import datetime as dt
 import json
@@ -14,26 +17,46 @@ from app.analysis.models import Finding
 from app.config import DB_PATH
 
 
-def _persist(conn: sqlite3.Connection, findings: list[Finding]) -> None:
-    conn.execute("DELETE FROM finding")
+def _persist(conn: sqlite3.Connection, findings: list[Finding]) -> dict[str, int]:
     now = dt.datetime.now(dt.UTC).isoformat()
-    conn.executemany(
-        "INSERT INTO finding (rule_id, severity, title, entity_refs_json, slot_refs_json, evidence_json, computed_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-            (
-                f.rule_id,
-                f.severity,
-                f.title,
-                json.dumps([e.to_dict() for e in f.entity_refs]),
-                json.dumps([s.to_dict() for s in f.slot_refs]),
-                json.dumps(f.evidence),
-                now,
+    by_key = {f.dedupe_key(): f for f in findings}
+
+    existing = {r["dedupe_key"]: r["id"] for r in conn.execute("SELECT id, dedupe_key FROM finding")}
+
+    updated = 0
+    inserted = 0
+    for key, f in by_key.items():
+        if key in existing:
+            conn.execute(
+                "UPDATE finding SET severity = ?, title = ?, entity_refs_json = ?, slot_refs_json = ?, "
+                "evidence_json = ?, computed_at = ?, status = CASE WHEN status = 'RESOLVED' THEN 'OPEN' ELSE status END "
+                "WHERE dedupe_key = ?",
+                (f.severity, f.title, json.dumps([e.to_dict() for e in f.entity_refs]),
+                 json.dumps([s.to_dict() for s in f.slot_refs]), json.dumps(f.evidence), now, key),
             )
-            for f in findings
-        ],
-    )
+            updated += 1
+        else:
+            conn.execute(
+                "INSERT INTO finding (dedupe_key, rule_id, severity, title, entity_refs_json, slot_refs_json, "
+                "evidence_json, status, first_seen_at, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)",
+                (key, f.rule_id, f.severity, f.title, json.dumps([e.to_dict() for e in f.entity_refs]),
+                 json.dumps([s.to_dict() for s in f.slot_refs]), json.dumps(f.evidence), now, now),
+            )
+            inserted += 1
+
+    stale_keys = set(existing) - set(by_key)
+    resolved = 0
+    if stale_keys:
+        placeholders = ",".join("?" for _ in stale_keys)
+        cur = conn.execute(
+            f"UPDATE finding SET status = 'RESOLVED', computed_at = ? "
+            f"WHERE dedupe_key IN ({placeholders}) AND status != 'RESOLVED'",
+            (now, *stale_keys),
+        )
+        resolved = cur.rowcount
+
     conn.commit()
+    return {"inserted": inserted, "updated": updated, "resolved": resolved}
 
 
 def run_analysis(db_path=None) -> dict:
@@ -43,13 +66,18 @@ def run_analysis(db_path=None) -> dict:
     try:
         composite_sync = sync_composite_candidates(conn)
         findings = [*run_clash_rules(conn), *run_load_rules(conn)]
-        _persist(conn, findings)
+        persist_result = _persist(conn, findings)
 
         by_rule: dict[str, int] = {}
         for f in findings:
             by_rule[f.rule_id] = by_rule.get(f.rule_id, 0) + 1
 
-        return {"composite_sync": composite_sync, "findings_total": len(findings), "findings_by_rule": by_rule}
+        return {
+            "composite_sync": composite_sync,
+            "findings_total": len(findings),
+            "findings_by_rule": by_rule,
+            "finding_persistence": persist_result,
+        }
     finally:
         conn.close()
 

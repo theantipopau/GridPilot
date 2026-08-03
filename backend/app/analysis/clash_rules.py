@@ -15,10 +15,15 @@ from app.analysis.composite_review import ApprovedComposites, load_approved_comp
 from app.analysis.models import EntityRef, Finding, SlotRef
 
 
-def _lesson_entries(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
+def lesson_entries(conn: sqlite3.Connection) -> list[dict]:
+    """Every LESSON timetable_entry, joined with display codes. Returned as
+    plain dicts (not sqlite3.Row) so callers - notably change-set what-if
+    validation (app/changes/service.py) - can apply in-memory overrides
+    without touching the database."""
+    rows = conn.execute(
         """
-        SELECT te.teacher_id, t.code AS teacher_code,
+        SELECT te.id AS entry_id,
+               te.teacher_id, t.code AS teacher_code,
                te.room_id, rm.code AS room_code,
                te.day_id, d.code AS day_code,
                te.period_id, p.code AS period_code,
@@ -34,10 +39,11 @@ def _lesson_entries(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         WHERE te.entry_type = 'LESSON'
         """
     ).fetchall()
+    return [dict(r) for r in rows]
 
 
-def teacher_double_booking(entries: list[sqlite3.Row], composites: ApprovedComposites) -> list[Finding]:
-    groups: dict[tuple, list[sqlite3.Row]] = defaultdict(list)
+def teacher_double_booking(entries: list[dict], composites: ApprovedComposites) -> list[Finding]:
+    groups: dict[tuple, list[dict]] = defaultdict(list)
     for e in entries:
         if e["teacher_id"] is None:
             continue
@@ -76,8 +82,8 @@ def teacher_double_booking(entries: list[sqlite3.Row], composites: ApprovedCompo
     return findings
 
 
-def room_double_booking(entries: list[sqlite3.Row], composites: ApprovedComposites) -> list[Finding]:
-    groups: dict[tuple, list[sqlite3.Row]] = defaultdict(list)
+def room_double_booking(entries: list[dict], composites: ApprovedComposites) -> list[Finding]:
+    groups: dict[tuple, list[dict]] = defaultdict(list)
     for e in entries:
         if e["room_id"] is None:
             continue
@@ -116,7 +122,7 @@ def room_double_booking(entries: list[sqlite3.Row], composites: ApprovedComposit
     return findings
 
 
-def student_double_booking(conn: sqlite3.Connection, entries: list[sqlite3.Row], composites: ApprovedComposites) -> list[Finding]:
+def student_double_booking(conn: sqlite3.Connection, entries: list[dict], composites: ApprovedComposites) -> list[Finding]:
     # class_name_id -> list of (day_id, period_id, day_code, period_code, class_code)
     slots_by_class: dict[int, list[tuple]] = defaultdict(list)
     for e in entries:
@@ -175,7 +181,7 @@ def student_double_booking(conn: sqlite3.Connection, entries: list[sqlite3.Row],
 
 
 def run_clash_rules(conn: sqlite3.Connection) -> list[Finding]:
-    entries = _lesson_entries(conn)
+    entries = lesson_entries(conn)
     composites = load_approved_composites(conn)
     return [
         *teacher_double_booking(entries, composites),

@@ -13,11 +13,13 @@ Section 3's privacy note and the project brief
 built against.
 
 **Status**: data ingestion + cross-validation, a timetable grid view
-(filterable by teacher/room/roll class), and a deterministic rules engine
-(teacher/room/student double-booking, with human-reviewed composite-class
-handling) are built and tested against the real export in
-`Timetabler Export/`. AI advisor and edit/export are not built yet - this
-README will grow as those land.
+(filterable by teacher/room/roll class), a deterministic rules engine
+(clash/capacity/load rules, with human-reviewed composite-class handling),
+and safe change sets (propose an edit, validate it against a what-if
+re-run of the clash rules, approve/reject - the imported timetable is
+never mutated) are built and tested against the real export in
+`Timetabler Export/`. AI advisor and actual export are not built yet -
+this README will grow as those land.
 
 ## Prerequisites
 
@@ -56,6 +58,9 @@ npm install
   into, and why.
 - `docs/rules.md` - the deterministic rules engine: what each rule
   checks, its evidence, and how composite-class review affects it.
+- `docs/change-sets.md` - how proposed edits are represented, validated
+  (a what-if re-run of the clash rules, never a real write), and
+  approved, and why the source timetable is never mutated.
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
@@ -123,11 +128,13 @@ cd frontend
 npm run dev
 ```
 
-Then open http://localhost:5173. Three tabs: **Timetable** (filter by
-teacher/room/roll class), **Findings** (every clash the rules engine
-found), and **Composite Review** (approve or reject detected composite
-classes - see `docs/rules.md`). Run `python -m app.analysis.run` first
-so there's something for Findings/Composite Review to show.
+Then open http://localhost:5173. Four tabs: **Timetable** (filter by
+teacher/room/roll class), **Findings** (every issue the rules engine
+found, with a "Propose a fix" action per finding), **Composite Review**
+(approve or reject detected composite classes - see `docs/rules.md`), and
+**Change Sets** (propose, validate, and approve/reject edits - see
+`docs/change-sets.md`). Run `python -m app.analysis.run` first so there's
+something for Findings/Composite Review to show.
 
 ## Overriding data locations
 

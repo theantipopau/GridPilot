@@ -130,3 +130,65 @@ export interface CompositeCandidate {
   reviewed_by: string | null;
   review_note: string | null;
 }
+
+export interface TimetableEntryLookup {
+  entry_id: number;
+  day_code: string;
+  period_code: string;
+  class_code: string | null;
+  room_code: string | null;
+  teacher_code: string | null;
+  roll_class_code: string;
+}
+
+export type ValidationStatus = "NOT_VALIDATED" | "VALID" | "INVALID";
+export type ApprovalStatus = "DRAFT" | "APPROVED" | "REJECTED";
+
+export interface FindingSummary {
+  rule_id: string;
+  severity: Severity;
+  title: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  reason: string | null;
+  introduced_findings: FindingSummary[];
+  resolved_findings: FindingSummary[];
+  unresolved_originating_findings: number[];
+}
+
+export interface ChangeSetSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  validation_status: ValidationStatus;
+  approval_status: ApprovalStatus;
+  created_at: string;
+  created_by: string;
+  change_count: number;
+}
+
+export interface ChangeEndpoint {
+  day_code: string | null;
+  period_code: string | null;
+  room_code: string | null;
+  teacher_code: string | null;
+}
+
+export interface ProposedChange {
+  id: number;
+  timetable_entry_id: number;
+  before: ChangeEndpoint;
+  after: ChangeEndpoint;
+  reason: string | null;
+  finding_ids: number[];
+}
+
+export interface ChangeSetDetail extends ChangeSetSummary {
+  validation_result: ValidationResult | null;
+  validated_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  changes: ProposedChange[];
+}

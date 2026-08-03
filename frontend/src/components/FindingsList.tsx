@@ -3,6 +3,7 @@ import type { Finding, Severity } from "../types";
 interface Props {
   findings: Finding[];
   countsBySeverity: Record<Severity, number>;
+  onProposeFix?: (finding: Finding) => void;
 }
 
 const SEVERITY_STYLES: Record<Severity, string> = {
@@ -17,12 +18,12 @@ const SEVERITY_BADGE: Record<Severity, string> = {
   info: "bg-slate-400 text-white",
 };
 
-export default function FindingsList({ findings, countsBySeverity }: Props) {
+export default function FindingsList({ findings, countsBySeverity, onProposeFix }: Props) {
   if (findings.length === 0) {
     return (
       <div className="p-6">
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          No findings - the rules engine found no clashes in the current timetable.
+          No open findings - the rules engine found no clashes in the current timetable.
         </p>
       </div>
     );
@@ -44,12 +45,21 @@ export default function FindingsList({ findings, countsBySeverity }: Props) {
               <span className="font-medium">{f.title}</span>
               <span className="text-xs uppercase tracking-wide opacity-60">{f.rule_id}</span>
             </div>
-            <div className="mt-1 flex flex-wrap gap-1">
+            <div className="mt-1 flex flex-wrap items-center gap-1">
               {f.entity_refs.map((ref, i) => (
                 <span key={i} className="rounded border border-current/30 px-1.5 py-0.5 text-xs opacity-80">
                   {ref.type}:{ref.code}
                 </span>
               ))}
+              {onProposeFix && (
+                <button
+                  type="button"
+                  onClick={() => onProposeFix(f)}
+                  className="ml-auto rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
+                >
+                  Propose a fix
+                </button>
+              )}
             </div>
           </div>
         ))}
