@@ -19,10 +19,12 @@ safe change sets (propose an edit, validate it against a what-if re-run
 of the clash rules, approve/reject - the imported timetable is never
 mutated), algorithmic fix suggestions (search every valid alternate
 room/time, reject anything that fails a hard constraint, rank the rest -
-no AI involved), and an audit trail + source-hash provenance + explicit
-retention/purge are built and tested against the real export in
-`Timetabler Export/`. AI advisor and actual export are not built yet -
-this README will grow as those land.
+no AI involved), an audit trail + source-hash provenance + explicit
+retention/purge, and an export gate (turn an approved change set into a
+re-importable `.tfx`, gated behind six validation checks including a real
+re-ingest through the app's own parser) are built and tested against the
+real export in `Timetabler Export/`. The AI advisor layer is what's left
+- this README will grow when that lands.
 
 ## Prerequisites
 
@@ -70,6 +72,10 @@ npm install
 - `docs/privacy-threat-model.md` - data flows, trust boundaries, the
   audit trail, source-file hash provenance, and the retention/purge
   utility.
+- `docs/export-validation.md` - the export gate: the patch-not-rebuild
+  strategy, all six validation gates, why file-writing is CLI-only, and
+  what this tool genuinely cannot verify (actual Timetabling Solutions
+  re-import - test that yourself against a non-production copy first).
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
@@ -148,6 +154,20 @@ Sets** (validate and approve/reject a proposed edit - see
 composite/change-set decision - see `docs/privacy-threat-model.md`). Run
 `python -m app.analysis.run` first so there's something for
 Findings/Composite Review to show.
+
+## Exporting an approved change set
+
+```bash
+cd backend
+python -m app.export.run --change-set-id 5              # dry run - validate, print gate results, write nothing
+python -m app.export.run --change-set-id 5 --confirm     # write the .tfx + changelog + validation report
+```
+
+The Change Sets tab has a "Preview export" action that runs every gate
+without writing anything; producing the actual file is deliberately a
+terminal command, not a button. See `docs/export-validation.md` -
+including what this tool can't verify (whether Timetabling Solutions
+itself accepts the file - test that yourself first).
 
 ## Clearing working data
 

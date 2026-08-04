@@ -219,3 +219,18 @@ export interface AuditEvent {
   summary: string;
   detail: Record<string, unknown> | null;
 }
+
+export interface ExportGateResult {
+  passed: boolean;
+  detail: Record<string, unknown>;
+}
+
+export interface ExportPreview {
+  change_set_id: number;
+  change_set_name: string;
+  ready: boolean;
+  gates: Record<string, ExportGateResult>;
+  changelog: Array<{ proposed_change_id: number; timetable_index: number; before: unknown; after: unknown }>;
+  written: boolean;
+  output_files: string[];
+}

@@ -14,6 +14,8 @@ from app.changes.service import (
     remove_proposed_change,
     validate_change_set,
 )
+from app.export.run import run_export
+from app.export.tfx_writer import ExportError
 
 router = APIRouter()
 
@@ -209,3 +211,15 @@ def reject_endpoint(change_set_id: int, request: ReviewChangeSetRequest, conn: s
     except ChangeSetError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"id": change_set_id, "approval_status": "REJECTED"}
+
+
+@router.get("/change-sets/{change_set_id}/export-preview")
+def export_preview(change_set_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Read-only - runs every export validation gate (including a full
+    re-ingest of the patched file through the application's own parser)
+    but never writes a file. Producing the actual file is deliberately
+    CLI-only - see app/export/run.py and docs/export-validation.md."""
+    try:
+        return run_export(conn, change_set_id, confirm=False)
+    except ExportError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

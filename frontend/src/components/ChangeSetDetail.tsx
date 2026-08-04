@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ChangeSetDetail as ChangeSetDetailType, ReferenceData } from "../types";
 import AddChangeForm from "./AddChangeForm";
+import ExportPreviewPanel from "./ExportPreviewPanel";
 
 interface Prefill {
   day_code?: string;
@@ -174,10 +175,13 @@ export default function ChangeSetDetail({
       )}
 
       {changeSet.approval_status === "APPROVED" && (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Approved by {changeSet.reviewed_by} on {changeSet.reviewed_at}. The source timetable is unchanged - this
-          record is the durable approval; export/apply isn't built yet.
-        </p>
+        <>
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            Approved by {changeSet.reviewed_by} on {changeSet.reviewed_at}. The source timetable is unchanged - this
+            record is the durable approval.
+          </p>
+          <ExportPreviewPanel changeSetId={changeSet.id} />
+        </>
       )}
     </div>
   );

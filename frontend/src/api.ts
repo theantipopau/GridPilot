@@ -3,6 +3,7 @@ import type {
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
+  ExportPreview,
   FindingsResponse,
   ReferenceData,
   ReviewStatus,
@@ -136,4 +137,8 @@ export function rejectChangeSet(changeSetId: number, reviewedBy: string): Promis
 export function fetchAuditEvents(eventType?: string): Promise<{ events: AuditEvent[]; total: number }> {
   const qs = eventType ? `?event_type=${encodeURIComponent(eventType)}` : "";
   return getJson(`${BASE}/audit${qs}`);
+}
+
+export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> {
+  return getJson(`${BASE}/change-sets/${changeSetId}/export-preview`);
 }
