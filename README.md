@@ -1,212 +1,197 @@
-# GridPilot
+<p align="center">
+  <img src="frontend/src/assets/gridpilot-logo.png" alt="GridPilot" width="420">
+</p>
 
-A local, offline-first tool for Sophia College that ingests Timetabling
-Solutions export and eMinerva roll-marking files, builds a normalised
-internal model, runs deterministic checks over it (clashes, room
-utilisation, teacher load), and layers a locally-run AI advisor on top
-that can explain findings and draft concrete edits for review.
+<p align="center">
+  <strong>A local-first co-pilot for school timetabling.</strong><br>
+  Ingest a Timetabling Solutions export, analyse it, propose and validate edits, export a file it can re-read — all offline.
+</p>
 
-Everything runs on your machine. Nothing containing student or staff data
-is ever sent to a cloud API by this tool - see `docs/data-formats.md`
-Section 3's privacy note and the project brief
-(`claude-code-timetabling-tool-prompt.md`) for the constraints this is
-built against. (One caveat: the project folder itself lives inside the
-school's OneDrive, so files here sync to BCE's tenant - see
-`docs/privacy-threat-model.md`.)
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-93%20passing-brightgreen">
+  <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
+  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
+</p>
 
-> **Operational warning**: `python -m app.ingest.run` currently rebuilds
-> the working database from scratch, which **discards all composite
-> reviews, change sets, and audit history**. Fine while evaluating; do
-> not rely on those surviving a re-ingest until the persistence fix in
-> `docs/project-status.md` #1 lands.
+---
 
-**Status**: data ingestion + cross-validation, a timetable grid view
-(filterable by teacher/room/roll class), a deterministic rules engine
-(clash/capacity/load rules, with human-reviewed composite-class handling),
-safe change sets (propose an edit, validate it against a what-if re-run
-of the clash rules, approve/reject - the imported timetable is never
-mutated), algorithmic fix suggestions (search every valid alternate
-room/time, reject anything that fails a hard constraint, rank the rest -
-no AI involved), an audit trail + source-hash provenance + explicit
-retention/purge, and an export gate (turn an approved change set into a
-re-importable `.tfx`, gated behind six validation checks including a real
-re-ingest through the app's own parser) are built and tested against the
-real export in `Timetabler Export/`. The AI advisor layer is what's left
-- this README will grow when that lands.
+GridPilot was built for Sophia College (Brisbane Catholic Education) to
+sit alongside Timetabling Solutions, not replace it: load the school's
+real `.tfx`/`.sfx` export, see the whole timetable, get a deterministic
+list of what's actually wrong with it (clashes, capacity, load,
+composite classes), propose and validate fixes without ever touching the
+source data, and export an approved change back out as a file
+Timetabling Solutions can re-read. Nothing here calls a cloud API —
+everything runs on your machine, and the one AI layer this project plans
+to add is local-only (Ollama), and only for *explaining* findings, never
+for inventing them.
 
-## Prerequisites
+## Contents
 
-- **Python 3.11+**
-- **Node.js 20+** (for the frontend)
-- **Ollama** (for the AI advisor layer, once built) - https://ollama.com.
-  Already installed and running on this machine with three models pulled:
-  `qwen3.5:9b` (recommended default - matches the brief's 7-8B guidance),
-  `qwen3.5:4b`, `qwen3.6:35b`. No further setup needed unless you want a
-  different model:
-  ```bash
-  ollama pull qwen3.5:9b
-  ```
+- [What's built](#whats-built)
+- [Design direction](#design-direction)
+- [Quick start](#quick-start)
+- [Running it](#running-it)
+- [Project layout](#project-layout)
+- [Documentation](#documentation)
+- [Privacy and data handling](#privacy-and-data-handling)
+- [Project status](#project-status)
 
-## Setup
+## What's built
+
+Six milestones, each tested against the school's real Term 3 export, not
+synthetic data alone:
+
+| | |
+|---|---|
+| ✅ **Ingestion + cross-validation** | `.tfx` (primary source) cross-checked against CSV and eMinerva exports; every mismatch surfaced as a structured discrepancy, never silently dropped. Auto-discovers the newest export file — a new term needs no code change. |
+| ✅ **Timetable grid** | Filterable by teacher, room, or roll class. |
+| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation. Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. |
+| ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
+| ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
+| ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
+
+**Not yet built:** the local AI advisor (Ollama) layer, and a
+purpose-built timetable-*building* UI (the current grid is
+read-only-plus-tabs, not a drag-and-drop editor). See
+[Project status](#project-status).
+
+## Design direction
+
+The current UI is functional, not final — plain tabs (Timetable,
+Findings, Composite Review, Change Sets, Audit), no drag-and-drop yet.
+The mockup below is the target design direction, not a screenshot of
+what exists today:
+
+<p align="center">
+  <img src="docs/design/ui-mockup.png" alt="GridPilot UI mockup — target design direction" width="850">
+</p>
+
+## Quick start
 
 ```bash
+# Backend
 cd backend
 pip install -e ".[dev]"
+
+# Frontend
 cd ../frontend
 npm install
 ```
 
-## Data layout
+Point `TT_SOURCE_DIR` at a folder containing a Timetabling Solutions
+export (`.tfx`, optionally per-year-level `.sfx` files, and the CSV/
+eMinerva exports) — see [Overriding data locations](#overriding-data-locations).
 
-- `Timetabler Export/` - the real Timetabling Solutions + eMinerva export
-  files. **Read-only.** The tool never writes here. Excluded from git via
-  `.gitignore`.
-- `data/` - the local working SQLite database, rebuilt from source on
-  every ingest run. Excluded from git.
-- `output/` - generated exports (re-import files, changelogs). Excluded
-  from git.
-- `docs/data-formats.md` - what every source file actually contains,
-  confirmed against the real data.
-- `docs/data-model.md` - the internal schema those files get ingested
-  into, and why.
-- `docs/tfx-compatibility.md` - how a different/future `.tfx` is
-  handled (version drift, missing/unknown sections, never a raw
-  `KeyError`), auto-discovery of the source file and every year level's
-  `.sfx`, and what's honestly still untested (a genuinely new
-  Timetabling Solutions major version).
-- `docs/rules.md` - the deterministic rules engine: what each rule
-  checks, its evidence, and how composite-class review affects it.
-- `docs/change-sets.md` - how proposed edits are represented, validated
-  (a what-if re-run of the clash rules, never a real write), and
-  approved, and why the source timetable is never mutated.
-- `docs/suggestions.md` - the algorithmic fix-suggestion engine: search
-  space, hard-constraint validation, scoring, and what's deliberately
-  out of scope (student clashes, teacher reassignment).
-- `docs/privacy-threat-model.md` - data flows, trust boundaries, the
-  audit trail, source-file hash provenance, and the retention/purge
-  utility.
-- `docs/export-validation.md` - the export gate: the patch-not-rebuild
-  strategy, all six validation gates, why file-writing is CLI-only, and
-  what this tool genuinely cannot verify (actual Timetabling Solutions
-  re-import - test that yourself against a non-production copy first).
-- `docs/project-status.md` - honest health review: what's solid, the
-  known weaknesses in priority order (re-ingest wiping review decisions
-  is #1), and the recommended sequence for what's next.
-- `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
-  `docs/staffing-ux-workflows.md` - mapping for the staff teaching
-  capability/allocation addendum against the schema above. Documentation
-  only so far - no new tables built yet.
-- `docs/design/` - UI mockup and logo assets supplied for GridPilot's
-  visual direction.
-- `PROJECT_ROADMAP.md`, `claude-code-complementary-timetabling-builder.md`,
-  `claude-code-full-timetabling-product-spec.md`,
-  `claude-code-staff-capability-and-allocation.md` - the planning
-  documents behind GridPilot's larger direction, in ascending order of
-  scope. Only `PROJECT_ROADMAP.md` is being actively built against right
-  now; the others are read and mapped but not yet under construction.
-
-## Running the ingestion pipeline
-
-Builds a fresh working database from `Timetabler Export/`, cross-validates
-the `.tfx` (primary source) against the CSV and eMinerva exports, ingests
-every year level's Student Options `.sfx` file, and logs any discrepancy
-found (see `docs/data-formats.md` for what's expected vs. worth
-investigating):
+## Running it
 
 ```bash
+# 1. Ingest — builds the working database from the export folder
 cd backend
-python -m app.ingest.run              # uses the most recently modified .tfx found
-python -m app.ingest.run --tfx "path/to/a/specific/file.tfx"
-```
+python -m app.ingest.run
 
-The `.tfx` and every `.sfx` are auto-discovered from `Timetabler Export/`
-- a new term's export just needs to land there, no code change required.
-See `docs/tfx-compatibility.md` for what happens with a different or
-future file version. Prints aggregate table counts only - no student or
-staff names are ever printed to the console by this tool.
-
-## Running the rules engine
-
-After ingesting, syncs composite-class candidates and runs every rule,
-persisting structured findings (see `docs/rules.md`):
-
-```bash
-cd backend
+# 2. Run the rules engine — findings + composite candidates
 python -m app.analysis.run
+
+# 3. Start both servers (separate terminals)
+python -m uvicorn app.api.main:app --port 8000
+cd ../frontend && npm run dev
 ```
 
-Findings and composite candidates are then queryable via the API
-(`GET /api/findings`, `GET /api/composites/candidates`) or the
-Findings / Composite Review tabs in the app itself.
-
-## Running the tests
-
-Tests run against the real export data and are skipped automatically if
-`Timetabler Export/` isn't present (e.g. in an environment without the
-real files):
+Open **http://localhost:5173**. Five tabs: **Timetable**, **Findings**
+(with one-click "Suggest fixes"), **Composite Review**, **Change Sets**,
+and **Audit**.
 
 ```bash
-cd backend
+# Export an approved change set (dry run by default)
+python -m app.export.run --change-set-id 5
+python -m app.export.run --change-set-id 5 --confirm    # actually write files
+
+# Clear working data (dry run by default)
+python -m app.retention
+python -m app.retention --confirm
+
+# Tests (skip automatically without real export data present)
 python -m pytest tests/ -v
 ```
 
-## Running the app
+### Overriding data locations
 
-Two servers, run in separate terminals:
-
-```bash
-# Terminal 1 - API (reads data/sophia_tt.sqlite3, built by the ingest step above)
-cd backend
-python -m uvicorn app.api.main:app --port 8000
-
-# Terminal 2 - frontend (proxies /api to the server above)
-cd frontend
-npm run dev
-```
-
-Then open http://localhost:5173. Five tabs: **Timetable** (filter by
-teacher/room/roll class), **Findings** (every issue the rules engine
-found - "Suggest fixes" shows ranked, pre-validated candidate moves with
-a one-click "Use this" per candidate, or "Propose a fix manually" to pick
-your own - see `docs/suggestions.md`), **Composite Review** (approve or
-reject detected composite classes - see `docs/rules.md`), **Change
-Sets** (validate and approve/reject a proposed edit - see
-`docs/change-sets.md`), and **Audit** (every import, rules-engine run,
-composite/change-set decision - see `docs/privacy-threat-model.md`). Run
-`python -m app.analysis.run` first so there's something for
-Findings/Composite Review to show.
-
-## Exporting an approved change set
-
-```bash
-cd backend
-python -m app.export.run --change-set-id 5              # dry run - validate, print gate results, write nothing
-python -m app.export.run --change-set-id 5 --confirm     # write the .tfx + changelog + validation report
-```
-
-The Change Sets tab has a "Preview export" action that runs every gate
-without writing anything; producing the actual file is deliberately a
-terminal command, not a button. See `docs/export-validation.md` -
-including what this tool can't verify (whether Timetabling Solutions
-itself accepts the file - test that yourself first).
-
-## Clearing working data
-
-```bash
-cd backend
-python -m app.retention              # dry run - lists what would be deleted
-python -m app.retention --confirm    # actually deletes data/ and output/
-```
-
-Never touches `Timetabler Export/`. See `docs/privacy-threat-model.md`.
-
-## Overriding data locations
-
-Set these environment variables if your export folder or working
-directories live somewhere else:
-
-- `TT_SOURCE_DIR` - defaults to `./Timetabler Export`
-- `TT_DATA_DIR` - defaults to `./data`
-- `TT_OUTPUT_DIR` - defaults to `./output`
-- `TT_TFX_PATH` - pin ingestion to one specific `.tfx`, overriding
+- `TT_SOURCE_DIR` — defaults to `./Timetabler Export`
+- `TT_DATA_DIR` — defaults to `./data`
+- `TT_OUTPUT_DIR` — defaults to `./output`
+- `TT_TFX_PATH` — pin ingestion to one specific `.tfx`, overriding
   auto-discovery of the newest file under `TT_SOURCE_DIR`
+
+## Project layout
+
+```
+backend/          FastAPI + SQLite. app/ingest, app/analysis, app/changes, app/export, app/api
+frontend/          React + TypeScript + Tailwind, talks to the API only
+docs/               Every design decision, written down (see below)
+Timetabler Export/  Real export data goes here — gitignored, never committed
+data/, output/      Working database and generated exports — gitignored
+```
+
+## Documentation
+
+Every non-obvious decision in this project is written down, not just
+coded — start with `docs/data-formats.md` if you're new to what a
+Timetabling Solutions export actually contains.
+
+| Doc | Covers |
+|---|---|
+| [`docs/data-formats.md`](docs/data-formats.md) | What every source file actually contains, confirmed against real data |
+| [`docs/data-model.md`](docs/data-model.md) | The internal schema, and why |
+| [`docs/tfx-compatibility.md`](docs/tfx-compatibility.md) | Handling a different/future export version; auto-discovery |
+| [`docs/rules.md`](docs/rules.md) | The rules engine: what each rule checks, composite-class review |
+| [`docs/change-sets.md`](docs/change-sets.md) | Proposed edits, what-if validation, why the source is never mutated |
+| [`docs/suggestions.md`](docs/suggestions.md) | The algorithmic (non-AI) fix-suggestion engine |
+| [`docs/export-validation.md`](docs/export-validation.md) | The six-gate export process, and what it genuinely can't verify |
+| [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md) | Data flows, trust boundaries, audit trail, retention/purge |
+| [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
+| [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
+| [`docs/design/`](docs/design/) | UI mockup and logo source assets |
+
+## Privacy and data handling
+
+This started as a tool for handling real student and staff data, and
+that constraint shaped everything:
+
+- **No cloud API calls anywhere in this codebase.** The planned AI layer
+  is local-only (Ollama), and its job is to explain findings that
+  already exist — never to generate or apply timetable changes itself.
+- **No PII in logs, findings, or audit records** — every structured
+  record uses codes (teacher code, room code, class code, a student's
+  numeric code) and never a name or email. This is asserted by tests,
+  not just intended.
+- **Source data is read-only.** Ingestion never writes back into the
+  export folder; every working file lives under a separate, gitignored
+  `data/`/`output/` directory.
+- **This repository contains no real student or staff data.** The
+  `Timetabler Export/` folder (and every `.tfx`/`.sfx`/database/export
+  file) is excluded from version control from the first commit — see
+  `.gitignore`. Verified directly before this repo went public: every
+  currently-tracked file was enumerated, and full git history was
+  checked for anything that was ever committed and later removed.
+
+Full detail, including a caveat about OneDrive sync in the original
+deployment environment, in [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md).
+
+## Project status
+
+All six `PROJECT_ROADMAP.md` milestones are complete. The honest
+self-review in [`docs/project-status.md`](docs/project-status.md) covers
+what's solid, two known weaknesses (re-ingesting currently wipes review
+decisions — a fix is planned before routine use — and the export path
+hasn't yet been trial-imported into an actual Timetabling Solutions
+instance), and the recommended order for what's next: persistence fix →
+trial import → timetable-building UX → the Ollama AI advisor.
+
+---
+
+<p align="center">
+  <sub>Built with <a href="https://claude.com/claude-code">Claude Code</a> for Sophia College.</sub>
+</p>
