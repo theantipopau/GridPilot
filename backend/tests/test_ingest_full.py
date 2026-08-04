@@ -8,8 +8,9 @@ import sqlite3
 
 import pytest
 
-from app.config import TFX_PATH
+from app.config import TFX_PATH, find_sfx_files
 from app.ingest.run import run_full_ingest, table_counts
+from app.ingest.tfx_parser import KNOWN_TFX_VERSION
 
 pytestmark = pytest.mark.skipif(not TFX_PATH.exists(), reason="real export data not present")
 
@@ -50,6 +51,39 @@ def test_ingest_run_records_source_hash_and_audit_event(counts_and_db):
         "SELECT summary FROM audit_event WHERE event_type = 'ingest_completed'"
     ).fetchone()
     assert audit_row is not None
+
+
+def test_ingest_run_records_the_source_file_id_version_string(counts_and_db):
+    """This is what future version-drift detection compares against -
+    see app.ingest.tfx_parser.check_tfx_compatibility."""
+    _, conn = counts_and_db
+    row = conn.execute("SELECT source_file_id FROM ingest_run").fetchone()
+    assert row["source_file_id"] == KNOWN_TFX_VERSION
+
+
+def test_all_six_student_options_files_are_auto_discovered_and_ingested(counts_and_db):
+    """run_full_ingest() was called with no explicit sfx_paths - this
+    proves find_sfx_files() auto-discovery actually wired every real
+    .sfx file into the pipeline, not just that ingest_sfx_file works in
+    isolation (see test_sfx_parser.py for that)."""
+    counts, conn = counts_and_db
+    assert len(find_sfx_files()) == 6
+    assert counts["sfx_file"] == 6
+    assert counts["sfx_student_preference"] > 0
+
+    year_levels = {r["year_level_code"] for r in conn.execute("SELECT year_level_code FROM sfx_file")}
+    assert year_levels == {"07", "08", "09", "10", "11", "12"}
+
+
+def test_sfx_students_reconcile_against_the_tfx_roll(counts_and_db):
+    """Every real .sfx student code matched an existing student ingested
+    from the .tfx - a genuine cross-validation result (see
+    docs/data-formats.md), asserted here so a regression is caught."""
+    _, conn = counts_and_db
+    unlinked = conn.execute(
+        "SELECT COUNT(*) FROM sfx_student_preference WHERE student_id IS NULL"
+    ).fetchone()[0]
+    assert unlinked == 0
 
 
 def test_no_unexplained_master_timetable_mismatches(counts_and_db):

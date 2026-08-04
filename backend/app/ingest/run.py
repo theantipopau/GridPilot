@@ -18,10 +18,12 @@ from app.config import (
     STUDENT_DETAILS_CSV,
     TEACHER_DETAILS_CSV,
     TFX_PATH,
+    find_sfx_files,
 )
 from app.db.connection import fresh_database
 from app.ingest.csv_validate import run_all_validations
 from app.ingest.eminerva_parser import ingest_eminerva_scourse
+from app.ingest.sfx_parser import ingest_all_sfx
 from app.ingest.tfx_parser import ingest_tfx
 
 
@@ -65,16 +67,26 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "roll_class", "student", "subject", "class_name", "class_group", "class_group_course",
         "class_group_course_room_override", "timetable_entry", "enrolment", "yard_duty_area",
         "yard_duty_session", "yard_duty_allocation", "ingest_discrepancy",
+        "sfx_file", "sfx_line", "sfx_subject", "sfx_option", "sfx_class", "sfx_student_preference",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
 
 
-def run_full_ingest(tfx_path=None, db_path=None) -> dict[str, int]:
+def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None) -> dict[str, int]:
     """Fresh-loads the working DB from the .tfx export (primary source),
-    cross-validates against the CSV exports, then layers in the eMinerva
-    enrolment list. Returns aggregate table counts only - never prints or
-    returns row-level PII."""
+    cross-validates against the CSV exports, layers in the eMinerva
+    enrolment list, then ingests every Student Options (.sfx) file found
+    (or the explicit list given). Returns aggregate table counts only -
+    never prints or returns row-level PII.
+
+    tfx_path defaults to the newest .tfx under SOURCE_DIR (see
+    app.config.default_tfx_path) - safe to leave unset when a new term's
+    export replaces the one this was built against; sfx_paths defaults to
+    every .sfx found the same way, so adding/removing a year level's file
+    needs no code change either."""
     path = tfx_path or TFX_PATH
+    sfx_files = sfx_paths if sfx_paths is not None else find_sfx_files()
+
     conn = fresh_database(db_path or DB_PATH)
     try:
         run_id = start_ingest_run(conn, str(path))
@@ -88,6 +100,7 @@ def run_full_ingest(tfx_path=None, db_path=None) -> dict[str, int]:
             "master_timetable": MASTER_TIMETABLE_CYCLE_CSV,
         })
         ingest_eminerva_scourse(conn, run_id, EMINERVA_SCOURSE_PATH)
+        ingest_all_sfx(conn, sfx_files, run_id)
         finish_ingest_run(conn, run_id)
         return table_counts(conn)
     finally:
@@ -95,6 +108,14 @@ def run_full_ingest(tfx_path=None, db_path=None) -> dict[str, int]:
 
 
 if __name__ == "__main__":
-    counts = run_full_ingest()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Ingest a Timetabling Solutions export into the working database.")
+    parser.add_argument("--tfx", type=Path, default=None,
+                         help="Path to a specific .tfx file. Defaults to the newest .tfx under the source folder.")
+    args = parser.parse_args()
+
+    print(f"Ingesting: {args.tfx or TFX_PATH}")
+    counts = run_full_ingest(tfx_path=args.tfx)
     for name, n in counts.items():
         print(f"{name}: {n}")

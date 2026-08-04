@@ -69,6 +69,11 @@ npm install
   confirmed against the real data.
 - `docs/data-model.md` - the internal schema those files get ingested
   into, and why.
+- `docs/tfx-compatibility.md` - how a different/future `.tfx` is
+  handled (version drift, missing/unknown sections, never a raw
+  `KeyError`), auto-discovery of the source file and every year level's
+  `.sfx`, and what's honestly still untested (a genuinely new
+  Timetabling Solutions major version).
 - `docs/rules.md` - the deterministic rules engine: what each rule
   checks, its evidence, and how composite-class review affects it.
 - `docs/change-sets.md` - how proposed edits are represented, validated
@@ -103,17 +108,22 @@ npm install
 ## Running the ingestion pipeline
 
 Builds a fresh working database from `Timetabler Export/`, cross-validates
-the `.tfx` (primary source) against the CSV and eMinerva exports, and logs
-any discrepancy found (see `docs/data-formats.md` for what's expected vs.
-worth investigating):
+the `.tfx` (primary source) against the CSV and eMinerva exports, ingests
+every year level's Student Options `.sfx` file, and logs any discrepancy
+found (see `docs/data-formats.md` for what's expected vs. worth
+investigating):
 
 ```bash
 cd backend
-python -m app.ingest.run
+python -m app.ingest.run              # uses the most recently modified .tfx found
+python -m app.ingest.run --tfx "path/to/a/specific/file.tfx"
 ```
 
-Prints aggregate table counts only - no student or staff names are ever
-printed to the console by this tool.
+The `.tfx` and every `.sfx` are auto-discovered from `Timetabler Export/`
+- a new term's export just needs to land there, no code change required.
+See `docs/tfx-compatibility.md` for what happens with a different or
+future file version. Prints aggregate table counts only - no student or
+staff names are ever printed to the console by this tool.
 
 ## Running the rules engine
 
@@ -198,3 +208,5 @@ directories live somewhere else:
 - `TT_SOURCE_DIR` - defaults to `./Timetabler Export`
 - `TT_DATA_DIR` - defaults to `./data`
 - `TT_OUTPUT_DIR` - defaults to `./output`
+- `TT_TFX_PATH` - pin ingestion to one specific `.tfx`, overriding
+  auto-discovery of the newest file under `TT_SOURCE_DIR`

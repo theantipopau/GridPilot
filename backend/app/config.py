@@ -12,7 +12,39 @@ OUTPUT_DIR = Path(os.environ.get("TT_OUTPUT_DIR", PROJECT_ROOT / "output"))
 
 DB_PATH = DATA_DIR / "sophia_tt.sqlite3"
 
-TFX_PATH = SOURCE_DIR / "TT files" / "TT 2026 Term Three Week 4.tfx"
+# Legacy fixed path, kept as the last-resort fallback so environments
+# without the real data still get a well-defined (non-existent) path for
+# tests' skipif checks.
+_LEGACY_TFX_PATH = SOURCE_DIR / "TT files" / "TT 2026 Term Three Week 4.tfx"
+
+
+def find_tfx_files() -> list[Path]:
+    """Every .tfx under the source folder, newest modification first."""
+    if not SOURCE_DIR.exists():
+        return []
+    return sorted(SOURCE_DIR.rglob("*.tfx"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def find_sfx_files() -> list[Path]:
+    """Every Student Options (.sfx) file under the source folder, name order."""
+    if not SOURCE_DIR.exists():
+        return []
+    return sorted(SOURCE_DIR.rglob("*.sfx"))
+
+
+def default_tfx_path() -> Path:
+    """The .tfx to ingest when none is named explicitly: TT_TFX_PATH env
+    var wins, else the most recently modified .tfx found under the source
+    folder, else the legacy fixed path (which simply won't exist in
+    environments without the real data)."""
+    env = os.environ.get("TT_TFX_PATH")
+    if env:
+        return Path(env)
+    found = find_tfx_files()
+    return found[0] if found else _LEGACY_TFX_PATH
+
+
+TFX_PATH = default_tfx_path()
 
 CSV_DIR = SOURCE_DIR
 ROOM_DETAILS_CSV = SOURCE_DIR / "Room Details.csv"

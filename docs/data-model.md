@@ -131,6 +131,35 @@ teacher-to-area-per-session assignments with a load value). Joined to
 `Teacher` and `Period` but not folded into `Teacher.contractedLoadMinutes`
 in v1.
 
+### Student Options data (added 2026-08-04)
+
+**`SfxFile`**, **`SfxLine`**, **`SfxSubject`**, **`SfxOption`**,
+**`SfxClass`**, **`SfxStudentPreference`**, **`SfxConstraint`** —
+namespaced `sfx_*` rather than merged into the equivalent-sounding
+`.tfx`-derived tables (`Subject`, `ClassName`, ...) because the two data
+sets describe different things that happen to share vocabulary: a `.tfx`
+`Subject` is a resolved timetable-grid entity; an `sfx_subject` is a
+pre-selection planning entity with its own fields (`Units`,
+`ClassSizeMaximum`) that don't exist on the other. One row per real
+`.tfx`/`.sfx` file (six `.sfx` files currently, one per year level 7–12),
+auto-discovered from the source folder rather than named individually -
+see `docs/tfx-compatibility.md`.
+
+`SfxStudentPreference.studentId` is nullable: a preference row always
+keeps the source `student_code`, but only links to the internal
+`Student` row when that code exists in the current `.tfx` cohort. A
+`.sfx` covering a future planning year's intake would have unlinked
+rows by design, not a data-quality problem - the ingester logs an info
+discrepancy (`sfx_students_not_in_tfx`) rather than treating it as an
+error. Against the real Term 3 data, every one of the six files'
+students matched - a genuine cross-validation result, not an assumption.
+
+**Not built yet**: nothing downstream (rules engine, suggestions,
+export) reads these tables. This milestone is ingestion only - the
+natural next uses are validating the resolved timetable against what
+students actually selected, and surfacing `SfxConstraint` (join/exclude
+rules between options) as a check against the built timetable.
+
 ## What this enables
 
 - **Clash detection**: group `TimetableEntry` by `(dayId, periodId,

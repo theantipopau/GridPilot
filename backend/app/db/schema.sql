@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS ingest_run (
     -- which export version a given run (and everything downstream of it:
     -- findings, composite candidates, change sets) was analysed against.
     tfx_source_sha256 TEXT,
+    -- The file's own "File ID" version string, e.g.
+    -- "Timetabling Solutions X TD 10.1.1.86" - recorded so version drift
+    -- across future exports is visible (see tfx_parser.check_tfx_compatibility).
+    source_file_id TEXT,
     notes TEXT
 );
 
@@ -322,6 +326,92 @@ CREATE TABLE IF NOT EXISTS proposed_change_finding (
     proposed_change_id INTEGER NOT NULL REFERENCES proposed_change(id),
     finding_id INTEGER NOT NULL REFERENCES finding(id),
     PRIMARY KEY (proposed_change_id, finding_id)
+);
+
+-- Student Options (.sfx) files ---------------------------------------------
+-- The per-year-level Student Options exports (e.g. "YR 10 2026 Term 3.sfx")
+-- hold the elective/option-line structure: lines (elective bands), subjects
+-- with class-size caps, options, the classes built on each line, and every
+-- student's subject preferences. Namespaced sfx_* because the concepts
+-- overlap with but differ from the .tfx-derived tables (an sfx "Subject"
+-- carries ClassSizeMaximum/Units; the tfx subject doesn't).
+--
+-- Privacy note: student rows are NOT created from .sfx files - preferences
+-- link to the existing student table by code where possible, and keep only
+-- the code (never a name) when the student isn't in the current .tfx (e.g.
+-- a next-year planning file). Codes only, per the standing no-PII rule.
+
+CREATE TABLE IF NOT EXISTS sfx_file (
+    id INTEGER PRIMARY KEY,
+    ingest_run_id INTEGER NOT NULL REFERENCES ingest_run(id),
+    file_name TEXT NOT NULL,
+    source_file_id TEXT,            -- e.g. "Timetabling Solutions X SO 10.1.1.86"
+    sha256 TEXT,
+    year_level_code TEXT            -- dominant Students[].YearLevel in the file
+);
+
+CREATE TABLE IF NOT EXISTS sfx_line (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    source_guid TEXT,
+    code TEXT NOT NULL,
+    name TEXT,
+    subgrid INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sfx_subject (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    source_guid TEXT,
+    code TEXT NOT NULL,
+    name TEXT,
+    units INTEGER,
+    class_size_maximum INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sfx_option (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    source_guid TEXT,
+    sfx_subject_id INTEGER REFERENCES sfx_subject(id),
+    code TEXT,
+    name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sfx_class (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    source_guid TEXT,
+    sfx_option_id INTEGER REFERENCES sfx_option(id),
+    sfx_line_id INTEGER REFERENCES sfx_line(id),
+    class_code TEXT,
+    subject_code TEXT,
+    roll_class_code TEXT,
+    max_class_size INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sfx_student_preference (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    student_id INTEGER REFERENCES student(id),   -- NULL when the student isn't in the current .tfx
+    student_code TEXT NOT NULL,
+    sfx_option_id INTEGER REFERENCES sfx_option(id),
+    sfx_class_id INTEGER REFERENCES sfx_class(id),
+    preference_order INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sfx_constraint (
+    id INTEGER PRIMARY KEY,
+    sfx_file_id INTEGER NOT NULL REFERENCES sfx_file(id),
+    source_guid TEXT,
+    type_str TEXT,
+    note TEXT,
+    limit_value INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sfx_constraint_option (
+    sfx_constraint_id INTEGER NOT NULL REFERENCES sfx_constraint(id),
+    sfx_option_id INTEGER REFERENCES sfx_option(id)
 );
 
 -- Audit trail --------------------------------------------------------------

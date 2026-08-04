@@ -20,6 +20,51 @@ def load_tfx(path: Path) -> dict[str, Any]:
         return json.load(f)
 
 
+# -- Format compatibility ---------------------------------------------------
+# The version string this parser was built and verified against. A different
+# minor/patch version is a warning-level discrepancy (the format is unlikely
+# to have changed shape); a file that isn't a "TD" (Timetable Development)
+# file at all, or is missing a section this parser requires, is a hard error
+# with a message that says exactly what's wrong - never a raw KeyError.
+KNOWN_TFX_VERSION = "Timetabling Solutions X TD 10.1.1.86"
+
+REQUIRED_SECTIONS = (
+    "Days", "Periods", "YearLevels", "Rooms", "Teachers", "Faculties",
+    "RollClasses", "ClassNames", "ClassGroups", "Timetable", "Students",
+)
+
+# Present in the known format but deliberately not modelled (see
+# docs/data-formats.md). Their presence is expected; their absence is fine.
+KNOWN_UNMODELLED_SECTIONS = (
+    "File ID", "Settings", "YardDutySessions", "YardDutyAreas", "YardDuties",
+    "TeacherFiles", "StudentFiles", "UnscheduledDuties", "Meetings",
+    "RURs", "MRCGs", "Groups", "PublishedTimetables",
+)
+
+
+def check_tfx_compatibility(data: dict[str, Any]) -> tuple[str | None, list[str], list[str]]:
+    """Returns (file_id, missing_required_sections, unknown_sections).
+    Raises IngestError only for hard incompatibilities - the caller
+    decides how to surface the softer signals."""
+    file_id = data.get("File ID")
+    if isinstance(file_id, str) and " SO " in file_id:
+        raise IngestError(
+            f"This is a Student Options (.sfx) file ({file_id!r}), not a timetable (.tfx) file - "
+            "it belongs to the .sfx ingestion path, not this parser."
+        )
+
+    missing = [s for s in REQUIRED_SECTIONS if s not in data]
+    if missing:
+        raise IngestError(
+            f"File is missing required section(s) {missing} - either it isn't a Timetabling Solutions "
+            f"TD export, or the format has changed. File ID: {file_id!r}"
+        )
+
+    known = set(REQUIRED_SECTIONS) | set(KNOWN_UNMODELLED_SECTIONS)
+    unknown = sorted(k for k in data.keys() if k not in known)
+    return (file_id if isinstance(file_id, str) else None), missing, unknown
+
+
 def _blank_to_none(v: Any) -> Any:
     return None if v == "" else v
 
@@ -57,6 +102,7 @@ class TfxIngester:
         )
 
     def run(self) -> None:
+        self._check_compatibility()
         self._ingest_days()
         self._ingest_periods()
         self._ingest_year_levels()
@@ -70,6 +116,32 @@ class TfxIngester:
         self._ingest_students_and_enrolment()
         self._ingest_yard_duty()
         self.conn.commit()
+
+    def _check_compatibility(self) -> None:
+        """Hard-fails with a clear message for a genuinely incompatible
+        file; records softer signals (version drift, unknown sections) as
+        discrepancies so a future format change is visible, not silent."""
+        file_id, _missing, unknown = check_tfx_compatibility(self.data)
+
+        self.conn.execute(
+            "UPDATE ingest_run SET source_file_id = ? WHERE id = ?",
+            (file_id, self.ingest_run_id),
+        )
+        if file_id and file_id != KNOWN_TFX_VERSION:
+            self.log_discrepancy(
+                "tfx_version_drift", "warning",
+                f"File ID {file_id!r} differs from the version this parser was verified against "
+                f"({KNOWN_TFX_VERSION!r}) - ingestion continues, but check the results carefully.",
+                {"file_id": file_id, "verified_against": KNOWN_TFX_VERSION},
+            )
+        if unknown:
+            self.log_discrepancy(
+                "tfx_unknown_sections", "warning",
+                f"{len(unknown)} top-level section(s) this parser doesn't recognise: {unknown} - "
+                "likely a newer Timetabling Solutions format. They are ignored on ingest; the export "
+                "path's patch strategy carries them through untouched.",
+                {"sections": unknown},
+            )
 
     # -- Cycle structure ----------------------------------------------
 

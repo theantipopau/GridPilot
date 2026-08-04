@@ -186,17 +186,31 @@ caps, join/exclude constraints between options) used when students choose
 subjects, not the resolved timetable. `Students[].StudentPreferences[]`
 here lists `{OptionID, ClassID}` — a student's *selected* option/class,
 which is presumably the input that produced the `StudentLessons[]` seen in
-the `.tfx`. The `.sfx` files are **not required** for the core clash/
-utilisation/load analysis (4.3) since the `.tfx` already has resolved
-lesson assignments — but they may be useful later for validating that the
-resolved timetable actually matches what students selected, or for a
-future "what-if" subject-change feature. Recommend treating `.sfx` as
-out-of-scope for v1 unless you want that cross-check.
+the `.tfx`.
 
-### 3.3 `tester.tfx` (root of project folder)
+**Now wired in** (added 2026-08-04, `backend/app/ingest/sfx_parser.py`):
+every `.sfx` under the source folder is auto-discovered and ingested into
+`sfx_line`/`sfx_subject`/`sfx_option`/`sfx_class`/`sfx_student_preference`/
+`sfx_constraint` tables - namespaced `sfx_*` since the concepts overlap
+with but differ from the `.tfx`-derived tables. Preferences link to the
+existing `student` table by code; a code with no match (expected for a
+next-year planning file) is kept by code only, never dropped. Cross-
+validated against the real files: **every** student code across all six
+`.sfx` files matched an existing student from the `.tfx` - zero
+unlinked, a good sign the planning data and the resolved timetable are
+in sync right now. See `docs/data-model.md`'s "Student Options data"
+section and `docs/rules.md` for what this could unlock (option-line
+constraint checks, "does the resolved timetable match what students
+actually selected") - not built yet, this milestone is ingestion only.
 
-Same file shape as §3.1 but `Days: []` and `Periods: []` — an empty
-template/test file, not live school data. Not part of the data model.
+### 3.3 `tester.tfx` (historical)
+
+An earlier discovery pass found an empty template/test file at the
+project root (`Days: []`, `Periods: []`). It's since been removed from
+git entirely per `docs/privacy-threat-model.md` - tracking any `.tfx`
+path risked becoming a real-data leak if it were ever overwritten
+locally without updating `.gitignore`. Noted here only so the removal
+isn't a mystery if you go looking for it.
 
 ## 4. eMinerva roll-marking export/import files
 
