@@ -2,6 +2,8 @@
 enrolment reconciliation, against the real export data. Only asserts on
 aggregate counts and discrepancy structure - never on individual names."""
 
+import hashlib
+import re
 import sqlite3
 
 import pytest
@@ -33,6 +35,21 @@ def test_table_counts(counts_and_db):
     assert counts["teacher"] == 74
     assert counts["timetable_entry"] == 2181
     assert counts["enrolment"] > 6000
+
+
+def test_ingest_run_records_source_hash_and_audit_event(counts_and_db):
+    """The hash proves exactly which .tfx version everything downstream
+    (findings, composite candidates) was analysed against."""
+    _, conn = counts_and_db
+    row = conn.execute("SELECT tfx_source_sha256 FROM ingest_run").fetchone()
+    assert row["tfx_source_sha256"] is not None
+    assert re.fullmatch(r"[0-9a-f]{64}", row["tfx_source_sha256"])
+    assert row["tfx_source_sha256"] == hashlib.sha256(TFX_PATH.read_bytes()).hexdigest()
+
+    audit_row = conn.execute(
+        "SELECT summary FROM audit_event WHERE event_type = 'ingest_completed'"
+    ).fetchone()
+    assert audit_row is not None
 
 
 def test_no_unexplained_master_timetable_mismatches(counts_and_db):

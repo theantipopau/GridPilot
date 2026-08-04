@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS ingest_run (
     started_at TEXT NOT NULL,
     finished_at TEXT,
     tfx_source_path TEXT,
+    -- SHA-256 of the source .tfx file at ingest time - proves exactly
+    -- which export version a given run (and everything downstream of it:
+    -- findings, composite candidates, change sets) was analysed against.
+    tfx_source_sha256 TEXT,
     notes TEXT
 );
 
@@ -319,3 +323,26 @@ CREATE TABLE IF NOT EXISTS proposed_change_finding (
     finding_id INTEGER NOT NULL REFERENCES finding(id),
     PRIMARY KEY (proposed_change_id, finding_id)
 );
+
+-- Audit trail --------------------------------------------------------------
+-- PROJECT_ROADMAP.md Milestone 5: an audit event for imports, rule runs,
+-- composite approvals, change-set approvals, and (once built) exports.
+-- Append-only from the application's perspective - nothing here ever
+-- deletes or edits a prior event. `actor` is a free-text name (this is a
+-- single-user local desktop tool with no login system - see
+-- docs/privacy-threat-model.md), never an email. `detail_json` follows the
+-- same no-PII rule as everything else: codes and ids, never names.
+
+CREATE TABLE IF NOT EXISTS audit_event (
+    id INTEGER PRIMARY KEY,
+    occurred_at TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    summary TEXT NOT NULL,
+    detail_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_event(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_event_occurred ON audit_event(occurred_at);

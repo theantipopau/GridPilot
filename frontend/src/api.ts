@@ -1,4 +1,5 @@
 import type {
+  AuditEvent,
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
@@ -130,4 +131,9 @@ export function approveChangeSet(changeSetId: number, reviewedBy: string): Promi
 
 export function rejectChangeSet(changeSetId: number, reviewedBy: string): Promise<{ approval_status: string }> {
   return postJson(`${BASE}/change-sets/${changeSetId}/reject`, { reviewed_by: reviewedBy });
+}
+
+export function fetchAuditEvents(eventType?: string): Promise<{ events: AuditEvent[]; total: number }> {
+  const qs = eventType ? `?event_type=${encodeURIComponent(eventType)}` : "";
+  return getJson(`${BASE}/audit${qs}`);
 }

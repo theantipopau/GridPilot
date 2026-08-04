@@ -14,6 +14,7 @@ from app.analysis.clash_rules import run_clash_rules
 from app.analysis.composite_review import sync_composite_candidates
 from app.analysis.load_rules import run_load_rules
 from app.analysis.models import Finding
+from app.audit import log_event
 from app.config import DB_PATH
 
 
@@ -71,6 +72,12 @@ def run_analysis(db_path=None) -> dict:
         by_rule: dict[str, int] = {}
         for f in findings:
             by_rule[f.rule_id] = by_rule.get(f.rule_id, 0) + 1
+
+        log_event(
+            conn, "rules_run_completed", f"Rules engine run: {len(findings)} findings",
+            detail={"findings_by_rule": by_rule, "finding_persistence": persist_result,
+                    "composite_sync": composite_sync},
+        )
 
         return {
             "composite_sync": composite_sync,

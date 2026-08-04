@@ -17,6 +17,7 @@ from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.models import Finding
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
+from app.audit import log_event
 
 
 class ChangeSetError(Exception):
@@ -200,6 +201,10 @@ def approve_change_set(conn: sqlite3.Connection, change_set_id: int, reviewed_by
         "UPDATE change_set SET approval_status = 'APPROVED', reviewed_at = ?, reviewed_by = ? WHERE id = ?",
         (dt.datetime.now(dt.UTC).isoformat(), reviewed_by, change_set_id),
     )
+    log_event(
+        conn, "change_set_approved", f"Change set {change_set_id} approved",
+        actor=reviewed_by, entity_type="change_set", entity_id=change_set_id,
+    )
     conn.commit()
 
 
@@ -210,5 +215,9 @@ def reject_change_set(conn: sqlite3.Connection, change_set_id: int, reviewed_by:
     conn.execute(
         "UPDATE change_set SET approval_status = 'REJECTED', reviewed_at = ?, reviewed_by = ? WHERE id = ?",
         (dt.datetime.now(dt.UTC).isoformat(), reviewed_by, change_set_id),
+    )
+    log_event(
+        conn, "change_set_rejected", f"Change set {change_set_id} rejected",
+        actor=reviewed_by, entity_type="change_set", entity_id=change_set_id,
     )
     conn.commit()

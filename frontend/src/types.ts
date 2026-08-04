@@ -208,3 +208,14 @@ export interface SuggestionsResponse {
   note: string | null;
   candidates: SuggestionCandidate[];
 }
+
+export interface AuditEvent {
+  id: number;
+  occurred_at: string;
+  actor: string;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  summary: string;
+  detail: Record<string, unknown> | null;
+}

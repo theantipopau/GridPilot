@@ -17,9 +17,10 @@ built against.
 (clash/capacity/load rules, with human-reviewed composite-class handling),
 safe change sets (propose an edit, validate it against a what-if re-run
 of the clash rules, approve/reject - the imported timetable is never
-mutated), and algorithmic fix suggestions (search every valid alternate
+mutated), algorithmic fix suggestions (search every valid alternate
 room/time, reject anything that fails a hard constraint, rank the rest -
-no AI involved) are built and tested against the real export in
+no AI involved), and an audit trail + source-hash provenance + explicit
+retention/purge are built and tested against the real export in
 `Timetabler Export/`. AI advisor and actual export are not built yet -
 this README will grow as those land.
 
@@ -66,6 +67,9 @@ npm install
 - `docs/suggestions.md` - the algorithmic fix-suggestion engine: search
   space, hard-constraint validation, scoring, and what's deliberately
   out of scope (student clashes, teacher reassignment).
+- `docs/privacy-threat-model.md` - data flows, trust boundaries, the
+  audit trail, source-file hash provenance, and the retention/purge
+  utility.
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
@@ -133,15 +137,27 @@ cd frontend
 npm run dev
 ```
 
-Then open http://localhost:5173. Four tabs: **Timetable** (filter by
+Then open http://localhost:5173. Five tabs: **Timetable** (filter by
 teacher/room/roll class), **Findings** (every issue the rules engine
 found - "Suggest fixes" shows ranked, pre-validated candidate moves with
 a one-click "Use this" per candidate, or "Propose a fix manually" to pick
 your own - see `docs/suggestions.md`), **Composite Review** (approve or
-reject detected composite classes - see `docs/rules.md`), and **Change
+reject detected composite classes - see `docs/rules.md`), **Change
 Sets** (validate and approve/reject a proposed edit - see
-`docs/change-sets.md`). Run `python -m app.analysis.run` first so there's
-something for Findings/Composite Review to show.
+`docs/change-sets.md`), and **Audit** (every import, rules-engine run,
+composite/change-set decision - see `docs/privacy-threat-model.md`). Run
+`python -m app.analysis.run` first so there's something for
+Findings/Composite Review to show.
+
+## Clearing working data
+
+```bash
+cd backend
+python -m app.retention              # dry run - lists what would be deleted
+python -m app.retention --confirm    # actually deletes data/ and output/
+```
+
+Never touches `Timetabler Export/`. See `docs/privacy-threat-model.md`.
 
 ## Overriding data locations
 

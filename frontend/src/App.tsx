@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import { addProposedChange, createChangeSet, fetchReference } from "./api";
 import gridPilotLogo from "./assets/gridpilot-logo.png";
+import AuditPage from "./pages/AuditPage";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import FindingsPage from "./pages/FindingsPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, ReferenceData, SuggestionCandidate } from "./types";
 
-type Tab = "timetable" | "findings" | "composites" | "changes";
+type Tab = "timetable" | "findings" | "composites" | "changes" | "audit";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "timetable", label: "Timetable" },
   { id: "findings", label: "Findings" },
   { id: "composites", label: "Composite Review" },
   { id: "changes", label: "Change Sets" },
+  { id: "audit", label: "Audit" },
 ];
 
 function buildProposeFixContext(finding: Finding): ProposeFixContext {
@@ -107,6 +109,7 @@ export default function App() {
           openChangeSetId={openChangeSetId}
         />
       )}
+      {tab === "audit" && <AuditPage />}
     </div>
   );
 }

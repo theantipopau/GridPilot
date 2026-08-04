@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.analysis.run import run_analysis
 from app.api.deps import get_db, get_db_writable
+from app.audit import log_event
 
 router = APIRouter()
 
@@ -75,6 +76,11 @@ def _review(group_id: int, status: str, request: ReviewRequest, conn: sqlite3.Co
     conn.execute(
         "UPDATE composite_group SET review_status = ?, reviewed_at = ?, reviewed_by = ?, review_note = ? WHERE id = ?",
         (status, dt.datetime.now(dt.UTC).isoformat(), request.reviewed_by, request.note, group_id),
+    )
+    log_event(
+        conn, "composite_group_reviewed", f"Composite group {group_id} marked {status}",
+        actor=request.reviewed_by, entity_type="composite_group", entity_id=group_id,
+        detail={"review_status": status, "note": request.note},
     )
     conn.commit()
     conn.close()
