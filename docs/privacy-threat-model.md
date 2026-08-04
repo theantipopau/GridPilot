@@ -26,6 +26,20 @@ API calls exist anywhere in the codebase today. When the AI advisor layer
 is eventually built, the brief's constraint (Ollama only, local inference)
 governs it - see `docs/data-model.md`'s architecture decisions.
 
+**One important caveat the above does not cover: OneDrive.** The project
+directory (including `Timetabler Export/`, `data/sophia_tt.sqlite3`, and
+`output/`) currently lives inside a `OneDrive - Brisbane Catholic
+Education` folder, so everything in it syncs to BCE's OneDrive tenant.
+That's outside this tool's control - the tool itself never initiates any
+network transfer - and it isn't a *new* exposure (the source exports
+already lived in this folder before this project existed, and it's the
+school's own managed tenant, presumably with its own compliance
+posture). But "everything stays on this machine" would be an overclaim:
+the accurate statement is "this tool sends nothing anywhere; the folder
+it lives in is cloud-synced by the school's own OneDrive." If strictly
+local storage is ever required, move the working directories out of
+OneDrive via `TT_SOURCE_DIR`/`TT_DATA_DIR`/`TT_OUTPUT_DIR`.
+
 **The one external-facing surface** is `Timetabler Export/` itself -
 read-only, and every ingestion path (`app/ingest/`) only ever opens files
 under `SOURCE_DIR` for reading. `app/config.py`'s `DATA_DIR`/`OUTPUT_DIR`

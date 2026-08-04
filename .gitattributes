@@ -1,0 +1,8 @@
+# Normalise line endings so commits stop producing LF/CRLF warning noise
+# on Windows. Text files are stored with LF in the repo; checkout uses
+# the platform default.
+* text=auto
+*.png binary
+*.tfx binary
+*.sfx binary
+*.sqlite3 binary

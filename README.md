@@ -10,7 +10,15 @@ Everything runs on your machine. Nothing containing student or staff data
 is ever sent to a cloud API by this tool - see `docs/data-formats.md`
 Section 3's privacy note and the project brief
 (`claude-code-timetabling-tool-prompt.md`) for the constraints this is
-built against.
+built against. (One caveat: the project folder itself lives inside the
+school's OneDrive, so files here sync to BCE's tenant - see
+`docs/privacy-threat-model.md`.)
+
+> **Operational warning**: `python -m app.ingest.run` currently rebuilds
+> the working database from scratch, which **discards all composite
+> reviews, change sets, and audit history**. Fine while evaluating; do
+> not rely on those surviving a re-ingest until the persistence fix in
+> `docs/project-status.md` #1 lands.
 
 **Status**: data ingestion + cross-validation, a timetable grid view
 (filterable by teacher/room/roll class), a deterministic rules engine
@@ -76,6 +84,9 @@ npm install
   strategy, all six validation gates, why file-writing is CLI-only, and
   what this tool genuinely cannot verify (actual Timetabling Solutions
   re-import - test that yourself against a non-production copy first).
+- `docs/project-status.md` - honest health review: what's solid, the
+  known weaknesses in priority order (re-ingest wiping review decisions
+  is #1), and the recommended sequence for what's next.
 - `docs/staff-capability-model.md`, `docs/staffing-priority-policy.md`,
   `docs/staffing-ux-workflows.md` - mapping for the staff teaching
   capability/allocation addendum against the schema above. Documentation
