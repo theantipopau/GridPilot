@@ -11,18 +11,28 @@ import {
 import ImportPanel from "./components/ImportPanel";
 import LoadingState from "./components/LoadingState";
 import Sidebar, { type SidebarItem, type Tab } from "./components/Sidebar";
-import { IconAlertTriangle, IconCalendar, IconClipboardList, IconGitBranch, IconHome, IconLayers } from "./components/icons";
+import {
+  IconAlertTriangle,
+  IconCalendar,
+  IconClipboardList,
+  IconGitBranch,
+  IconHome,
+  IconLayers,
+  IconUsers,
+} from "./components/icons";
 import AuditPage from "./pages/AuditPage";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import DashboardPage from "./pages/DashboardPage";
 import FindingsPage from "./pages/FindingsPage";
+import TeachersPage from "./pages/TeachersPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "./types";
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> },
   { id: "timetable", label: "Timetable", icon: (c) => <IconCalendar className={c} /> },
+  { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
   { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
   { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
   { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
@@ -168,6 +178,7 @@ export default function App() {
             onOpenChangeSet={openChangeSetInTab}
           />
         )}
+        {tab === "teachers" && <TeachersPage />}
         {tab === "findings" && (
           <FindingsPage
             onProposeFix={(finding) => {

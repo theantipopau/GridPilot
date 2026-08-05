@@ -436,3 +436,35 @@ CREATE TABLE IF NOT EXISTS audit_event (
 
 CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_event(event_type);
 CREATE INDEX IF NOT EXISTS idx_audit_event_occurred ON audit_event(occurred_at);
+
+-- Staff roles / middle leadership tiers --------------------------------------
+-- App-owned, not derived from any Timetabling Solutions export - there is
+-- no source data for "this teacher is a Head of Department with N minutes
+-- release per cycle" anywhere in the .tfx/.sfx files. Entered and managed
+-- entirely within GridPilot. Deliberately not in app/db/resync.py's
+-- SOURCE_TABLES_IN_DELETE_ORDER - these two tables are never wiped on
+-- re-ingest, same treatment as composite_group/change_set.
+--
+-- teacher_role_assignment references the teacher by CODE, not by
+-- teacher.id - teacher is a source-derived table that's fully rebuilt
+-- (new surrogate ids) on every re-ingest (see app/db/resync.py), so a
+-- role assignment keyed by the old integer id would silently point at
+-- the wrong teacher - or nothing - the moment a new export is loaded.
+-- The code is the one thing about a teacher that's stable across terms.
+
+CREATE TABLE IF NOT EXISTS staff_role (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,          -- e.g. "Head of Department"
+    tier TEXT,                          -- free text, e.g. "Tier 1" - school's own naming, not GridPilot's
+    release_minutes_per_cycle REAL,     -- nullable - a role can exist without a confirmed time value yet
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS teacher_role_assignment (
+    id INTEGER PRIMARY KEY,
+    teacher_code TEXT NOT NULL UNIQUE,  -- one active role per teacher in v1; re-assigning replaces it
+    staff_role_id INTEGER NOT NULL REFERENCES staff_role(id),
+    assigned_at TEXT NOT NULL,
+    assigned_by TEXT NOT NULL
+);

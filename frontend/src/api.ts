@@ -10,7 +10,9 @@ import type {
   IngestUploadResult,
   ReferenceData,
   ReviewStatus,
+  StaffRole,
   SuggestionsResponse,
+  TeacherSummary,
   TimetableEntryLookup,
   TimetableResponse,
   ValidationResult,
@@ -144,6 +146,38 @@ export function fetchAuditEvents(eventType?: string): Promise<{ events: AuditEve
 
 export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> {
   return getJson(`${BASE}/change-sets/${changeSetId}/export-preview`);
+}
+
+export function fetchTeachers(): Promise<{ teachers: TeacherSummary[] }> {
+  return getJson(`${BASE}/teachers`);
+}
+
+export function fetchTeacher(code: string): Promise<TeacherSummary> {
+  return getJson(`${BASE}/teachers/${encodeURIComponent(code)}`);
+}
+
+export function fetchRoles(): Promise<{ roles: StaffRole[] }> {
+  return getJson(`${BASE}/roles`);
+}
+
+export function createRole(params: {
+  name: string;
+  tier?: string;
+  release_minutes_per_cycle?: number;
+  notes?: string;
+}): Promise<{ id: number }> {
+  return postJson(`${BASE}/roles`, params);
+}
+
+export function assignTeacherRole(
+  code: string,
+  staffRoleId: number | null,
+  assignedBy: string,
+): Promise<{ teacher_code: string; staff_role_id: number | null }> {
+  return postJson(`${BASE}/teachers/${encodeURIComponent(code)}/role`, {
+    staff_role_id: staffRoleId,
+    assigned_by: assignedBy,
+  });
 }
 
 export function fetchDashboard(): Promise<DashboardData> {

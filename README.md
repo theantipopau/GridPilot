@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-110%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-118%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -55,12 +55,13 @@ synthetic data alone:
 | ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
 | ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the sidebar. |
 | ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
+| ✅ **Teachers** | Name, code, faculty, and load (contracted vs. scheduled) straight from the import - read-only. Plus middle-leadership role/tier assignment, the one thing entered directly in GridPilot - kept by teacher **code**, not an internal id, specifically so it survives a re-ingest. |
 
 **Not yet built:** the local AI advisor (Ollama) layer, adding/editing
-teacher records (deliberately staying view-only for staff data for now),
-and anything resembling a solver or multi-scenario planning (a real
-architecture change, not a UI addition) - see
-[Project status](#project-status).
+teacher *records* (name/faculty/load stay view-only - only role
+assignment is writable), and anything resembling a solver or
+multi-scenario planning (a real architecture change, not a UI addition) -
+see [Project status](#project-status).
 
 ## Design direction
 

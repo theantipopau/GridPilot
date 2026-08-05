@@ -254,6 +254,25 @@ export interface IngestDiscrepancy {
   description: string;
 }
 
+export interface StaffRole {
+  id: number;
+  name: string;
+  tier: string | null;
+  release_minutes_per_cycle: number | null;
+  notes?: string | null;
+}
+
+export interface TeacherSummary {
+  code: string;
+  first_name: string | null;
+  last_name: string | null;
+  staff_category: string | null;
+  faculty_codes: string[];
+  contracted_load_minutes: number | null;
+  scheduled_load_minutes: number | null;
+  role: StaffRole | null;
+}
+
 export interface DashboardData {
   counts: {
     teachers: number;
