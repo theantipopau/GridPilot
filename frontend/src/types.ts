@@ -58,6 +58,7 @@ export interface ReferenceData {
 }
 
 export interface TimetableEntry {
+  entry_id: number;
   day_code: string;
   day_no: number;
   week_label: string;

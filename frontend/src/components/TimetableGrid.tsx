@@ -5,6 +5,8 @@ interface Props {
   days: Day[];
   periods: Period[];
   entries: TimetableEntry[];
+  pendingEntryIds?: Set<number>;
+  onSelectLesson?: (entry: TimetableEntry) => void;
 }
 
 const ENTRY_STYLES: Record<string, string> = {
@@ -17,7 +19,7 @@ const ENTRY_STYLES: Record<string, string> = {
   OTHER: "bg-slate-50 border-slate-200 text-slate-600",
 };
 
-export default function TimetableGrid({ view, days, periods, entries }: Props) {
+export default function TimetableGrid({ view, days, periods, entries, pendingEntryIds, onSelectLesson }: Props) {
   const weekA = days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
   const weekB = days.filter((d) => d.week_label === "B").sort((a, b) => a.day_no - b.day_no);
 
@@ -39,6 +41,8 @@ export default function TimetableGrid({ view, days, periods, entries }: Props) {
         periods={canonicalPeriods}
         entriesByKey={entriesByKey}
         view={view}
+        pendingEntryIds={pendingEntryIds}
+        onSelectLesson={onSelectLesson}
       />
       <WeekTable
         label="Week B"
@@ -46,6 +50,8 @@ export default function TimetableGrid({ view, days, periods, entries }: Props) {
         periods={canonicalPeriods}
         entriesByKey={entriesByKey}
         view={view}
+        pendingEntryIds={pendingEntryIds}
+        onSelectLesson={onSelectLesson}
       />
     </div>
   );
@@ -57,12 +63,16 @@ function WeekTable({
   periods,
   entriesByKey,
   view,
+  pendingEntryIds,
+  onSelectLesson,
 }: {
   label: string;
   weekDays: Day[];
   periods: Period[];
   entriesByKey: Map<string, TimetableEntry[]>;
   view: ViewType;
+  pendingEntryIds?: Set<number>;
+  onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   return (
     <div>
@@ -100,7 +110,7 @@ function WeekTable({
                   const cellEntries = entriesByKey.get(key) ?? [];
                   return (
                     <td key={d.code} className="border-b border-slate-200 p-1 align-top">
-                      <Cell view={view} entries={cellEntries} />
+                      <Cell view={view} entries={cellEntries} pendingEntryIds={pendingEntryIds} onSelectLesson={onSelectLesson} />
                     </td>
                   );
                 })}
@@ -113,7 +123,17 @@ function WeekTable({
   );
 }
 
-function Cell({ view, entries }: { view: ViewType; entries: TimetableEntry[] }) {
+function Cell({
+  view,
+  entries,
+  pendingEntryIds,
+  onSelectLesson,
+}: {
+  view: ViewType;
+  entries: TimetableEntry[];
+  pendingEntryIds?: Set<number>;
+  onSelectLesson?: (entry: TimetableEntry) => void;
+}) {
   if (entries.length === 0) {
     return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-slate-300">Free</div>;
   }
@@ -122,14 +142,32 @@ function Cell({ view, entries }: { view: ViewType; entries: TimetableEntry[] }) 
 
   return (
     <div className={clash ? "flex flex-col gap-1 ring-2 ring-red-400 rounded" : undefined}>
-      {entries.map((e, i) => (
-        <div
-          key={i}
-          className={`rounded border p-1.5 text-xs leading-tight ${ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER}`}
-        >
-          <EntryContent view={view} entry={e} />
-        </div>
-      ))}
+      {entries.map((e, i) => {
+        const editable = e.entry_type === "LESSON" && !!onSelectLesson;
+        const pending = pendingEntryIds?.has(e.entry_id);
+        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight ${ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER} ${
+          editable ? "cursor-pointer hover:ring-2 hover:ring-sky-400" : ""
+        } ${pending ? "ring-2 ring-amber-400" : ""}`;
+
+        const content = (
+          <>
+            {pending && (
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" title="Pending edit" />
+            )}
+            <EntryContent view={view} entry={e} />
+          </>
+        );
+
+        return editable ? (
+          <button key={i} type="button" className={className} onClick={() => onSelectLesson!(e)}>
+            {content}
+          </button>
+        ) : (
+          <div key={i} className={className}>
+            {content}
+          </div>
+        );
+      })}
       {clash && <div className="px-1 text-[10px] font-semibold text-red-600">CLASH</div>}
     </div>
   );

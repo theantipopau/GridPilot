@@ -95,21 +95,33 @@ Suggested sequence:
 
 1. **Trial import into TT Solutions** (weakness #1) - user task, small,
    unlocks trust in the whole loop.
-2. **Timetable-building UX** - the current grid is read-only-plus-tabs.
-   The supplied mockup (`docs/design/ui-mockup.png`) shows the target: a
-   grid you edit in place, with a lesson inspector, drag/move actions
-   that create proposed changes automatically, and clash/composite
-   badges inline. The change-set machinery underneath already exists -
-   this is mostly frontend work wiring the grid to it.
-3. **AI advisor (Ollama)** - the layer the original brief promised.
+2. **AI advisor (Ollama)** - the layer the original brief promised.
    Everything is staged for it: findings are structured, suggestions are
    pre-validated, evidence is codes-only. The AI's job per the roadmap
    is to *explain* findings, *summarise* trade-offs between candidate
    fixes, and *draft* changes into the same reviewable change-set
    pipeline - never to apply anything itself. `qwen3.5:9b` is already
    pulled locally.
-4. **Staff capability / solver work** (the three larger planning docs) -
-   still parked, correctly, until the above is stable.
+3. **Staff capability / solver work** (the three larger planning docs) -
+   still parked, correctly, until the above is stable. If/when teacher
+   *records* (not just capability rules) become editable in the UI, stay
+   code+role only (qualifications, faculty, roles/middle-leader,
+   capabilities, load) - explicitly **not** personal-detail fields (DOB,
+   home address, emergency contact) shown in `docs/design/ui-mockup2.png`,
+   per the 2026-08-06 decision below.
+
+*2026-08-06 update: **Timetable-building UX** (formerly #2 here) is
+done - click a lesson in the grid, move it, see the clash-rule impact
+immediately, save as a change set. The change-set/validation machinery
+this was "mostly frontend work" against is exactly what made it a
+same-day build. Also added: browser-based `.tfx`/`.sfx` import (no more
+CLI-only ingestion). A second UI mockup was supplied showing a much
+richer teacher-profile screen (`docs/design/ui-mockup2.png`) - it
+includes real PII (date of birth, home address, emergency contact) with
+no source in any Timetabling Solutions export; decided to keep teacher
+data view-only and code+role-only for any future build, not add PII
+storage - see the README's privacy section, which this project has held
+to since the start.*
 
 ## Housekeeping done as part of this review
 

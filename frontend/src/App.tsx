@@ -65,6 +65,12 @@ export default function App() {
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({ findings: 0, composites: 0, changes: 0 });
+  const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
+
+  const openChangeSetInTab = (id: number) => {
+    setOpenChangeSetId(id);
+    setTab("changes");
+  };
 
   // Sequenced, not parallel: fetching reference data before we know an
   // import has ever happened would 503 against a schema-less database
@@ -104,8 +110,7 @@ export default function App() {
       reason: "Applied from a suggested fix",
       finding_ids: [finding.id],
     });
-    setOpenChangeSetId(id);
-    setTab("changes");
+    openChangeSetInTab(id);
   };
 
   const handleImported = () => {
@@ -195,7 +200,14 @@ export default function App() {
       {showImportModal && (
         <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
       )}
-      {tab === "timetable" && <TimetablePage reference={reference} />}
+      {tab === "timetable" && (
+        <TimetablePage
+          reference={reference}
+          gridChangeSetId={gridChangeSetId}
+          onGridChangeSetCreated={setGridChangeSetId}
+          onOpenChangeSet={openChangeSetInTab}
+        />
+      )}
       {tab === "findings" && (
         <FindingsPage
           onProposeFix={(finding) => {

@@ -33,6 +33,7 @@ def get_timetable(
     rows = conn.execute(
         f"""
         SELECT
+            te.id AS entry_id,
             d.code AS day_code, d.day_no, d.week_label,
             p.code AS period_code, p.period_no, p.name AS period_name, p.entry_kind,
             te.entry_type,

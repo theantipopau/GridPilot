@@ -47,7 +47,7 @@ synthetic data alone:
 | | |
 |---|---|
 | ✅ **Ingestion + cross-validation** | `.tfx` (primary source) cross-checked against CSV and eMinerva exports; every mismatch surfaced as a structured discrepancy, never silently dropped. Auto-discovers the newest export file — a new term needs no code change. |
-| ✅ **Timetable grid** | Filterable by teacher, room, or roll class. |
+| ✅ **Timetable grid** | Filterable by teacher, room, or roll class. Click any lesson to move it - day, period, room, and/or teacher - and see the clash-rule impact immediately, before anything is saved. |
 | ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation. Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. |
 | ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
@@ -55,10 +55,9 @@ synthetic data alone:
 | ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
 | ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the header. |
 
-**Not yet built:** the local AI advisor (Ollama) layer, and a
-purpose-built timetable-*building* UI (the current grid is
-read-only-plus-tabs, not a drag-and-drop editor). See
-[Project status](#project-status).
+**Not yet built:** the local AI advisor (Ollama) layer, and adding/editing
+teacher records (deliberately staying view-only for staff data for now -
+see [Project status](#project-status)).
 
 ## Design direction
 
