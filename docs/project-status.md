@@ -115,13 +115,33 @@ done - click a lesson in the grid, move it, see the clash-rule impact
 immediately, save as a change set. The change-set/validation machinery
 this was "mostly frontend work" against is exactly what made it a
 same-day build. Also added: browser-based `.tfx`/`.sfx` import (no more
-CLI-only ingestion). A second UI mockup was supplied showing a much
+CLI-only ingestion), a UI polish pass (icons, page headers, empty
+states), and a sidebar + real Dashboard page (`docs/design/ui-mockup3.png`
+was the reference). A second UI mockup was supplied showing a much
 richer teacher-profile screen (`docs/design/ui-mockup2.png`) - it
 includes real PII (date of birth, home address, emergency contact) with
 no source in any Timetabling Solutions export; decided to keep teacher
 data view-only and code+role-only for any future build, not add PII
 storage - see the README's privacy section, which this project has held
 to since the start.*
+
+*2026-08-06 update 2: a third mockup (`docs/design/ui-mockup3.png`)
+showed a full sidebar IA and a "Timetable Overview" dashboard with score
+rings, a scenario selector, a solver action, a real-calendar-dates
+snapshot, and compliance-% metrics. Built the parts backed by real data -
+a sidebar nav (light theme; the actual logo has dark text and doesn't
+read on a dark sidebar, so that one detail departed from the mockup) and
+a Dashboard page wired to a new `/api/dashboard` endpoint (real finding/
+composite/change-set counts, real average room utilisation, real entity
+counts, real recent-audit-events). Deliberately did **not** build:
+Scenarios (GridPilot has one timetable, not branching versions - a real
+architecture change, not a UI skin), "Run Solver" (no solver exists -
+the deterministic-rules-only design has been intentional throughout),
+a real-dates calendar view (no calendar mapping exists, and the roadmap
+explicitly warned against guessing one), or the compliance-% tiles
+(Curriculum Coverage, Teacher Availability, etc. - not things GridPilot
+computes, and inventing scoring logic just to fill a tile felt like
+exactly the kind of decorative-but-hollow UI this project has avoided).*
 
 ## Housekeeping done as part of this review
 

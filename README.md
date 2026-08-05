@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-108%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-110%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -53,21 +53,30 @@ synthetic data alone:
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
 | ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
 | ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
-| ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the header. |
+| ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the sidebar. |
+| ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
 
-**Not yet built:** the local AI advisor (Ollama) layer, and adding/editing
-teacher records (deliberately staying view-only for staff data for now -
-see [Project status](#project-status)).
+**Not yet built:** the local AI advisor (Ollama) layer, adding/editing
+teacher records (deliberately staying view-only for staff data for now),
+and anything resembling a solver or multi-scenario planning (a real
+architecture change, not a UI addition) - see
+[Project status](#project-status).
 
 ## Design direction
 
-The current UI is functional, not final — plain tabs (Timetable,
-Findings, Composite Review, Change Sets, Audit), no drag-and-drop yet.
-The mockup below is the target design direction, not a screenshot of
-what exists today:
+The UI now follows the target mockups fairly closely — a sidebar, a real
+Dashboard, and an editable timetable grid all exist. What's deliberately
+*not* built, even though the mockups show it: Scenarios (GridPilot has
+one timetable, not branching versions), a solver/"Run Solver" action (no
+optimiser exists — deterministic rules only, by design), a real-calendar
+Timetable Overview (no calendar-date mapping exists, and guessing one was
+explicitly ruled out early on), and compliance-percentage tiles (not
+things GridPilot actually computes). See
+[`docs/project-status.md`](docs/project-status.md) for the reasoning
+behind each.
 
 <p align="center">
-  <img src="docs/design/ui-mockup.png" alt="GridPilot UI mockup — target design direction" width="850">
+  <img src="docs/design/ui-mockup3.png" alt="GridPilot dashboard mockup — the most recent design reference" width="850">
 </p>
 
 ## Quick start
@@ -98,9 +107,12 @@ Open **http://localhost:5173**. With no data loaded yet, you'll land on
 an import screen — choose the `.tfx` export (required) and any `.sfx`
 Student Options files (optional, can be added later), and it ingests and
 runs the rules engine immediately. Re-import a fresh export any time via
-**Import…** in the header. Five tabs once loaded: **Timetable**,
-**Findings** (with one-click "Suggest fixes" and an attention-count
-badge), **Composite Review**, **Change Sets**, and **Audit**.
+**Import…** in the sidebar. Six sections once loaded: **Dashboard** (a
+real overview - open findings, pending reviews, room utilisation, entity
+counts), **Timetable** (click a lesson to move it and see the clash
+impact live), **Findings** (with one-click "Suggest fixes" and an
+attention-count badge), **Composite Review**, **Change Sets**, and
+**Audit**.
 
 Prefer the CLI (scripting, or a file already sitting in
 `Timetabler Export/`)? Same ingestion path, just triggered directly:

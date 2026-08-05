@@ -254,6 +254,24 @@ export interface IngestDiscrepancy {
   description: string;
 }
 
+export interface DashboardData {
+  counts: {
+    teachers: number;
+    rooms: number;
+    roll_classes: number;
+    students: number;
+    class_names: number;
+    lessons: number;
+    days: number;
+    periods_per_day: number;
+  };
+  findings_by_severity: Record<Severity, number>;
+  composites_pending: number;
+  change_sets_draft: number;
+  room_utilisation_pct: number | null;
+  last_rules_run_at: string | null;
+}
+
 export interface IngestUploadResult {
   counts: Record<string, number>;
   analysis: {

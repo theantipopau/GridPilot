@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   addProposedChange,
   createChangeSet,
@@ -8,35 +8,26 @@ import {
   fetchIngestStatus,
   fetchReference,
 } from "./api";
-import gridPilotLogo from "./assets/gridpilot-logo.png";
 import ImportPanel from "./components/ImportPanel";
 import LoadingState from "./components/LoadingState";
-import { IconAlertTriangle, IconCalendar, IconClipboardList, IconGitBranch, IconLayers, IconUpload } from "./components/icons";
+import Sidebar, { type SidebarItem, type Tab } from "./components/Sidebar";
+import { IconAlertTriangle, IconCalendar, IconClipboardList, IconGitBranch, IconHome, IconLayers } from "./components/icons";
 import AuditPage from "./pages/AuditPage";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
+import DashboardPage from "./pages/DashboardPage";
 import FindingsPage from "./pages/FindingsPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "./types";
 
-type Tab = "timetable" | "findings" | "composites" | "changes" | "audit";
-
-const TABS: { id: Tab; label: string; icon: (className?: string) => ReactNode }[] = [
+const SIDEBAR_ITEMS: SidebarItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> },
   { id: "timetable", label: "Timetable", icon: (c) => <IconCalendar className={c} /> },
   { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
   { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
   { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
   { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
 ];
-
-function sourceFileName(path: string | null): string | null {
-  if (!path) return null;
-  const base = path.split(/[\\/]/).pop() ?? path;
-  // Browser-uploaded files are staged on disk with a "<timestamp>_" prefix
-  // for collision-safety (see app/api/ingest.py) - strip it back off for
-  // display so it reads as the file the user actually chose.
-  return base.replace(/^\d{8}T\d{12}_/, "");
-}
 
 function buildProposeFixContext(finding: Finding): ProposeFixContext {
   const byType = (type: string) => finding.entity_refs.find((r) => r.type === type)?.code;
@@ -62,7 +53,7 @@ export default function App() {
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("timetable");
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -117,7 +108,7 @@ export default function App() {
 
   const handleImported = () => {
     setShowImportModal(false);
-    setTab("timetable");
+    setTab("dashboard");
     loadAll();
   };
 
@@ -150,88 +141,53 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-white px-6 py-3">
-        <img src={gridPilotLogo} alt="GridPilot" className="h-8 w-auto" />
-        <nav className="flex flex-1 gap-1">
-          {TABS.map((t) => {
-            const count = badgeFor(t.id);
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                  active ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                }`}
-              >
-                {t.icon(active ? "h-4 w-4 text-sky-600" : "h-4 w-4 text-slate-400")}
-                {t.label}
-                {count > 0 && (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-xs font-semibold transition-colors duration-150 ${
-                      active ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="flex items-center gap-3 text-right">
-          <div className="hidden sm:block">
-            <p className="text-xs font-medium text-slate-600">
-              {sourceFileName(ingestStatus.last_ingest?.tfx_source_path ?? null) ?? "No file loaded"}
-            </p>
-            <p className="text-xs text-slate-400">
-              {ingestStatus.last_ingest?.finished_at
-                ? `Imported ${new Date(ingestStatus.last_ingest.finished_at).toLocaleString()}`
-                : "Sophia College"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors duration-150 hover:border-slate-400 hover:bg-slate-50"
-          >
-            <IconUpload className="h-4 w-4" />
-            Import…
-          </button>
-        </div>
-      </header>
-      {showImportModal && (
-        <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
-      )}
-      {tab === "timetable" && (
-        <TimetablePage
-          reference={reference}
-          gridChangeSetId={gridChangeSetId}
-          onGridChangeSetCreated={setGridChangeSetId}
-          onOpenChangeSet={openChangeSetInTab}
-        />
-      )}
-      {tab === "findings" && (
-        <FindingsPage
-          onProposeFix={(finding) => {
-            setProposeFixContext(buildProposeFixContext(finding));
-            setTab("changes");
-          }}
-          onApplySuggestion={handleApplySuggestion}
-        />
-      )}
-      {tab === "composites" && <CompositeReviewPage />}
-      {tab === "changes" && (
-        <ChangeSetsPage
-          reference={reference}
-          proposeFixContext={proposeFixContext}
-          onConsumeProposeFixContext={() => setProposeFixContext(null)}
-          openChangeSetId={openChangeSetId}
-        />
-      )}
-      {tab === "audit" && <AuditPage />}
+    <div className="flex min-h-screen bg-slate-50">
+      <Sidebar
+        items={SIDEBAR_ITEMS}
+        activeTab={tab}
+        onTabChange={setTab}
+        badgeFor={badgeFor}
+        ingestStatus={ingestStatus}
+        onImportClick={() => setShowImportModal(true)}
+      />
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        {showImportModal && (
+          <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
+        )}
+        {tab === "dashboard" && (
+          <DashboardPage
+            onNavigate={(t) => setTab(t)}
+            onImportClick={() => setShowImportModal(true)}
+          />
+        )}
+        {tab === "timetable" && (
+          <TimetablePage
+            reference={reference}
+            gridChangeSetId={gridChangeSetId}
+            onGridChangeSetCreated={setGridChangeSetId}
+            onOpenChangeSet={openChangeSetInTab}
+          />
+        )}
+        {tab === "findings" && (
+          <FindingsPage
+            onProposeFix={(finding) => {
+              setProposeFixContext(buildProposeFixContext(finding));
+              setTab("changes");
+            }}
+            onApplySuggestion={handleApplySuggestion}
+          />
+        )}
+        {tab === "composites" && <CompositeReviewPage />}
+        {tab === "changes" && (
+          <ChangeSetsPage
+            reference={reference}
+            proposeFixContext={proposeFixContext}
+            onConsumeProposeFixContext={() => setProposeFixContext(null)}
+            openChangeSetId={openChangeSetId}
+          />
+        )}
+        {tab === "audit" && <AuditPage />}
+      </main>
     </div>
   );
 }

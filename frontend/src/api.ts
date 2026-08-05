@@ -3,6 +3,7 @@ import type {
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
+  DashboardData,
   ExportPreview,
   FindingsResponse,
   IngestStatus,
@@ -143,6 +144,10 @@ export function fetchAuditEvents(eventType?: string): Promise<{ events: AuditEve
 
 export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> {
   return getJson(`${BASE}/change-sets/${changeSetId}/export-preview`);
+}
+
+export function fetchDashboard(): Promise<DashboardData> {
+  return getJson(`${BASE}/dashboard`);
 }
 
 export function fetchIngestStatus(): Promise<IngestStatus> {
