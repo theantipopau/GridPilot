@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-93%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-99%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -52,6 +52,7 @@ synthetic data alone:
 | ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
 | ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
+| ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
 
 **Not yet built:** the local AI advisor (Ollama) layer, and a
 purpose-built timetable-*building* UI (the current grid is
@@ -150,6 +151,7 @@ Timetabling Solutions export actually contains.
 | [`docs/change-sets.md`](docs/change-sets.md) | Proposed edits, what-if validation, why the source is never mutated |
 | [`docs/suggestions.md`](docs/suggestions.md) | The algorithmic (non-AI) fix-suggestion engine |
 | [`docs/export-validation.md`](docs/export-validation.md) | The six-gate export process, and what it genuinely can't verify |
+| [`docs/reingest-persistence.md`](docs/reingest-persistence.md) | How composite reviews, change sets, and the audit trail survive a re-ingest |
 | [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md) | Data flows, trust boundaries, audit trail, retention/purge |
 | [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
@@ -184,11 +186,12 @@ deployment environment, in [`docs/privacy-threat-model.md`](docs/privacy-threat-
 
 All six `PROJECT_ROADMAP.md` milestones are complete. The honest
 self-review in [`docs/project-status.md`](docs/project-status.md) covers
-what's solid, two known weaknesses (re-ingesting currently wipes review
-decisions — a fix is planned before routine use — and the export path
-hasn't yet been trial-imported into an actual Timetabling Solutions
-instance), and the recommended order for what's next: persistence fix →
-trial import → timetable-building UX → the Ollama AI advisor.
+what's solid, the remaining known weaknesses (top of the list: the export
+path hasn't yet been trial-imported into an actual Timetabling Solutions
+instance — re-ingest persistence, formerly #1, is now fixed, see
+[`docs/reingest-persistence.md`](docs/reingest-persistence.md)), and the
+recommended order for what's next: trial import → timetable-building UX
+→ the Ollama AI advisor.
 
 ---
 

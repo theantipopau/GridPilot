@@ -20,7 +20,8 @@ from app.config import (
     TFX_PATH,
     find_sfx_files,
 )
-from app.db.connection import fresh_database
+from app.db.connection import fresh_database, get_connection, init_schema
+from app.db.resync import resync_source_tables
 from app.ingest.csv_validate import run_all_validations
 from app.ingest.eminerva_parser import ingest_eminerva_scourse
 from app.ingest.sfx_parser import ingest_all_sfx
@@ -83,12 +84,18 @@ def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None) -> dict[str, in
     app.config.default_tfx_path) - safe to leave unset when a new term's
     export replaces the one this was built against; sfx_paths defaults to
     every .sfx found the same way, so adding/removing a year level's file
-    needs no code change either."""
+    needs no code change either.
+
+    If the target database doesn't exist yet, it's created fresh (nothing
+    to preserve). If it already exists, this re-ingests through
+    app.db.resync.resync_source_tables() instead of wiping the file, so
+    composite-group reviews, change sets, and the audit trail survive a
+    re-ingest - see docs/reingest-persistence.md."""
     path = tfx_path or TFX_PATH
     sfx_files = sfx_paths if sfx_paths is not None else find_sfx_files()
+    target_db_path = Path(db_path) if db_path is not None else DB_PATH
 
-    conn = fresh_database(db_path or DB_PATH)
-    try:
+    def _do_ingest() -> None:
         run_id = start_ingest_run(conn, str(path))
         ingest_tfx(conn, path, run_id)
         run_all_validations(conn, run_id, {
@@ -102,6 +109,19 @@ def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None) -> dict[str, in
         ingest_eminerva_scourse(conn, run_id, EMINERVA_SCOURSE_PATH)
         ingest_all_sfx(conn, sfx_files, run_id)
         finish_ingest_run(conn, run_id)
+
+    is_first_ingest = not target_db_path.exists()
+    if is_first_ingest:
+        conn = fresh_database(target_db_path)
+    else:
+        conn = get_connection(target_db_path)
+        init_schema(conn)  # idempotent (CREATE TABLE IF NOT EXISTS) - picks up any schema additions
+
+    try:
+        if is_first_ingest:
+            _do_ingest()
+        else:
+            resync_source_tables(conn, _do_ingest)
         return table_counts(conn)
     finally:
         conn.close()
