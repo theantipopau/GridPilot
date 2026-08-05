@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   addProposedChange,
   createChangeSet,
@@ -10,6 +10,8 @@ import {
 } from "./api";
 import gridPilotLogo from "./assets/gridpilot-logo.png";
 import ImportPanel from "./components/ImportPanel";
+import LoadingState from "./components/LoadingState";
+import { IconAlertTriangle, IconCalendar, IconClipboardList, IconGitBranch, IconLayers, IconUpload } from "./components/icons";
 import AuditPage from "./pages/AuditPage";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
@@ -19,12 +21,12 @@ import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "
 
 type Tab = "timetable" | "findings" | "composites" | "changes" | "audit";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "timetable", label: "Timetable" },
-  { id: "findings", label: "Findings" },
-  { id: "composites", label: "Composite Review" },
-  { id: "changes", label: "Change Sets" },
-  { id: "audit", label: "Audit" },
+const TABS: { id: Tab; label: string; icon: (className?: string) => ReactNode }[] = [
+  { id: "timetable", label: "Timetable", icon: (c) => <IconCalendar className={c} /> },
+  { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
+  { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
+  { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
+  { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
 ];
 
 function sourceFileName(path: string | null): string | null {
@@ -129,7 +131,7 @@ export default function App() {
   }
 
   if (!ingestStatus) {
-    return <div className="p-6 text-slate-500">Loading…</div>;
+    return <LoadingState />;
   }
 
   if (!ingestStatus.has_data) {
@@ -137,7 +139,7 @@ export default function App() {
   }
 
   if (!reference) {
-    return <div className="p-6 text-slate-500">Loading…</div>;
+    return <LoadingState />;
   }
 
   const badgeFor = (id: Tab): number => {
@@ -154,20 +156,22 @@ export default function App() {
         <nav className="flex flex-1 gap-1">
           {TABS.map((t) => {
             const count = badgeFor(t.id);
+            const active = tab === t.id;
             return (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-                  tab === t.id ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                  active ? "bg-sky-50 text-sky-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                 }`}
               >
+                {t.icon(active ? "h-4 w-4 text-sky-600" : "h-4 w-4 text-slate-400")}
                 {t.label}
                 {count > 0 && (
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                      tab === t.id ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-600"
+                    className={`rounded-full px-1.5 py-0.5 text-xs font-semibold transition-colors duration-150 ${
+                      active ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-600"
                     }`}
                   >
                     {count}
@@ -191,8 +195,9 @@ export default function App() {
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors duration-150 hover:border-slate-400 hover:bg-slate-50"
           >
+            <IconUpload className="h-4 w-4" />
             Import…
           </button>
         </div>

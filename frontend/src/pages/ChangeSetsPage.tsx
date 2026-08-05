@@ -10,6 +10,9 @@ import {
   validateChangeSet,
 } from "../api";
 import ChangeSetDetail, { type AddChangeParams } from "../components/ChangeSetDetail";
+import EmptyState from "../components/EmptyState";
+import PageHeader from "../components/PageHeader";
+import { IconGitBranch, IconInbox } from "../components/icons";
 import type { ChangeSetDetail as ChangeSetDetailType, ChangeSetSummary, ReferenceData } from "../types";
 
 export interface ProposeFixContext {
@@ -108,7 +111,13 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
     : undefined;
 
   return (
-    <div className="flex gap-6 p-6">
+    <div className="p-6">
+      <PageHeader
+        icon={<IconGitBranch className="h-5 w-5" />}
+        title="Change Sets"
+        description="Proposed edits, validated against the clash rules before approval. The imported timetable is never mutated - approving a change set only creates a durable record."
+      />
+      <div className="flex gap-6">
       <div className="w-72 shrink-0">
         {proposeFixContext && !detail && (
           <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm">
@@ -146,7 +155,7 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
               key={cs.id}
               type="button"
               onClick={() => setSelectedId(cs.id)}
-              className={`rounded border p-2 text-left text-xs ${
+              className={`rounded border p-2 text-left text-xs shadow-sm transition-all duration-150 hover:shadow-md ${
                 selectedId === cs.id ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
             >
@@ -159,7 +168,9 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
               <div className="text-slate-400">{cs.change_count} change(s)</div>
             </button>
           ))}
-          {list?.length === 0 && <p className="text-xs text-slate-400">No change sets yet.</p>}
+          {list?.length === 0 && (
+            <EmptyState icon={<IconInbox className="h-7 w-7" />} title="No change sets yet" />
+          )}
         </div>
       </div>
 
@@ -190,6 +201,7 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
         ) : (
           <p className="text-sm text-slate-400">Select a change set, or create one to propose a fix.</p>
         )}
+      </div>
       </div>
     </div>
   );

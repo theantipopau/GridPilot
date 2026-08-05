@@ -1,4 +1,7 @@
 import { useState } from "react";
+import EmptyState from "./EmptyState";
+import PageHeader from "./PageHeader";
+import { IconInbox, IconLayers } from "./icons";
 import type { CompositeCandidate, ReviewStatus } from "../types";
 
 interface Props {
@@ -29,12 +32,14 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
 
   return (
     <div className="p-6">
-      <p className="mb-4 max-w-2xl text-sm text-slate-600">
-        These are teacher+room combinations where the same physical lesson is scheduled under more than one
-        official class code (e.g. two year levels merged into one class). Detection is a heuristic - approve
-        only the ones that are genuinely one combined lesson. An approved group stops producing clash findings
-        for those classes; a pending or rejected one still shows as a clash.
-      </p>
+      <PageHeader
+        icon={<IconLayers className="h-5 w-5" />}
+        title="Composite Review"
+        description="Teacher+room combinations where the same physical lesson is scheduled under more than one official
+          class code (e.g. two year levels merged into one class). Detection is a heuristic - approve only the ones
+          that are genuinely one combined lesson. An approved group stops producing clash findings for those
+          classes; a pending or rejected one still shows as a clash."
+      />
 
       <div className="mb-4 flex items-center gap-3">
         <label className="text-sm text-slate-600">Reviewing as</label>
@@ -65,11 +70,17 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
       </div>
 
       {candidates.length === 0 ? (
-        <p className="text-sm text-slate-400">No {reviewStatus.toLowerCase()} candidates.</p>
+        <EmptyState
+          icon={<IconInbox className="h-8 w-8" />}
+          title={`No ${reviewStatus.toLowerCase()} candidates`}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {candidates.map((c) => (
-            <div key={c.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+            <div
+              key={c.id}
+              className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md"
+            >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.class_codes.join(" + ")}</span>
                 <span className="text-xs text-slate-400">{c.slot_count} matching slots</span>
@@ -88,7 +99,7 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
                     type="button"
                     disabled={busyId === c.id}
                     onClick={() => handleReview(c.id, "approve")}
-                    className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                    className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-emerald-700 disabled:opacity-50"
                   >
                     Approve
                   </button>
@@ -96,7 +107,7 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
                     type="button"
                     disabled={busyId === c.id}
                     onClick={() => handleReview(c.id, "reject")}
-                    className="rounded-md bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
+                    className="rounded-md bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-300 disabled:opacity-50"
                   >
                     Reject
                   </button>

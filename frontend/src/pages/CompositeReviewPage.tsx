@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchCompositeCandidates, reviewCompositeCandidate } from "../api";
 import CompositeReviewQueue from "../components/CompositeReviewQueue";
+import LoadingState from "../components/LoadingState";
 import type { CompositeCandidate, ReviewStatus } from "../types";
 
 export default function CompositeReviewPage() {
@@ -24,7 +25,7 @@ export default function CompositeReviewPage() {
   };
 
   if (error) return <div className="p-6 text-red-600">Failed to load composite candidates: {error}</div>;
-  if (!candidates) return <div className="p-6 text-slate-500">Loading…</div>;
+  if (!candidates) return <LoadingState label="Loading composite candidates…" />;
 
   return (
     <CompositeReviewQueue

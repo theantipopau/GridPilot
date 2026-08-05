@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { uploadImport } from "../api";
+import { IconCheckCircle, IconSpinner, IconUpload } from "./icons";
 import type { IngestUploadResult } from "../types";
 
 interface Props {
@@ -60,6 +61,9 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
     <div className={variant === "onboarding" ? "mx-auto max-w-xl" : ""}>
       {variant === "onboarding" && (
         <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+            <IconUpload className="h-6 w-6" />
+          </div>
           <h1 className="text-lg font-semibold text-slate-900">Load a timetable to get started</h1>
           <p className="mt-1 text-sm text-slate-500">
             Choose the <code className="rounded bg-slate-100 px-1 py-0.5">.tfx</code> export from Timetabling
@@ -70,7 +74,7 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
       )}
 
       {!result && (
-        <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <FilePickerField
             inputRef={tfxInputRef}
             label="Timetable file"
@@ -105,8 +109,9 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
               type="button"
               disabled={!tfxFile || submitting}
               onClick={handleSubmit}
-              className="ml-auto rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="ml-auto flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
+              {submitting && <IconSpinner className="h-4 w-4" />}
               {submitting ? "Importing…" : "Import"}
             </button>
           </div>
@@ -187,14 +192,17 @@ function ImportSummary({ result, onContinue }: { result: IngestUploadResult; onC
   const warnings = result.discrepancies.filter((d) => d.severity === "warning");
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-      <div>
-        <p className="text-sm font-medium text-emerald-700">Import complete - {result.tfx_filename}</p>
-        {result.sfx_filenames.length > 0 && (
-          <p className="mt-0.5 text-xs text-slate-500">
-            Plus {result.sfx_filenames.length} student options file(s): {result.sfx_filenames.join(", ")}
-          </p>
-        )}
+    <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-2">
+        <IconCheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+        <div>
+          <p className="text-sm font-medium text-emerald-700">Import complete - {result.tfx_filename}</p>
+          {result.sfx_filenames.length > 0 && (
+            <p className="mt-0.5 text-xs text-slate-500">
+              Plus {result.sfx_filenames.length} student options file(s): {result.sfx_filenames.join(", ")}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

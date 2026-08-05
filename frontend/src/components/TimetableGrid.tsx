@@ -145,8 +145,8 @@ function Cell({
       {entries.map((e, i) => {
         const editable = e.entry_type === "LESSON" && !!onSelectLesson;
         const pending = pendingEntryIds?.has(e.entry_id);
-        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight ${ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER} ${
-          editable ? "cursor-pointer hover:ring-2 hover:ring-sky-400" : ""
+        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight transition-all duration-150 ${ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER} ${
+          editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""
         } ${pending ? "ring-2 ring-amber-400" : ""}`;
 
         const content = (

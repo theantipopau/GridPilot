@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { fetchSuggestions } from "../api";
+import EmptyState from "./EmptyState";
+import { IconCheckCircle } from "./icons";
 import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
 
 interface Props {
@@ -53,16 +55,19 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
 
   if (findings.length === 0) {
     return (
-      <div className="p-6">
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          No open findings - the rules engine found no clashes in the current timetable.
-        </p>
+      <div className="px-6 pb-6">
+        <EmptyState
+          tone="positive"
+          icon={<IconCheckCircle className="h-8 w-8" />}
+          title="No open findings"
+          description="The rules engine found no clashes in the current timetable."
+        />
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="px-6 pb-6">
       <div className="mb-4 flex gap-3 text-sm">
         {(["critical", "warning", "info"] as Severity[]).map((sev) => (
           <span key={sev} className={`rounded-full px-3 py-1 font-medium ${SEVERITY_BADGE[sev]}`}>
@@ -74,7 +79,10 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
         {findings.map((f) => {
           const suggestions = suggestionsByFinding[f.id];
           return (
-            <div key={f.id} className={`rounded-lg border p-3 text-sm ${SEVERITY_STYLES[f.severity]}`}>
+            <div
+              key={f.id}
+              className={`rounded-lg border p-3 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md ${SEVERITY_STYLES[f.severity]}`}
+            >
               <div className="flex items-center justify-between">
                 <span className="font-medium">{f.title}</span>
                 <span className="text-xs uppercase tracking-wide opacity-60">{f.rule_id}</span>
