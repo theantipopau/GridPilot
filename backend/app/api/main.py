@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import audit, change_sets, composites, findings, reference, timetable, timetable_entries
+from app.api import audit, change_sets, composites, findings, ingest, reference, timetable, timetable_entries
 
 app = FastAPI(title="GridPilot API")
 
@@ -20,6 +20,7 @@ app.include_router(findings.router, prefix="/api")
 app.include_router(composites.router, prefix="/api")
 app.include_router(change_sets.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
+app.include_router(ingest.router, prefix="/api")
 
 
 @app.get("/api/health")

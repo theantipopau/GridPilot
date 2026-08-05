@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-99%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-108%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -53,6 +53,7 @@ synthetic data alone:
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
 | ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
 | ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
+| ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the header. |
 
 **Not yet built:** the local AI advisor (Ollama) layer, and a
 purpose-built timetable-*building* UI (the current grid is
@@ -89,21 +90,27 @@ eMinerva exports) — see [Overriding data locations](#overriding-data-locations
 ## Running it
 
 ```bash
-# 1. Ingest — builds the working database from the export folder
-cd backend
-python -m app.ingest.run
-
-# 2. Run the rules engine — findings + composite candidates
-python -m app.analysis.run
-
-# 3. Start both servers (separate terminals)
-python -m uvicorn app.api.main:app --port 8000
-cd ../frontend && npm run dev
+# Start both servers (separate terminals)
+cd backend && python -m uvicorn app.api.main:app --port 8000
+cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173**. Five tabs: **Timetable**, **Findings**
-(with one-click "Suggest fixes"), **Composite Review**, **Change Sets**,
-and **Audit**.
+Open **http://localhost:5173**. With no data loaded yet, you'll land on
+an import screen — choose the `.tfx` export (required) and any `.sfx`
+Student Options files (optional, can be added later), and it ingests and
+runs the rules engine immediately. Re-import a fresh export any time via
+**Import…** in the header. Five tabs once loaded: **Timetable**,
+**Findings** (with one-click "Suggest fixes" and an attention-count
+badge), **Composite Review**, **Change Sets**, and **Audit**.
+
+Prefer the CLI (scripting, or a file already sitting in
+`Timetabler Export/`)? Same ingestion path, just triggered directly:
+
+```bash
+cd backend
+python -m app.ingest.run       # builds the working database from the export folder
+python -m app.analysis.run     # rules engine — findings + composite candidates
+```
 
 ```bash
 # Export an approved change set (dry run by default)

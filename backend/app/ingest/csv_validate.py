@@ -187,11 +187,37 @@ def validate_master_timetable(conn: sqlite3.Connection, run_id: int, path: Path)
              f"in Master Timetable Cycle.csv", {"sample": list(only_in_db)[:10]})
 
 
+_VALIDATORS = {
+    "rooms": validate_rooms,
+    "periods": validate_periods,
+    "teachers": validate_teachers,
+    "roll_classes": validate_roll_classes,
+    "students": validate_students,
+    "master_timetable": validate_master_timetable,
+}
+
+
 def run_all_validations(conn: sqlite3.Connection, run_id: int, paths: dict) -> None:
-    validate_rooms(conn, run_id, paths["rooms"])
-    validate_periods(conn, run_id, paths["periods"])
-    validate_teachers(conn, run_id, paths["teachers"])
-    validate_roll_classes(conn, run_id, paths["roll_classes"])
-    validate_students(conn, run_id, paths["students"])
-    validate_master_timetable(conn, run_id, paths["master_timetable"])
+    """Cross-validates against whichever CSV exports are actually present
+    alongside the .tfx. These are a supplementary cross-check, not a
+    second source of truth (see module docstring) - a .tfx uploaded on its
+    own (e.g. via the browser import flow, see app/api/ingest.py) is a
+    complete, valid ingest without them. A CSV that's missing is skipped
+    and logged as info, never a hard failure; one that's present but
+    doesn't match the .tfx still fails loudly via IngestError, same as
+    always."""
+    missing = []
+    for name, validator in _VALIDATORS.items():
+        path = paths[name]
+        if not path.exists():
+            missing.append(path.name)
+            continue
+        validator(conn, run_id, path)
+    if missing:
+        _log(
+            conn, run_id, "csv_cross_validation_skipped", "info",
+            f"{len(missing)} CSV cross-validation file(s) not found alongside the .tfx - skipped, not "
+            f"failed. The .tfx remains the primary source either way: {sorted(missing)}",
+            {"missing_files": sorted(missing)},
+        )
     conn.commit()

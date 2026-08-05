@@ -25,6 +25,20 @@ def _log(conn: sqlite3.Connection, run_id: int, check_name: str, severity: str, 
 
 
 def ingest_eminerva_scourse(conn: sqlite3.Connection, run_id: int, path: Path) -> None:
+    """A supplementary cross-check against enrolment already derived from
+    .tfx Students[].StudentLessons[] (see tfx_parser.py) - not the only
+    source of enrolment data, so a missing eMinervaSCourse.txt (e.g. a
+    .tfx uploaded on its own via the browser import flow) is skipped and
+    logged as info, never a hard failure."""
+    if not path.exists():
+        _log(
+            conn, run_id, "eminerva_cross_validation_skipped", "info",
+            f"{path.name} not found alongside the .tfx - skipped, not failed. Enrolment already "
+            "derived from the .tfx itself either way.",
+        )
+        conn.commit()
+        return
+
     rows = _read_csv(path)
 
     student_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM student")}

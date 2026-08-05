@@ -5,6 +5,8 @@ import type {
   CompositeCandidate,
   ExportPreview,
   FindingsResponse,
+  IngestStatus,
+  IngestUploadResult,
   ReferenceData,
   ReviewStatus,
   SuggestionsResponse,
@@ -141,4 +143,18 @@ export function fetchAuditEvents(eventType?: string): Promise<{ events: AuditEve
 
 export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> {
   return getJson(`${BASE}/change-sets/${changeSetId}/export-preview`);
+}
+
+export function fetchIngestStatus(): Promise<IngestStatus> {
+  return getJson(`${BASE}/ingest/status`);
+}
+
+export async function uploadImport(tfxFile: File, sfxFiles: File[]): Promise<IngestUploadResult> {
+  const form = new FormData();
+  form.append("tfx_file", tfxFile);
+  for (const f of sfxFiles) form.append("sfx_files", f);
+  const url = `${BASE}/ingest/upload`;
+  const res = await fetch(url, { method: "POST", body: form });
+  if (!res.ok) throw new Error(await extractError(res, url));
+  return res.json() as Promise<IngestUploadResult>;
 }

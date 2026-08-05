@@ -234,3 +234,33 @@ export interface ExportPreview {
   written: boolean;
   output_files: string[];
 }
+
+export interface LastIngest {
+  started_at: string;
+  finished_at: string | null;
+  tfx_source_path: string | null;
+  source_file_id: string | null;
+}
+
+export interface IngestStatus {
+  has_data: boolean;
+  last_ingest: LastIngest | null;
+}
+
+export interface IngestDiscrepancy {
+  check_name: string;
+  severity: "info" | "warning" | "error";
+  description: string;
+}
+
+export interface IngestUploadResult {
+  counts: Record<string, number>;
+  analysis: {
+    findings_total: number;
+    findings_by_rule: Record<string, number>;
+    composite_sync: Record<string, number>;
+  };
+  discrepancies: IngestDiscrepancy[];
+  tfx_filename: string;
+  sfx_filenames: string[];
+}
