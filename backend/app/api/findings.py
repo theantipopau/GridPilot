@@ -3,6 +3,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.advisor.explain import AdvisorError, OLLAMA_MODEL, explain_finding
 from app.analysis.suggestions import suggest_fixes
 from app.api.deps import get_db
 
@@ -63,3 +64,32 @@ def get_suggestions(finding_id: int, conn: sqlite3.Connection = Depends(get_db))
     if row is None:
         raise HTTPException(status_code=404, detail=f"No finding {finding_id}")
     return suggest_fixes(conn, finding_id)
+
+
+@router.post("/findings/{finding_id}/explain")
+async def explain_finding_endpoint(finding_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """AI-generated explanation of an existing finding, via a local Ollama
+    model - never a suggestion or a change, see app/advisor/explain.py.
+    Computed on demand, not cached or precomputed."""
+    row = conn.execute(
+        "SELECT rule_id, severity, title, entity_refs_json, slot_refs_json, evidence_json "
+        "FROM finding WHERE id = ?",
+        (finding_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No finding {finding_id}")
+
+    finding = {
+        "rule_id": row["rule_id"],
+        "severity": row["severity"],
+        "title": row["title"],
+        "entity_refs": json.loads(row["entity_refs_json"]),
+        "slot_refs": json.loads(row["slot_refs_json"]),
+        "evidence": json.loads(row["evidence_json"]),
+    }
+    try:
+        explanation = await explain_finding(finding)
+    except AdvisorError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+    return {"finding_id": finding_id, "explanation": explanation, "model": OLLAMA_MODEL}

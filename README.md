@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-118%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-121%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -24,8 +24,8 @@ list of what's actually wrong with it (clashes, capacity, load,
 composite classes), propose and validate fixes without ever touching the
 source data, and export an approved change back out as a file
 Timetabling Solutions can re-read. Nothing here calls a cloud API —
-everything runs on your machine, and the one AI layer this project plans
-to add is local-only (Ollama), and only for *explaining* findings, never
+everything runs on your machine, and the one AI layer this project uses
+is local-only (Ollama), and only for *explaining* findings, never
 for inventing them.
 
 ## Contents
@@ -56,12 +56,12 @@ synthetic data alone:
 | ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the sidebar. |
 | ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
 | ✅ **Teachers** | Name, code, faculty, and load (contracted vs. scheduled) straight from the import - read-only. Plus middle-leadership role/tier assignment, the one thing entered directly in GridPilot - kept by teacher **code**, not an internal id, specifically so it survives a re-ingest. |
+| ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix, never sees anything beyond the finding's own codes/evidence. One "Explain" button per finding in the Findings tab. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
 
-**Not yet built:** the local AI advisor (Ollama) layer, adding/editing
-teacher *records* (name/faculty/load stay view-only - only role
-assignment is writable), and anything resembling a solver or
-multi-scenario planning (a real architecture change, not a UI addition) -
-see [Project status](#project-status).
+**Not yet built:** adding/editing teacher *records* (name/faculty/load
+stay view-only - only role assignment is writable), and anything
+resembling a solver or multi-scenario planning (a real architecture
+change, not a UI addition) - see [Project status](#project-status).
 
 ## Design direction
 
@@ -108,12 +108,13 @@ Open **http://localhost:5173**. With no data loaded yet, you'll land on
 an import screen — choose the `.tfx` export (required) and any `.sfx`
 Student Options files (optional, can be added later), and it ingests and
 runs the rules engine immediately. Re-import a fresh export any time via
-**Import…** in the sidebar. Six sections once loaded: **Dashboard** (a
+**Import…** in the sidebar. Sections once loaded: **Dashboard** (a
 real overview - open findings, pending reviews, room utilisation, entity
 counts), **Timetable** (click a lesson to move it and see the clash
-impact live), **Findings** (with one-click "Suggest fixes" and an
-attention-count badge), **Composite Review**, **Change Sets**, and
-**Audit**.
+impact live), **Teachers** (load, faculty, and middle-leadership role
+assignment), **Findings** (with one-click "Suggest fixes", a local-AI
+"Explain", and an attention-count badge), **Composite Review**, **Change
+Sets**, and **Audit**.
 
 Prefer the CLI (scripting, or a file already sitting in
 `Timetabler Export/`)? Same ingestion path, just triggered directly:
@@ -171,6 +172,7 @@ Timetabling Solutions export actually contains.
 | [`docs/suggestions.md`](docs/suggestions.md) | The algorithmic (non-AI) fix-suggestion engine |
 | [`docs/export-validation.md`](docs/export-validation.md) | The six-gate export process, and what it genuinely can't verify |
 | [`docs/reingest-persistence.md`](docs/reingest-persistence.md) | How composite reviews, change sets, and the audit trail survive a re-ingest |
+| [`docs/ai-advisor.md`](docs/ai-advisor.md) | The local Ollama explain-a-finding layer: boundary, model choice, and a hardware gotcha worth knowing about |
 | [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md) | Data flows, trust boundaries, audit trail, retention/purge |
 | [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
@@ -203,14 +205,15 @@ deployment environment, in [`docs/privacy-threat-model.md`](docs/privacy-threat-
 
 ## Project status
 
-All six `PROJECT_ROADMAP.md` milestones are complete. The honest
-self-review in [`docs/project-status.md`](docs/project-status.md) covers
-what's solid, the remaining known weaknesses (top of the list: the export
-path hasn't yet been trial-imported into an actual Timetabling Solutions
-instance — re-ingest persistence, formerly #1, is now fixed, see
-[`docs/reingest-persistence.md`](docs/reingest-persistence.md)), and the
-recommended order for what's next: trial import → timetable-building UX
-→ the Ollama AI advisor.
+All six `PROJECT_ROADMAP.md` milestones are complete, plus the Teachers
+section and the Ollama AI advisor beyond the original roadmap. The
+honest self-review in [`docs/project-status.md`](docs/project-status.md)
+covers what's solid and the remaining known weaknesses — top of the
+list: the export path hasn't yet been trial-imported into an actual
+Timetabling Solutions instance (re-ingest persistence, formerly #1, is
+now fixed, see [`docs/reingest-persistence.md`](docs/reingest-persistence.md)).
+That trial import is the main thing left that only the school itself can
+do.
 
 ---
 

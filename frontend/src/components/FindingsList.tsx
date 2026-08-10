@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchSuggestions } from "../api";
+import { explainFinding, fetchSuggestions } from "../api";
 import EmptyState from "./EmptyState";
 import { IconCheckCircle } from "./icons";
 import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
@@ -23,9 +23,12 @@ const SEVERITY_BADGE: Record<Severity, string> = {
   info: "bg-slate-400 text-white",
 };
 
+type ExplanationState = { status: "loading" } | { status: "done"; text: string } | { status: "error"; message: string };
+
 export default function FindingsList({ findings, countsBySeverity, onProposeFix, onApplySuggestion }: Props) {
   const [suggestionsByFinding, setSuggestionsByFinding] = useState<Record<number, SuggestionsResponse | "loading">>({});
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
+  const [explanationsByFinding, setExplanationsByFinding] = useState<Record<number, ExplanationState>>({});
 
   const toggleSuggestions = async (finding: Finding) => {
     const current = suggestionsByFinding[finding.id];
@@ -40,6 +43,25 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
     setSuggestionsByFinding((prev) => ({ ...prev, [finding.id]: "loading" }));
     const result = await fetchSuggestions(finding.id);
     setSuggestionsByFinding((prev) => ({ ...prev, [finding.id]: result }));
+  };
+
+  const toggleExplanation = async (finding: Finding) => {
+    const current = explanationsByFinding[finding.id];
+    if (current) {
+      setExplanationsByFinding((prev) => {
+        const next = { ...prev };
+        delete next[finding.id];
+        return next;
+      });
+      return;
+    }
+    setExplanationsByFinding((prev) => ({ ...prev, [finding.id]: { status: "loading" } }));
+    try {
+      const result = await explainFinding(finding.id);
+      setExplanationsByFinding((prev) => ({ ...prev, [finding.id]: { status: "done", text: result.explanation } }));
+    } catch (e) {
+      setExplanationsByFinding((prev) => ({ ...prev, [finding.id]: { status: "error", message: String(e) } }));
+    }
   };
 
   const applySuggestion = async (finding: Finding, candidate: SuggestionCandidate) => {
@@ -96,6 +118,13 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
                 <div className="ml-auto flex gap-2">
                   <button
                     type="button"
+                    onClick={() => toggleExplanation(f)}
+                    className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
+                  >
+                    {explanationsByFinding[f.id] ? "Hide explanation" : "Explain"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => toggleSuggestions(f)}
                     className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
                   >
@@ -112,6 +141,20 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
                   )}
                 </div>
               </div>
+
+              {explanationsByFinding[f.id]?.status === "loading" && (
+                <p className="mt-2 text-xs opacity-70">Asking the local AI advisor…</p>
+              )}
+              {explanationsByFinding[f.id]?.status === "error" && (
+                <p className="mt-2 rounded border border-current/20 bg-white/60 p-2 text-xs opacity-70">
+                  {(explanationsByFinding[f.id] as { status: "error"; message: string }).message}
+                </p>
+              )}
+              {explanationsByFinding[f.id]?.status === "done" && (
+                <p className="mt-2 rounded border border-current/20 bg-white/60 p-2 text-xs">
+                  {(explanationsByFinding[f.id] as { status: "done"; text: string }).text}
+                </p>
+              )}
 
               {suggestions === "loading" && (
                 <p className="mt-2 text-xs opacity-70">Searching for valid alternatives…</p>

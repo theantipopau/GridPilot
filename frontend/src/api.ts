@@ -69,6 +69,10 @@ export function fetchSuggestions(findingId: number): Promise<SuggestionsResponse
   return getJson(`${BASE}/findings/${findingId}/suggestions`);
 }
 
+export function explainFinding(findingId: number): Promise<{ finding_id: number; explanation: string; model: string }> {
+  return postJson(`${BASE}/findings/${findingId}/explain`, {});
+}
+
 export function fetchCompositeCandidates(reviewStatus?: ReviewStatus): Promise<{ candidates: CompositeCandidate[] }> {
   const qs = reviewStatus ? `?review_status=${reviewStatus}` : "";
   return getJson(`${BASE}/composites/candidates${qs}`);
