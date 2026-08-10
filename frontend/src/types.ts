@@ -109,6 +109,9 @@ export interface Finding {
   evidence: Record<string, unknown>;
   status: string;
   computed_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
 }
 
 export interface FindingsResponse {

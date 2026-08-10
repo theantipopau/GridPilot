@@ -109,6 +109,24 @@ Review via `POST /api/composites/candidates/{id}/approve` or `/reject`
 (body: `{"reviewed_by": "...", "note": "optional"}`). Both re-run the
 rules engine synchronously so findings reflect the decision immediately.
 
+## Findings: accept a clash as intentional, don't just hide it
+
+Not every double-booking is a mistake - e.g. a deliberate supervision
+overlap. `POST /api/findings/{id}/accept-risk` (body: `{"reviewed_by":
+"...", "note": "optional"}`) marks a finding `ACCEPTED_RISK`: it drops
+out of the default `status=OPEN` view but is never actually hidden -
+`GET /api/findings?status=ACCEPTED_RISK` (or `ALL`) still shows it, with
+who accepted it, when, and why. `POST /api/findings/{id}/reopen` undoes
+that. Both are logged to the audit trail (`finding_status_changed`) like
+every other review decision in this app.
+
+This survives the rules engine's next run for the same reason a
+composite review decision does: `_persist()` in `app/analysis/run.py`
+only ever flips a *RESOLVED* finding back to `OPEN` when it reproduces -
+never an `ACCEPTED_RISK` one. A finding can only be reviewed while it's
+still live; a finding the engine has already marked `RESOLVED` returns a
+`409` rather than accepting a decision about something no longer there.
+
 ## Not yet implemented
 
 From the roadmap's Milestone 1 "first rules" list, the remainder are

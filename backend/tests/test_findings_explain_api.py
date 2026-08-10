@@ -43,9 +43,10 @@ def client(db_path, monkeypatch):
 
 
 def test_explain_returns_the_mocked_advisor_text(client, monkeypatch):
-    async def fake_explain(finding: dict) -> str:
+    async def fake_explain(finding: dict, related: list | None = None) -> str:
         assert finding["rule_id"] == "teacher_double_booking"
         assert finding["entity_refs"] == [{"type": "teacher", "code": "T1"}]
+        assert related == []  # only finding in the fixture - nothing to relate to
         return "Teacher T1 is booked into two lessons at the same time."
 
     monkeypatch.setattr(findings_api, "explain_finding", fake_explain)
@@ -59,7 +60,7 @@ def test_explain_returns_the_mocked_advisor_text(client, monkeypatch):
 
 
 def test_explain_surfaces_advisor_errors_as_a_clean_503(client, monkeypatch):
-    async def fake_explain_failing(finding: dict) -> str:
+    async def fake_explain_failing(finding: dict, related: list | None = None) -> str:
         raise AdvisorError("Can't reach Ollama at http://localhost:11434 - is it running?")
 
     monkeypatch.setattr(findings_api, "explain_finding", fake_explain_failing)
@@ -72,3 +73,28 @@ def test_explain_surfaces_advisor_errors_as_a_clean_503(client, monkeypatch):
 def test_explain_unknown_finding_is_404(client):
     resp = client.post("/api/findings/999/explain")
     assert resp.status_code == 404
+
+
+def test_explain_passes_related_open_findings_sharing_the_same_slot(client, monkeypatch, db_path):
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO finding (dedupe_key, rule_id, severity, title, entity_refs_json, slot_refs_json, "
+        "evidence_json, status, first_seen_at, computed_at) VALUES ('k2', 'room_double_booking', "
+        "'critical', 'Room R1 double-booked at Day 1 A P1', "
+        "'[{\"type\": \"room\", \"code\": \"R1\"}]', '[{\"day_code\": \"Day 1 A\", \"period_code\": \"P1\"}]', "
+        "'{}', 'OPEN', 'test', 'test')"
+    )
+    conn.commit()
+    conn.close()
+
+    captured = {}
+
+    async def fake_explain(finding: dict, related: list | None = None) -> str:
+        captured["related"] = related
+        return "explained"
+
+    monkeypatch.setattr(findings_api, "explain_finding", fake_explain)
+
+    resp = client.post("/api/findings/1/explain")
+    assert resp.status_code == 200, resp.text
+    assert captured["related"] == [{"rule_id": "room_double_booking", "title": "Room R1 double-booked at Day 1 A P1"}]

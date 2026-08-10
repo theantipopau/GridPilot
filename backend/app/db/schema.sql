@@ -256,9 +256,13 @@ CREATE TABLE IF NOT EXISTS composite_group_member (
 -- Findings ---------------------------------------------------------------
 -- Structured output of the deterministic rules engine. entity/slot refs are
 -- codes and internal ids only - never names or emails (see
--- docs/rules.md and PROJECT_ROADMAP.md's privacy correction). Recomputed
--- from scratch on every rules-engine run (app/analysis/run.py clears and
--- repopulates this table), same pattern as ingest_discrepancy.
+-- docs/rules.md and PROJECT_ROADMAP.md's privacy correction). Upserted by
+-- dedupe_key on every rules-engine run (app/analysis/run.py), not wiped -
+-- a finding keeps its id and any human-set status (ACCEPTED_RISK included)
+-- across re-runs and re-ingests, as long as the same underlying issue still
+-- reproduces; one that stops reproducing is marked RESOLVED, never deleted.
+-- reviewed_at/by/note record a human's ACCEPTED_RISK/OPEN decision, same
+-- shape as composite_group's review columns above.
 
 CREATE TABLE IF NOT EXISTS finding (
     id INTEGER PRIMARY KEY,
@@ -272,7 +276,10 @@ CREATE TABLE IF NOT EXISTS finding (
     suggested_actions_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ACCEPTED_RISK')),
     first_seen_at TEXT NOT NULL,
-    computed_at TEXT NOT NULL
+    computed_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    review_note TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_finding_rule ON finding(rule_id);

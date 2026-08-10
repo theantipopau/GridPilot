@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-121%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-131%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -47,8 +47,8 @@ synthetic data alone:
 | | |
 |---|---|
 | ✅ **Ingestion + cross-validation** | `.tfx` (primary source) cross-checked against CSV and eMinerva exports; every mismatch surfaced as a structured discrepancy, never silently dropped. Auto-discovers the newest export file — a new term needs no code change. |
-| ✅ **Timetable grid** | Filterable by teacher, room, or roll class. Click any lesson to move it - day, period, room, and/or teacher - and see the clash-rule impact immediately, before anything is saved. |
-| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation. Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. |
+| ✅ **Timetable grid** | **Master grid** by default - every lesson, every day, at once, rows switchable between Room/Teacher/Roll class (Room is the classic timetabler's view - a clash is two lessons stacked in one cell). "Single entity" mode still filters to one teacher/room/roll class. Click any lesson to move it - day, period, room, and/or teacher - and see the clash-rule impact immediately, before anything is saved. See [`docs/master-timetable.md`](docs/master-timetable.md). |
+| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation. Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. A finding can also be marked **accepted risk** (an intentional, known clash) - it drops out of the default view but is never hidden, and is reversible. See [`docs/rules.md`](docs/rules.md). |
 | ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
 | ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
@@ -56,7 +56,7 @@ synthetic data alone:
 | ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the sidebar. |
 | ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
 | ✅ **Teachers** | Name, code, faculty, and load (contracted vs. scheduled) straight from the import - read-only. Plus middle-leadership role/tier assignment, the one thing entered directly in GridPilot - kept by teacher **code**, not an internal id, specifically so it survives a re-ingest. |
-| ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix, never sees anything beyond the finding's own codes/evidence. One "Explain" button per finding in the Findings tab. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
+| ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix, never sees anything beyond the finding's own codes/evidence. Also told about *other* open findings sharing an entity or time slot, so it can flag when two findings are really the same underlying clash seen from different sides, instead of explaining everything in isolation. One "Explain" button per finding in the Findings tab. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
 
 **Not yet built:** adding/editing teacher *records* (name/faculty/load
 stay view-only - only role assignment is writable), and anything
@@ -110,11 +110,12 @@ Student Options files (optional, can be added later), and it ingests and
 runs the rules engine immediately. Re-import a fresh export any time via
 **Import…** in the sidebar. Sections once loaded: **Dashboard** (a
 real overview - open findings, pending reviews, room utilisation, entity
-counts), **Timetable** (click a lesson to move it and see the clash
-impact live), **Teachers** (load, faculty, and middle-leadership role
-assignment), **Findings** (with one-click "Suggest fixes", a local-AI
-"Explain", and an attention-count badge), **Composite Review**, **Change
-Sets**, and **Audit**.
+counts), **Timetable** (a master grid of every lesson by default, click
+any to move it and see the clash impact live), **Teachers** (load,
+faculty, and middle-leadership role assignment), **Findings** (with
+one-click "Suggest fixes", a local-AI "Explain", "Mark as intentional"
+for a known/accepted clash, and an attention-count badge), **Composite
+Review**, **Change Sets**, and **Audit**.
 
 Prefer the CLI (scripting, or a file already sitting in
 `Timetabler Export/`)? Same ingestion path, just triggered directly:
@@ -172,7 +173,8 @@ Timetabling Solutions export actually contains.
 | [`docs/suggestions.md`](docs/suggestions.md) | The algorithmic (non-AI) fix-suggestion engine |
 | [`docs/export-validation.md`](docs/export-validation.md) | The six-gate export process, and what it genuinely can't verify |
 | [`docs/reingest-persistence.md`](docs/reingest-persistence.md) | How composite reviews, change sets, and the audit trail survive a re-ingest |
-| [`docs/ai-advisor.md`](docs/ai-advisor.md) | The local Ollama explain-a-finding layer: boundary, model choice, and a hardware gotcha worth knowing about |
+| [`docs/ai-advisor.md`](docs/ai-advisor.md) | The local Ollama explain-a-finding layer: boundary, model choice, a hardware gotcha, and how it uses related findings |
+| [`docs/master-timetable.md`](docs/master-timetable.md) | The whole-school grid: why it exists, how the axis switch works, why Room is the default |
 | [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md) | Data flows, trust boundaries, audit trail, retention/purge |
 | [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |

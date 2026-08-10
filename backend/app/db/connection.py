@@ -17,7 +17,18 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    _migrate(conn)
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """CREATE TABLE IF NOT EXISTS (above) only picks up brand-new tables -
+    it's a no-op against a table that already exists, so a column added to
+    an existing table needs an explicit, idempotent ALTER TABLE here."""
+    existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(finding)")}
+    for column in ("reviewed_at", "reviewed_by", "review_note"):
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE finding ADD COLUMN {column} TEXT")
 
 
 def fresh_database(db_path: Path | None = None) -> sqlite3.Connection:

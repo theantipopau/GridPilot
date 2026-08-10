@@ -17,7 +17,7 @@ locally running [Ollama](https://ollama.com) instance.
   already shown in the Findings tab. Entity refs are codes only (teacher
   code, class code, room code), never a name - same no-PII boundary as
   everywhere else in this project (`docs/privacy-threat-model.md`).
-- **Output**: 2-4 sentences of plain-English explanation. The prompt
+- **Output**: 2-5 sentences of plain-English explanation. The prompt
   explicitly tells the model not to suggest a fix (that's
   `app/analysis/suggestions.py`, `docs/suggestions.md`) and not to invent
   any fact not given.
@@ -50,6 +50,33 @@ If the machine later runs something bigger (e.g. a discrete GPU), just
 set `GRIDPILOT_OLLAMA_MODEL` - no code change needed. Reasoning models
 used that way should keep `think: false` unless the extra latency is
 actually wanted.
+
+## Making the explanation actually useful
+
+Real usage surfaced two gaps in the first version: the model tended to
+just restate the finding's title back ("The rules engine detected a
+critical conflict where...") instead of adding anything, and it treated
+every finding as if it existed in total isolation - even when the same
+underlying clash was sitting right next to it in the list from another
+entity's point of view.
+
+- **`RULE_GUIDANCE`** in `explain.py` maps each `rule_id` to a short,
+  concrete instruction about the practical consequence to lead with
+  (still only domain-general knowledge about what the rule category
+  means - never a fact about this school not already in the finding).
+  The prompt also explicitly forbids opening with "the rules engine
+  detected..." or restating the title.
+- **Related findings**: `_related_open_findings()` in `app/api/findings.py`
+  looks up other OPEN findings sharing an entity code or a time slot with
+  the one being explained (e.g. a `room_double_booking` and a
+  `teacher_double_booking` at the same slot are usually two views of one
+  scheduling mistake), and passes their rule/title into the prompt with
+  an instruction to say so plainly if it looks true - without inventing a
+  connection that isn't there. Verified against the real data: asked to
+  explain "Teacher HENE04 double-booked at Tues A P4," the model correctly
+  noted "this represents part of a recurring pattern where this teacher
+  has multiple double-bookings across different days and slots," picked
+  up entirely from the related-findings list, not invented.
 
 ## Error handling
 

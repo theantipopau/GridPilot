@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { explainFinding, fetchSuggestions } from "../api";
+import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding } from "../api";
 import EmptyState from "./EmptyState";
 import { IconCheckCircle } from "./icons";
 import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
@@ -7,8 +7,10 @@ import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from
 interface Props {
   findings: Finding[];
   countsBySeverity: Record<Severity, number>;
+  reviewedBy?: string;
   onProposeFix?: (finding: Finding) => void;
   onApplySuggestion?: (finding: Finding, candidate: SuggestionCandidate) => Promise<void>;
+  onReviewed?: () => void;
 }
 
 const SEVERITY_STYLES: Record<Severity, string> = {
@@ -25,10 +27,18 @@ const SEVERITY_BADGE: Record<Severity, string> = {
 
 type ExplanationState = { status: "loading" } | { status: "done"; text: string } | { status: "error"; message: string };
 
-export default function FindingsList({ findings, countsBySeverity, onProposeFix, onApplySuggestion }: Props) {
+export default function FindingsList({
+  findings,
+  countsBySeverity,
+  reviewedBy,
+  onProposeFix,
+  onApplySuggestion,
+  onReviewed,
+}: Props) {
   const [suggestionsByFinding, setSuggestionsByFinding] = useState<Record<number, SuggestionsResponse | "loading">>({});
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [explanationsByFinding, setExplanationsByFinding] = useState<Record<number, ExplanationState>>({});
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const toggleSuggestions = async (finding: Finding) => {
     const current = suggestionsByFinding[finding.id];
@@ -64,6 +74,40 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
     }
   };
 
+  const handleAcceptRisk = async (finding: Finding) => {
+    if (!reviewedBy?.trim()) {
+      alert("Enter your name before marking a finding as intentional.");
+      return;
+    }
+    let note: string | null = null;
+    try {
+      note = window.prompt("Optional note - why is this intentional?");
+    } catch {
+      // window.prompt isn't available in every embedding context - the note is optional, so just skip it.
+    }
+    setReviewingId(finding.id);
+    try {
+      await acceptFindingRisk(finding.id, reviewedBy.trim(), note || undefined);
+      onReviewed?.();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleReopen = async (finding: Finding) => {
+    if (!reviewedBy?.trim()) {
+      alert("Enter your name before reopening a finding.");
+      return;
+    }
+    setReviewingId(finding.id);
+    try {
+      await reopenFinding(finding.id, reviewedBy.trim());
+      onReviewed?.();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   const applySuggestion = async (finding: Finding, candidate: SuggestionCandidate) => {
     if (!onApplySuggestion) return;
     const key = `${finding.id}:${candidate.entry_id}:${candidate.after.day_code}:${candidate.after.period_code}:${candidate.after.room_code}`;
@@ -81,8 +125,8 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
         <EmptyState
           tone="positive"
           icon={<IconCheckCircle className="h-8 w-8" />}
-          title="No open findings"
-          description="The rules engine found no clashes in the current timetable."
+          title="No findings here"
+          description="Nothing in the current timetable matches this tab."
         />
       </div>
     );
@@ -139,8 +183,34 @@ export default function FindingsList({ findings, countsBySeverity, onProposeFix,
                       Propose a fix manually
                     </button>
                   )}
+                  {f.status === "ACCEPTED_RISK" ? (
+                    <button
+                      type="button"
+                      disabled={reviewingId === f.id}
+                      onClick={() => handleReopen(f)}
+                      className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white disabled:opacity-50"
+                    >
+                      Reopen
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={reviewingId === f.id}
+                      onClick={() => handleAcceptRisk(f)}
+                      className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white disabled:opacity-50"
+                    >
+                      Mark as intentional
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {f.status === "ACCEPTED_RISK" && (
+                <div className="mt-1 text-xs opacity-70">
+                  Accepted as intentional by {f.reviewed_by}
+                  {f.review_note ? ` - "${f.review_note}"` : ""}
+                </div>
+              )}
 
               {explanationsByFinding[f.id]?.status === "loading" && (
                 <p className="mt-2 text-xs opacity-70">Asking the local AI advisor…</p>

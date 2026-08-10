@@ -13,6 +13,7 @@ import type {
   StaffRole,
   SuggestionsResponse,
   TeacherSummary,
+  TimetableEntry,
   TimetableEntryLookup,
   TimetableResponse,
   ValidationResult,
@@ -61,8 +62,13 @@ export function fetchTimetable(view: ViewType, code: string): Promise<TimetableR
   return getJson(`${BASE}/timetable?view=${view}&code=${encodeURIComponent(code)}`);
 }
 
-export function fetchFindings(): Promise<FindingsResponse> {
-  return getJson(`${BASE}/findings`);
+export function fetchAllTimetableEntries(): Promise<{ entries: TimetableEntry[] }> {
+  return getJson(`${BASE}/timetable/all`);
+}
+
+export function fetchFindings(status?: "OPEN" | "ACCEPTED_RISK" | "ALL"): Promise<FindingsResponse> {
+  const qs = status ? `?status=${status}` : "";
+  return getJson(`${BASE}/findings${qs}`);
 }
 
 export function fetchSuggestions(findingId: number): Promise<SuggestionsResponse> {
@@ -71,6 +77,14 @@ export function fetchSuggestions(findingId: number): Promise<SuggestionsResponse
 
 export function explainFinding(findingId: number): Promise<{ finding_id: number; explanation: string; model: string }> {
   return postJson(`${BASE}/findings/${findingId}/explain`, {});
+}
+
+export function acceptFindingRisk(findingId: number, reviewedBy: string, note?: string): Promise<{ id: number; status: string }> {
+  return postJson(`${BASE}/findings/${findingId}/accept-risk`, { reviewed_by: reviewedBy, note });
+}
+
+export function reopenFinding(findingId: number, reviewedBy: string): Promise<{ id: number; status: string }> {
+  return postJson(`${BASE}/findings/${findingId}/reopen`, { reviewed_by: reviewedBy });
 }
 
 export function fetchCompositeCandidates(reviewStatus?: ReviewStatus): Promise<{ candidates: CompositeCandidate[] }> {
