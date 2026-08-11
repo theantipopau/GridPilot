@@ -177,6 +177,7 @@ Timetabling Solutions export actually contains.
 | [`docs/master-timetable.md`](docs/master-timetable.md) | The whole-school grid: why it exists, how the axis switch works, why Room is the default |
 | [`docs/privacy-threat-model.md`](docs/privacy-threat-model.md) | Data flows, trust boundaries, audit trail, retention/purge |
 | [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
+| [`docs/full-timetabler-plan.md`](docs/full-timetabler-plan.md) | The long game: what Timetabling Solutions actually does, what the open-source field offers, and the phased plan to go from companion tool to full timetabling program |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
 | [`docs/design/`](docs/design/) | UI mockup and logo source assets |
 
