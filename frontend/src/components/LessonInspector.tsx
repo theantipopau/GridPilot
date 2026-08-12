@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { ReferenceData, TimetableEntry, ValidationResult } from "../types";
+import { useEffect, useState } from "react";
+import { findTimetableEntries } from "../api";
+import type { ReferenceData, TimetableEntry, TimetableEntryLookup, ValidationResult } from "../types";
 
 export interface MoveParams {
   after_day_code?: string;
@@ -35,6 +36,15 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [occurrences, setOccurrences] = useState<TimetableEntryLookup[] | null>(null);
+
+  useEffect(() => {
+    setOccurrences(null);
+    if (!entry.class_code) return;
+    findTimetableEntries({ class_code: entry.class_code })
+      .then((r) => setOccurrences(r.entries))
+      .catch(() => setOccurrences([]));
+  }, [entry.class_code]);
 
   const periodCodes = uniquePeriodCodes(reference);
   const teacherName = entry.teacher_last_name
@@ -95,6 +105,8 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
         <dt className="text-slate-400">Teacher</dt>
         <dd className="text-slate-700">{teacherName ?? "—"}</dd>
       </dl>
+
+      {entry.class_code && <OtherOccurrences classCode={entry.class_code} currentEntryId={entry.entry_id} occurrences={occurrences} />}
 
       {!result && (
         <>
@@ -212,6 +224,54 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function OtherOccurrences({
+  classCode,
+  currentEntryId,
+  occurrences,
+}: {
+  classCode: string;
+  currentEntryId: number;
+  occurrences: TimetableEntryLookup[] | null;
+}) {
+  if (occurrences === null) {
+    return <p className="mb-4 text-xs text-slate-400">Loading other occurrences of {classCode}…</p>;
+  }
+
+  const others = occurrences.filter((o) => o.entry_id !== currentEntryId);
+  if (others.length === 0) return null;
+
+  const roomCount = new Set(others.map((o) => o.room_code).filter(Boolean)).size;
+  const teacherCount = new Set(others.map((o) => o.teacher_code).filter(Boolean)).size;
+
+  return (
+    <div className="mb-5">
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Also on the timetable ({others.length})
+      </h3>
+      {(roomCount > 1 || teacherCount > 1) && (
+        <p className="mb-2 text-xs text-amber-700">
+          {roomCount > 1 && `${roomCount} different rooms`}
+          {roomCount > 1 && teacherCount > 1 && " · "}
+          {teacherCount > 1 && `${teacherCount} different teachers`}
+          {" across the cycle"}
+        </p>
+      )}
+      <ul className="max-h-40 overflow-y-auto rounded border border-slate-200 text-xs">
+        {others.map((o) => (
+          <li key={o.entry_id} className="flex items-center justify-between gap-2 border-b border-slate-100 px-2 py-1 last:border-b-0">
+            <span className="text-slate-500">
+              {o.day_code} · {o.period_code}
+            </span>
+            <span className="text-slate-700">
+              {o.room_code ?? "no room"} · {o.teacher_code ?? "no teacher"}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
