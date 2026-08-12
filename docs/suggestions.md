@@ -22,13 +22,25 @@ explain *these* candidates in plain language - never to invent its own.
 
 **Supported**: `teacher_double_booking`, `room_double_booking` - the two
 rule types where there's an obvious "thing to move" (one of the
-conflicting lessons) and an obvious search space (alternate rooms/times).
+conflicting lessons) and an obvious search space (alternate rooms/times) -
+and `class_room_instability` (added 2026-08-13), where the "thing to move"
+is instead every lesson of the class sitting in a room other than the one
+it already mostly uses, and the search space is exactly one room: the
+class's own majority room, at each minority lesson's existing slot. See
+"Room consolidation" below.
 
 **Not supported, and says so rather than silently returning nothing
 useful**: every other rule type, most notably `student_double_booking`
 (there's no single lesson whose room/time you'd move - the fix usually
-means restructuring an option line, out of scope here) and the
-capacity/utilisation rules (not really "move this lesson" problems).
+means restructuring an option line, out of scope here), the
+capacity/utilisation rules (not really "move this lesson" problems), and
+`class_teacher_inconsistency` - `class_room_instability`'s sibling rule,
+deliberately *not* given the same treatment. Moving a lesson to the
+class's other room is a safe, algorithmic search; moving it to the
+class's other *teacher* would be exactly the kind of invented
+suggestion this module refuses to make (see "Never suggested" below) -
+there's no way to tell which of the class's teachers the move should
+prefer without subject-qualification data this project doesn't have.
 `GET /api/findings/{id}/suggestions` on an unsupported finding returns
 `supported: false` with an explanatory `note`, never an empty result that
 could be mistaken for "no fix exists."
@@ -75,6 +87,44 @@ least disruptive; ties break on `resolves_finding_count`, then on
 **room familiarity** (below) - a candidate that happens to put the class
 in a room it already uses elsewhere ranks ahead of an equally-cheap move
 to a room it's never been in.
+
+## Room consolidation for class_room_instability (2026-08-13)
+
+Real feedback after the user hit the finding's "Suggestion generation
+isn't implemented ... yet" note during their own testing and asked what's
+next. Unlike the clash rules, a `class_room_instability` finding has no
+"conflicting entry" to move - every one of the class's lessons is
+individually valid, the issue is only that they don't agree on a room.
+So the search here is deliberately narrower than Type A/B above:
+
+1. Find the class's **majority room** - whichever room the most of its
+   lessons already use (ties break on room code, so re-runs are stable).
+2. For each of the class's lessons in a different room (capped at
+   `MAX_ENTRIES_CONSIDERED`, same as the clash rules), offer exactly one
+   candidate: that lesson, moved into the majority room, **at its
+   existing slot**. No alternate times are searched - the point is
+   consistency, not finding it a new time too, and combining both would
+   turn one clear suggestion into a much larger, harder-to-explain
+   search.
+3. The candidate still goes through the same hard-constraint checks as
+   every other candidate (room capacity, no new clash) via `_try_
+   candidate()` - if the majority room is already taken by another class
+   at that particular slot, no candidate is offered for that lesson at
+   all, rather than silently proposing an invalid move.
+
+`resolves_finding_count` is always `0` here (there's no clash finding to
+resolve), so ranking falls to `class_room_familiarity` - and because the
+target room is by definition the class's majority room, familiarity is
+always high, which is exactly the point.
+
+Verified against the real finding that prompted this ("Class 12RAE1 used
+3 different rooms across the cycle" - `ANG1`, `LEO2`, `LEO4`). 12RAE1's
+8 lessons run in `LEO2` six times, so that's the majority room; of its
+two minority lessons, only the `LEO4` one got a candidate (move to `LEO2`
+Fri B P2, capacity confirmed 20/30 seats, familiarity 6/7) - the `ANG1`
+lesson (Fri A P4) was correctly skipped because a different class already
+holds `LEO2` at that exact slot, which is the "no valid fix, so don't
+show one" case rather than a bug.
 
 ## Why it works, and what else it affects (2026-08-12)
 
@@ -133,10 +183,13 @@ Two entry points, sharing one presentation component
 - Clicking a lesson on the **Timetable** grid opens the inspector panel
   with a **"Suggested fixes"** tab alongside "Move manually" (added
   2026-08-12, real feedback: *"maybe extra tabs"*). This finds every
-  *open* `teacher_double_booking`/`room_double_booking` finding whose
-  slot and teacher/room match the clicked lesson, fetches suggestions for
-  each, and keeps only the candidates that would move *this specific*
-  lesson (not the other side of the clash) - deduplicated by target slot.
+  *open* finding relevant to the clicked lesson: for
+  `teacher_double_booking`/`room_double_booking`, matched by slot +
+  teacher/room code; for `class_room_instability` (added 2026-08-13),
+  matched by class code instead, since that finding has no `slot_refs` -
+  it's about the whole class, not one lesson. Either way it fetches
+  suggestions for each match and keeps only the candidates that would
+  move *this specific* lesson - deduplicated by target slot.
   "Use this" here reuses the grid's own in-progress change set
   (`onPropose`, the same path "Move manually" uses) rather than creating
   a separate one, since the panel is already scoped to one change set.

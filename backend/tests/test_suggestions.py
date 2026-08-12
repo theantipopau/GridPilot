@@ -3,6 +3,7 @@
 tests/synthetic.py."""
 
 from app.analysis.clash_rules import run_clash_rules
+from app.analysis.consistency_rules import run_consistency_rules
 from app.analysis.run import _persist
 from app.analysis.suggestions import suggest_fixes
 from tests.synthetic import add_enrolment, add_lesson, build_richer_synthetic_db
@@ -12,6 +13,10 @@ def _persist_current_findings(conn):
     """Runs the same upsert path app.analysis.run.run_analysis() uses, so
     finding evidence carries entry_id exactly like it would in production."""
     _persist(conn, run_clash_rules(conn))
+
+
+def _persist_consistency_findings(conn):
+    _persist(conn, run_consistency_rules(conn))
 
 
 def test_unsupported_rule_type_is_explicit_not_silent():
@@ -205,3 +210,68 @@ def test_no_candidate_ever_introduces_a_regression():
         after_entries = apply_overrides(before_entries, overrides, code_lookups)
         after_keys = {f.dedupe_key() for f in run_clash_findings(conn, after_entries, composites)}
         assert after_keys - before_keys == set(), f"candidate introduced a regression: {c}"
+
+
+def test_class_room_instability_offers_moves_into_majority_room():
+    conn = build_richer_synthetic_db()
+    # CLASSA runs twice in R1 (its "home" room) and once in R2 - the
+    # engine should propose moving the R2 lesson into R1, at its existing
+    # slot, not searching for a different time too.
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
+    _persist_consistency_findings(conn)
+
+    finding_id = conn.execute(
+        "SELECT id FROM finding WHERE rule_id = 'class_room_instability'"
+    ).fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    assert result["supported"] is True
+    assert len(result["candidates"]) == 1
+    c = result["candidates"][0]
+    assert c["before"]["room_code"] == "R2"
+    assert c["after"]["room_code"] == "R1"
+    assert c["before"]["day_code"] == c["after"]["day_code"]
+    assert c["before"]["period_code"] == c["after"]["period_code"]
+    assert c["movement_cost"] == 0
+    assert c["class_room_familiarity"]["same_room_elsewhere_count"] == 2
+    assert c["class_room_familiarity"]["total_other_lessons"] == 2
+
+
+def test_class_room_instability_skips_lesson_when_majority_room_already_busy():
+    conn = build_richer_synthetic_db()
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
+    # A different class already occupies R1 (the majority room) at the
+    # minority lesson's slot - there's no valid "just swap the room" fix
+    # for that lesson, so it must not appear as a candidate at all.
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    _persist_consistency_findings(conn)
+
+    finding_id = conn.execute(
+        "SELECT id FROM finding WHERE rule_id = 'class_room_instability'"
+    ).fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    assert result["supported"] is True
+    assert result["candidates"] == []
+
+
+def test_class_teacher_inconsistency_has_no_suggestion_support():
+    """Deliberate scope boundary (docs/suggestions.md) - reassigning a
+    lesson to a different teacher would be an invented suggestion with no
+    subject-qualification data behind it, unlike a same-class room swap."""
+    conn = build_richer_synthetic_db()
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=2, room_id=1)
+    _persist_consistency_findings(conn)
+
+    finding_id = conn.execute(
+        "SELECT id FROM finding WHERE rule_id = 'class_teacher_inconsistency'"
+    ).fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    assert result["supported"] is False
+    assert result["candidates"] == []

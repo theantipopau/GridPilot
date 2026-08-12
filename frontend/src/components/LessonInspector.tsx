@@ -20,7 +20,7 @@ interface Props {
   onOpenChangeSet: () => void;
 }
 
-const SUGGESTABLE_RULES = new Set(["teacher_double_booking", "room_double_booking"]);
+const SUGGESTABLE_RULES = new Set(["teacher_double_booking", "room_double_booking", "class_room_instability"]);
 
 type SuggestionsState =
   | { status: "idle" }
@@ -68,14 +68,21 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
     setSuggestions({ status: "loading" });
     try {
       const { findings } = await fetchFindings();
-      const matches = findings.filter(
-        (f) =>
-          SUGGESTABLE_RULES.has(f.rule_id) &&
+      const matches = findings.filter((f) => {
+        if (!SUGGESTABLE_RULES.has(f.rule_id)) return false;
+        // class_room_instability findings cover the whole class, not one
+        // slot - they carry no slot_refs at all, so match by class code
+        // instead of the slot+teacher/room match the double-booking rules use.
+        if (f.rule_id === "class_room_instability") {
+          return f.entity_refs.some((e) => e.type === "class" && e.code === entry.class_code);
+        }
+        return (
           f.slot_refs.some((s) => s.day_code === entry.day_code && s.period_code === entry.period_code) &&
           f.entity_refs.some(
             (e) => (e.type === "teacher" && e.code === entry.teacher_code) || (e.type === "room" && e.code === entry.room_code),
-          ),
-      );
+          )
+        );
+      });
       if (matches.length === 0) {
         setSuggestions({ status: "not_applicable" });
         return;
@@ -280,8 +287,8 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
               {suggestions.status === "loading" && <p className="text-xs text-slate-400">Searching for valid alternatives…</p>}
               {suggestions.status === "not_applicable" && (
                 <p className="text-xs text-slate-400">
-                  This lesson isn't part of an open teacher/room double-booking finding - suggestions only cover those two rule
-                  types today.
+                  This lesson isn't part of an open teacher/room double-booking or room-instability finding - suggestions don't
+                  cover other finding types yet.
                 </p>
               )}
               {suggestions.status === "ready" && suggestions.candidates.length === 0 && (

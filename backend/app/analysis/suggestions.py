@@ -11,13 +11,17 @@ This is deliberately algorithmic, not AI - nothing here calls a model.
 The (not yet built) AI advisor layer's job is to explain *these* ranked,
 pre-validated candidates in plain language, never to invent its own.
 
-Scope: teacher_double_booking and room_double_booking only. Room-feature
-matching and student_double_booking suggestions are out of scope - see
-docs/suggestions.md for why. Teacher reassignment (moving a lesson to a
-*different teacher*) is deliberately never suggested - there's no
-authoritative subject-qualification data yet (see docs/staff-capability-
-model.md), and guessing would be exactly the kind of invented suggestion
-the roadmap warns against."""
+Scope: teacher_double_booking, room_double_booking, and
+class_room_instability. Room-feature matching and student_double_booking
+suggestions are out of scope - see docs/suggestions.md for why. Teacher
+reassignment (moving a lesson to a *different teacher*) is deliberately
+never suggested - there's no authoritative subject-qualification data yet
+(see docs/staff-capability-model.md), and guessing would be exactly the
+kind of invented suggestion the roadmap warns against. That's also why
+class_teacher_inconsistency has no suggestion support here even though
+its sibling rule class_room_instability does - "move this lesson to the
+class's other room" is a safe search; "move this lesson to the class's
+other teacher" is exactly the guess this module refuses to make."""
 
 import json
 import sqlite3
@@ -28,8 +32,9 @@ from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
-MAX_ENTRIES_CONSIDERED = 3  # cap on how many conflicting entries per finding get candidates generated
+MAX_ENTRIES_CONSIDERED = 3  # cap on how many conflicting/minority-room entries per finding get candidates generated
 MAX_CANDIDATES_RETURNED = 15
+SUPPORTED_RULES = {"teacher_double_booking", "room_double_booking", "class_room_instability"}
 
 
 @dataclass(frozen=True)
@@ -95,6 +100,34 @@ def _class_room_familiarity(entries_by_class: dict[int, list[dict]], entry: dict
     return {"same_room_elsewhere_count": same_room_elsewhere, "total_other_lessons": len(others)}
 
 
+def _majority_room(entries: list[dict]) -> int | None:
+    """The room_id most of a class's lessons already use - the "home" room
+    a class_room_instability fix should consolidate the rest towards.
+    Ties break on room_code alphabetically, so the choice is stable across
+    runs rather than depending on query/dict iteration order."""
+    counts: dict[int, int] = defaultdict(int)
+    codes: dict[int, str] = {}
+    for e in entries:
+        if e["room_id"] is None:
+            continue
+        counts[e["room_id"]] += 1
+        codes[e["room_id"]] = e["room_code"]
+    if not counts:
+        return None
+    return min(counts, key=lambda room_id: (-counts[room_id], codes[room_id]))
+
+
+def _candidate_sort_key(c: dict) -> tuple:
+    # Least disruptive first, then most findings resolved, then prefer a
+    # room the class already uses elsewhere (ties back to
+    # class_room_instability - a suggestion that happens to make the class
+    # *more* consistent, not just conflict-free, ranks ahead of one that
+    # doesn't).
+    fam = c["class_room_familiarity"]
+    familiarity_tiebreak = -fam["same_room_elsewhere_count"] if fam else 0
+    return (c["movement_cost"], -c["resolves_finding_count"], familiarity_tiebreak)
+
+
 def _try_candidate(
     conn: sqlite3.Connection,
     before_entries: list[dict],
@@ -146,41 +179,27 @@ def _try_candidate(
     }
 
 
-def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
-    finding_row = conn.execute(
-        "SELECT rule_id, evidence_json FROM finding WHERE id = ?", (finding_id,)
-    ).fetchone()
-    if finding_row is None:
-        return {"finding_id": finding_id, "supported": False, "note": "No such finding.", "candidates": []}
-
-    if finding_row["rule_id"] not in ("teacher_double_booking", "room_double_booking"):
-        return {
-            "finding_id": finding_id, "supported": False,
-            "note": f"Suggestion generation isn't implemented for {finding_row['rule_id']} yet - see docs/suggestions.md.",
-            "candidates": [],
-        }
-
+def _clash_candidates(
+    conn: sqlite3.Connection,
+    finding_row,
+    before_entries: list[dict],
+    entries_by_id: dict[int, dict],
+    before_findings: dict,
+    composites,
+    code_lookups: dict,
+    teacher_busy: dict,
+    room_busy: dict,
+    all_slots: list[Slot],
+    entries_by_class: dict[int, list[dict]],
+) -> dict | None:
+    """teacher_double_booking / room_double_booking: for each conflicting
+    entry, search every alternate room-at-same-slot and same-room-at-
+    another-slot. Returns None if the finding's evidence can't drive a
+    search (predates entry_id tracking)."""
     evidence = json.loads(finding_row["evidence_json"])
     conflicting = evidence.get("entries", [])[:MAX_ENTRIES_CONSIDERED]
     if not conflicting or "entry_id" not in conflicting[0]:
-        return {
-            "finding_id": finding_id, "supported": False,
-            "note": "Finding evidence predates entry_id tracking - re-run the rules engine.",
-            "candidates": [],
-        }
-
-    code_lookups = load_code_lookups(conn)
-    composites = load_approved_composites(conn)
-    before_entries = lesson_entries(conn)
-    entries_by_id = {e["entry_id"]: e for e in before_entries}
-    before_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, before_entries, composites)}
-    teacher_busy, room_busy = _busy_sets(before_entries)
-    all_slots = _all_lesson_slots(conn)
-
-    entries_by_class: dict[int, list[dict]] = defaultdict(list)
-    for e in before_entries:
-        if e["class_name_id"] is not None:
-            entries_by_class[e["class_name_id"]].append(e)
+        return None
 
     all_candidates = []
     for conflict in conflicting:
@@ -220,17 +239,100 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
                 if candidate:
                     all_candidates.append(candidate)
 
-    def familiarity_tiebreak(c: dict) -> int:
-        fam = c["class_room_familiarity"]
-        return -fam["same_room_elsewhere_count"] if fam else 0
+    return all_candidates
 
-    # Least disruptive first, then most findings resolved, then prefer a
-    # room the class already uses elsewhere (ties back to
-    # class_room_instability - a suggestion that happens to make the class
-    # *more* consistent, not just conflict-free, ranks ahead of one that
-    # doesn't).
-    all_candidates.sort(key=lambda c: (c["movement_cost"], -c["resolves_finding_count"], familiarity_tiebreak(c)))
+
+def _room_instability_candidates(
+    conn: sqlite3.Connection,
+    finding_row,
+    before_entries: list[dict],
+    before_findings: dict,
+    composites,
+    code_lookups: dict,
+    room_busy: dict,
+    entries_by_class: dict[int, list[dict]],
+) -> list[dict] | None:
+    """class_room_instability: unlike the clash rules, there's no
+    conflicting entry to move - the "fix" is consolidating the class's
+    lessons into whichever room it already favours. For each lesson
+    currently in a minority room, the only candidate offered is that one
+    room, at the lesson's existing slot (moving it *and* the time would
+    also fix the room, but that's no longer "make this consistent", it's
+    a different suggestion and out of scope - see docs/suggestions.md).
+    Returns None if the finding's class can't be resolved from entity_refs
+    (predates entity_refs tracking, or has no lessons left)."""
+    entity_refs = json.loads(finding_row["entity_refs_json"])
+    class_code = next((r["code"] for r in entity_refs if r["type"] == "class"), None)
+    if class_code is None:
+        return None
+
+    class_entries = [e for e in before_entries if e["class_code"] == class_code]
+    target_room_id = _majority_room(class_entries)
+    if target_room_id is None:
+        return None
+
+    class_name_ids = {e["class_name_id"] for e in class_entries if e["class_name_id"] is not None}
+    minority_entries = [e for e in class_entries if e["room_id"] != target_room_id][:MAX_ENTRIES_CONSIDERED]
+
+    all_candidates = []
+    for entry in minority_entries:
+        if (entry["day_id"], entry["period_id"]) in room_busy.get(target_room_id, set()):
+            continue  # the class's own room is already taken at this lesson's slot
+        candidate = _try_candidate(
+            conn, before_entries, before_findings, composites, code_lookups,
+            entry, entry["day_id"], entry["period_id"], target_room_id, class_name_ids,
+            entries_by_class,
+        )
+        if candidate:
+            all_candidates.append(candidate)
+    return all_candidates
+
+
+def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
+    finding_row = conn.execute(
+        "SELECT rule_id, evidence_json, entity_refs_json FROM finding WHERE id = ?", (finding_id,)
+    ).fetchone()
+    if finding_row is None:
+        return {"finding_id": finding_id, "supported": False, "note": "No such finding.", "candidates": []}
+
+    if finding_row["rule_id"] not in SUPPORTED_RULES:
+        return {
+            "finding_id": finding_id, "supported": False,
+            "note": f"Suggestion generation isn't implemented for {finding_row['rule_id']} yet - see docs/suggestions.md.",
+            "candidates": [],
+        }
+
+    code_lookups = load_code_lookups(conn)
+    composites = load_approved_composites(conn)
+    before_entries = lesson_entries(conn)
+    entries_by_id = {e["entry_id"]: e for e in before_entries}
+    before_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, before_entries, composites)}
+    teacher_busy, room_busy = _busy_sets(before_entries)
+    all_slots = _all_lesson_slots(conn)
+
+    entries_by_class: dict[int, list[dict]] = defaultdict(list)
+    for e in before_entries:
+        if e["class_name_id"] is not None:
+            entries_by_class[e["class_name_id"]].append(e)
+
+    if finding_row["rule_id"] == "class_room_instability":
+        candidates = _room_instability_candidates(
+            conn, finding_row, before_entries, before_findings, composites, code_lookups,
+            room_busy, entries_by_class,
+        )
+        not_found_note = "This class's lessons couldn't be matched to the current timetable - re-run the rules engine."
+    else:
+        candidates = _clash_candidates(
+            conn, finding_row, before_entries, entries_by_id, before_findings, composites, code_lookups,
+            teacher_busy, room_busy, all_slots, entries_by_class,
+        )
+        not_found_note = "Finding evidence predates entry_id tracking - re-run the rules engine."
+
+    if candidates is None:
+        return {"finding_id": finding_id, "supported": False, "note": not_found_note, "candidates": []}
+
+    candidates.sort(key=_candidate_sort_key)
     return {
         "finding_id": finding_id, "supported": True, "note": None,
-        "candidates": all_candidates[:MAX_CANDIDATES_RETURNED],
+        "candidates": candidates[:MAX_CANDIDATES_RETURNED],
     }
