@@ -3,7 +3,7 @@ import gridPilotLogo from "../assets/gridpilot-logo.png";
 import { IconUpload } from "./icons";
 import type { IngestStatus } from "../types";
 
-export type Tab = "dashboard" | "timetable" | "teachers" | "findings" | "composites" | "changes" | "audit";
+export type Tab = "dashboard" | "timetable" | "blocking" | "teachers" | "findings" | "composites" | "changes" | "audit";
 
 export interface SidebarItem {
   id: Tab;

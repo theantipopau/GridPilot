@@ -115,6 +115,15 @@ export function IconDoor({ className = base }: IconProps) {
   );
 }
 
+export function IconColumns({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="2.5" y="3" width="15" height="14" rx="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 3v14M12.5 3v14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSpinner({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={`${className} animate-spin`}>

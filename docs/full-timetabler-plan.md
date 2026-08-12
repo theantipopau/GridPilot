@@ -400,18 +400,24 @@ without either a school conversation or richer non-lesson-duty data (see
 
 ---
 
-### Phase C — Blocking pattern, read-only → editable · **M**
-The board TTS makes you infer from spreadsheets:
+### Phase C — Blocking pattern, read-only → editable · **M** · **read-only half done 2026-08-12**
+The board TTS makes you infer from spreadsheets, now a real page
+(**Blocking** in the sidebar, `GET /api/blocking-lines`): one grid per
+TTS grouping label, rows = roll class, columns = line, cell = the
+class(es)/teacher/room on that line for that roll class.
 
-```
-           Line A      Line B      Line C      Line D   …
-Year 10    10RE  ×4    10ENG ×4    10MAT ×4    Sci  ×4
-Year 9     …
-Year 12    12A   ×2    12B   ×2    …
-```
+Building it against the real data corrected an assumption from Phase A:
+the row-group label (`"10A"`, `"12"`, etc) is **not reliably a year
+level**, despite most of them looking exactly like one. Group `"12"`
+turned out to cover every roll class's Fratelli/Assembly/Break slot -
+7A through the RTC support class - not Year 12 specifically. The page
+shows TTS's own grouping code verbatim ("Group 12") rather than the
+"Year group 12" label it shipped with for about ten minutes before this
+was caught in browser verification - see `docs/data-formats.md` #5 item
+4 for the correction.
 
-Read-only first (Phase A gives the data). Editable — drag a class group
-between lines — is Tier 3 and waits on Phase 0.
+Editable — drag a class group between lines — is Tier 3 and waits on
+Phase 0. 2 new tests; 145 passing (was 143).
 
 **Value:** for the first time the school can *see* why the structure
 produces the clashes the Findings page reports.
@@ -610,7 +616,7 @@ NOW (no write risk, high value, ~2–3 build sessions):
   Phase 0  ← school, 15 min, gates everything - still open
   Phase A  ← read whole file; fixes the 40% load blind spot - ✅ done 2026-08-12
   Phase B  ← rooms/teachers ✅ done 2026-08-12; loads dropped (needs school input, see §6)
-  Phase C  ← blocking pattern, read-only
+  Phase C  ← blocking pattern, read-only - ✅ done 2026-08-12
 
 THEN (gated on Phase 0 passing):
   Phase D  ← entity authoring

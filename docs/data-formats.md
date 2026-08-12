@@ -295,10 +295,18 @@ Still open (default assumption noted, revisit if wrong):
    Blocking Pattern.xlsx` (added 2026-08-03): the spreadsheet's "LINE 1",
    "LINE 2"... column structure (subjects that run in parallel so
    students can pick one per line) matches the MRCG `DefaultCode` naming
-   pattern exactly (`"12 A"`, `"12 B"`, `"10A B"`, etc. = year level +
+   pattern exactly (`"12 A"`, `"12 B"`, `"10A B"`, etc. = grouping label +
    line letter). MRCGs are **option-line/blocking-column groupings**, not
    composite-class markers (see item 9 below - a different, real
    phenomenon this file doesn't explicitly encode) - now in `blocking_line`/
+   **Correction, found building the Phase C UI (2026-08-12): the
+   `DefaultCode` prefix is *not* reliably a year level**, despite `"10A
+   B"`/`"10A C"`/etc looking exactly like one. Group `"12"` covers every
+   roll class from `7A` to `RTC`'s Fratelli/Assembly/Break slots, not
+   Year 12 - it's a whole-school scheduling block that happens to be
+   labelled `12`. Displayed as TTS's own opaque grouping code
+   (`docs/full-timetabler-plan.md` Phase C), never re-labelled "Year
+   group" again.
    `blocking_line_class_group`. `RURs[]` ("Room Utilisation
    Requirements") confirmed by tracing a real `RURReferences[].ReferencesID`
    value to `ClassNames[].ClassNameID`: a room-choice constraint - "one of

@@ -15,12 +15,14 @@ import {
   IconAlertTriangle,
   IconCalendar,
   IconClipboardList,
+  IconColumns,
   IconGitBranch,
   IconHome,
   IconLayers,
   IconUsers,
 } from "./components/icons";
 import AuditPage from "./pages/AuditPage";
+import BlockingPage from "./pages/BlockingPage";
 import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -32,6 +34,7 @@ import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> },
   { id: "timetable", label: "Timetable", icon: (c) => <IconCalendar className={c} /> },
+  { id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> },
   { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
   { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
   { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
@@ -178,6 +181,7 @@ export default function App() {
             onOpenChangeSet={openChangeSetInTab}
           />
         )}
+        {tab === "blocking" && <BlockingPage />}
         {tab === "teachers" && <TeachersPage />}
         {tab === "findings" && (
           <FindingsPage

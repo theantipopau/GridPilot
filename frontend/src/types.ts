@@ -305,3 +305,33 @@ export interface IngestUploadResult {
   tfx_filename: string;
   sfx_filenames: string[];
 }
+
+export interface BlockingLineCourse {
+  class_name_code: string | null;
+  teacher_code: string | null;
+  room_code: string | null;
+}
+
+export interface BlockingLineClassGroup {
+  roll_class_code: string;
+  periods_per_cycle: number | null;
+  courses: BlockingLineCourse[];
+}
+
+export interface BlockingLine {
+  id: number;
+  default_code: string;
+  line: string;
+  code: string | null;
+  name: string | null;
+  class_groups: BlockingLineClassGroup[];
+}
+
+export interface BlockingGroup {
+  group: string;
+  lines: BlockingLine[];
+}
+
+export interface BlockingLinesResponse {
+  groups: BlockingGroup[];
+}

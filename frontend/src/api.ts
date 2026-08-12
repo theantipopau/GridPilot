@@ -1,5 +1,6 @@
 import type {
   AuditEvent,
+  BlockingLinesResponse,
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
@@ -196,6 +197,10 @@ export function assignTeacherRole(
     staff_role_id: staffRoleId,
     assigned_by: assignedBy,
   });
+}
+
+export function fetchBlockingLines(): Promise<BlockingLinesResponse> {
+  return getJson(`${BASE}/blocking-lines`);
 }
 
 export function fetchDashboard(): Promise<DashboardData> {

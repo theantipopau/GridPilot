@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-143%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-145%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -57,6 +57,7 @@ synthetic data alone:
 | ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
 | ✅ **Teachers** | Name, code, faculty, and load (contracted vs. scheduled) straight from the import - read-only. Plus middle-leadership role/tier assignment, the one thing entered directly in GridPilot - kept by teacher **code**, not an internal id, specifically so it survives a re-ingest. |
 | ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix, never sees anything beyond the finding's own codes/evidence. Also told about *other* open findings sharing an entity or time slot, so it can flag when two findings are really the same underlying clash seen from different sides, instead of explaining everything in isolation. One "Explain" button per finding in the Findings tab. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
+| ✅ **Blocking** | Read-only view of the option-line / blocking-pattern structure (which classes run in parallel so a student can pick one per line) - the board a timetabler currently has to infer from a spreadsheet. See [`docs/full-timetabler-plan.md`](docs/full-timetabler-plan.md) Phase C. |
 
 **Not yet built:** adding/editing teacher *records* (name/faculty/load
 stay view-only - only role assignment is writable), and anything

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     audit,
+    blocking,
     change_sets,
     composites,
     dashboard,
@@ -34,6 +35,7 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(teachers.router, prefix="/api")
+app.include_router(blocking.router, prefix="/api")
 
 
 @app.get("/api/health")
