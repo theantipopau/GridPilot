@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   addProposedChange,
   createChangeSet,
   fetchAllTimetableEntries,
   fetchChangeSet,
+  fetchFindings,
   fetchTimetable,
   validateChangeSet,
 } from "../api";
@@ -13,8 +14,9 @@ import LessonInspector, { type MoveParams } from "../components/LessonInspector"
 import LoadingState from "../components/LoadingState";
 import MasterTimetableGrid from "../components/MasterTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
+import { buildFindingHighlightIndex } from "../lib/findingHighlights";
 import { applyPendingMoves, buildPendingMoveMap } from "../lib/pendingMoves";
-import type { ChangeEndpoint, ReferenceData, TimetableEntry, TimetableResponse, ValidationResult, ViewType } from "../types";
+import type { ChangeEndpoint, Finding, ReferenceData, TimetableEntry, TimetableResponse, ValidationResult, ViewType } from "../types";
 
 interface Props {
   reference: ReferenceData;
@@ -45,6 +47,19 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
   const [pendingEntryIds, setPendingEntryIds] = useState<Set<number>>(new Set());
   const [pendingMoves, setPendingMoves] = useState<Map<number, ChangeEndpoint>>(new Map());
   const [changeSetName, setChangeSetName] = useState<string | null>(null);
+  const [openFindings, setOpenFindings] = useState<Finding[]>([]);
+
+  useEffect(() => {
+    fetchFindings("OPEN")
+      .then((r) => setOpenFindings(r.findings))
+      .catch(() => setOpenFindings([]));
+  }, []);
+
+  // Findings only reflect the last rules-engine run, not any change still
+  // sitting in a pending change set (nothing is written to the timetable
+  // until a change set is approved) - so this index doesn't need to
+  // refresh as the user proposes moves, only once per page visit.
+  const findingHighlights = useMemo(() => buildFindingHighlightIndex(openFindings), [openFindings]);
 
   useEffect(() => {
     if (mode !== "master" || masterEntries) return;
@@ -152,6 +167,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
             reference={reference}
             entries={applyPendingMoves(masterEntries, pendingMoves, reference)}
             pendingEntryIds={pendingEntryIds}
+            findingHighlights={findingHighlights}
             onSelectLesson={setSelectedEntry}
           />
         ) : (
@@ -165,6 +181,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
           periods={reference.periods}
           entries={applyPendingMoves(timetable.entries, pendingMoves, reference)}
           pendingEntryIds={pendingEntryIds}
+          findingHighlights={findingHighlights}
           onSelectLesson={setSelectedEntry}
         />
       )}

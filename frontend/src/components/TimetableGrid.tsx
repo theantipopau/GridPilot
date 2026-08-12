@@ -1,4 +1,5 @@
 import { facultyColor } from "../lib/facultyColors";
+import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
 import type { Day, Period, TimetableEntry, ViewType } from "../types";
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
   periods: Period[];
   entries: TimetableEntry[];
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }
 
@@ -21,7 +23,7 @@ const ENTRY_STYLES: Record<string, string> = {
   OTHER: "bg-slate-50 border-slate-200 text-slate-600",
 };
 
-export default function TimetableGrid({ view, days, periods, entries, pendingEntryIds, onSelectLesson }: Props) {
+export default function TimetableGrid({ view, days, periods, entries, pendingEntryIds, findingHighlights, onSelectLesson }: Props) {
   const weekA = days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
   const weekB = days.filter((d) => d.week_label === "B").sort((a, b) => a.day_no - b.day_no);
 
@@ -44,6 +46,7 @@ export default function TimetableGrid({ view, days, periods, entries, pendingEnt
         entriesByKey={entriesByKey}
         view={view}
         pendingEntryIds={pendingEntryIds}
+        findingHighlights={findingHighlights}
         onSelectLesson={onSelectLesson}
       />
       <WeekTable
@@ -53,6 +56,7 @@ export default function TimetableGrid({ view, days, periods, entries, pendingEnt
         entriesByKey={entriesByKey}
         view={view}
         pendingEntryIds={pendingEntryIds}
+        findingHighlights={findingHighlights}
         onSelectLesson={onSelectLesson}
       />
     </div>
@@ -66,6 +70,7 @@ function WeekTable({
   entriesByKey,
   view,
   pendingEntryIds,
+  findingHighlights,
   onSelectLesson,
 }: {
   label: string;
@@ -74,6 +79,7 @@ function WeekTable({
   entriesByKey: Map<string, TimetableEntry[]>;
   view: ViewType;
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   return (
@@ -112,7 +118,13 @@ function WeekTable({
                   const cellEntries = entriesByKey.get(key) ?? [];
                   return (
                     <td key={d.code} className="border-b border-slate-200 p-1 align-top">
-                      <Cell view={view} entries={cellEntries} pendingEntryIds={pendingEntryIds} onSelectLesson={onSelectLesson} />
+                      <Cell
+                        view={view}
+                        entries={cellEntries}
+                        pendingEntryIds={pendingEntryIds}
+                        findingHighlights={findingHighlights}
+                        onSelectLesson={onSelectLesson}
+                      />
                     </td>
                   );
                 })}
@@ -129,32 +141,36 @@ function Cell({
   view,
   entries,
   pendingEntryIds,
+  findingHighlights,
   onSelectLesson,
 }: {
   view: ViewType;
   entries: TimetableEntry[];
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (entries.length === 0) {
     return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-slate-300">Free</div>;
   }
 
-  const clash = entries.length > 1;
-
   return (
-    <div className={clash ? "flex flex-col gap-1 ring-2 ring-red-400 rounded" : undefined}>
+    <div className={entries.length > 1 ? "flex flex-col gap-1" : undefined}>
       {entries.map((e, i) => {
         const editable = e.entry_type === "LESSON" && !!onSelectLesson;
         const pending = pendingEntryIds?.has(e.entry_id);
+        const highlight = findingHighlights ? highlightForEntry(findingHighlights, e) : null;
         const isLesson = e.entry_type === "LESSON";
         const color = isLesson ? facultyColor(e.faculty_code) : null;
+        // Pending takes the ring when both apply - the user is actively
+        // working this lesson, so that's the more relevant signal in the
+        // moment, but the finding is still named in the title either way.
+        const ringClass = pending ? "ring-2 ring-amber-400" : highlight ? HIGHLIGHT_RING[highlight.severity] : "";
         const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight transition-all duration-150 ${
           isLesson ? "border-transparent text-slate-900" : (ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER)
-        } ${editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""} ${
-          pending ? "ring-2 ring-amber-400" : ""
-        }`;
+        } ${editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""} ${ringClass}`;
         const style = color ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` } : undefined;
+        const title = highlight ? highlight.titles.join("; ") : undefined;
 
         const content = (
           <>
@@ -166,16 +182,15 @@ function Cell({
         );
 
         return editable ? (
-          <button key={i} type="button" className={className} style={style} onClick={() => onSelectLesson!(e)}>
+          <button key={i} type="button" className={className} style={style} title={title} onClick={() => onSelectLesson!(e)}>
             {content}
           </button>
         ) : (
-          <div key={i} className={className} style={style}>
+          <div key={i} className={className} style={style} title={title}>
             {content}
           </div>
         );
       })}
-      {clash && <div className="px-1 text-[10px] font-semibold text-red-600">CLASH</div>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { facultyColor } from "../lib/facultyColors";
+import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
 import type { Day, Period, ReferenceData, TimetableEntry, ViewType } from "../types";
 
 interface RowSpec {
@@ -11,6 +12,7 @@ interface Props {
   reference: ReferenceData;
   entries: TimetableEntry[];
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }
 
@@ -41,7 +43,7 @@ function dedupePeriodsByNumber(periods: Period[]): Period[] {
   return [...byNumber.values()].sort((a, b) => a.period_no - b.period_no);
 }
 
-export default function MasterTimetableGrid({ axis, reference, entries, pendingEntryIds, onSelectLesson }: Props) {
+export default function MasterTimetableGrid({ axis, reference, entries, pendingEntryIds, findingHighlights, onSelectLesson }: Props) {
   const rows = rowsForAxis(reference, axis);
   const canonicalPeriods = dedupePeriodsByNumber(reference.periods);
   const weekA = reference.days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
@@ -68,6 +70,7 @@ export default function MasterTimetableGrid({ axis, reference, entries, pendingE
         axis={axis}
         entriesByRowKey={entriesByRowKey}
         pendingEntryIds={pendingEntryIds}
+        findingHighlights={findingHighlights}
         onSelectLesson={onSelectLesson}
       />
       <MasterWeekTable
@@ -78,6 +81,7 @@ export default function MasterTimetableGrid({ axis, reference, entries, pendingE
         axis={axis}
         entriesByRowKey={entriesByRowKey}
         pendingEntryIds={pendingEntryIds}
+        findingHighlights={findingHighlights}
         onSelectLesson={onSelectLesson}
       />
     </div>
@@ -92,6 +96,7 @@ function MasterWeekTable({
   axis,
   entriesByRowKey,
   pendingEntryIds,
+  findingHighlights,
   onSelectLesson,
 }: {
   label: string;
@@ -101,6 +106,7 @@ function MasterWeekTable({
   axis: ViewType;
   entriesByRowKey: Map<string, TimetableEntry[]>;
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (weekDays.length === 0) return null;
@@ -159,6 +165,7 @@ function MasterWeekTable({
                         axis={axis}
                         entries={cellEntries}
                         pendingEntryIds={pendingEntryIds}
+                        findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
                       />
                     );
@@ -177,33 +184,36 @@ function MasterCell({
   axis,
   entries,
   pendingEntryIds,
+  findingHighlights,
   onSelectLesson,
 }: {
   axis: ViewType;
   entries: TimetableEntry[];
   pendingEntryIds?: Set<number>;
+  findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (entries.length === 0) {
     return <td className="border-b border-l border-slate-100 p-1 text-center text-slate-300">·</td>;
   }
 
-  const clash = entries.length > 1;
-
   return (
-    <td className={`border-b border-l border-slate-100 p-[3px] align-top ${clash ? "bg-red-50" : ""}`}>
+    <td className="border-b border-l border-slate-100 p-[3px] align-top">
       <div className="flex flex-col gap-[3px]">
         {entries.map((e, i) => {
           const primary = cellPrimary(e);
           const secondary = cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
           const pending = pendingEntryIds?.has(e.entry_id);
+          const highlight = findingHighlights ? highlightForEntry(findingHighlights, e) : null;
           const color = e.entry_type === "LESSON" ? facultyColor(e.faculty_code) : null;
+          // Pending takes the ring when both apply - the user is actively
+          // working this lesson, so that's the more relevant signal in the
+          // moment, but the finding is still named in the tooltip either way.
+          const ringClass = pending ? "ring-2 ring-amber-400" : highlight ? HIGHLIGHT_RING[highlight.severity] : "";
           const className = `relative w-full truncate rounded-sm py-1 pl-1.5 pr-1 text-left leading-tight ${
             e.entry_type === "LESSON" ? "text-slate-900" : "bg-slate-100 text-slate-500"
-          } ${clash ? "ring-1 ring-red-400" : ""} ${editable ? "cursor-pointer hover:brightness-95" : ""} ${
-            pending ? "ring-2 ring-amber-400" : ""
-          }`;
+          } ${editable ? "cursor-pointer hover:brightness-95" : ""} ${ringClass}`;
           const style = color
             ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` }
             : undefined;
@@ -213,7 +223,8 @@ function MasterCell({
               {secondary && <div className="truncate text-[10px] opacity-70">{secondary}</div>}
             </>
           );
-          const title = cellTitle(e) + (pending ? " · pending move" : "");
+          const title =
+            cellTitle(e) + (pending ? " · pending move" : "") + (highlight ? ` · ${highlight.titles.join("; ")}` : "");
           return editable ? (
             <button key={i} type="button" className={className} style={style} onClick={() => onSelectLesson!(e)} title={title}>
               {content}

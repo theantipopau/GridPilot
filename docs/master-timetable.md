@@ -25,12 +25,11 @@ count and column count come straight from `reference` (already loaded);
 the grid only groups the entries fetched from `/timetable/all` by
 `{axisCode}|{day_code}|{period_no}`.
 
-Clash detection reuses the exact same rule as the single-entity grid: more
-than one entry in a cell is a real clash *for that row's entity* (a room
-can't hold two classes at once; a teacher can't teach two at once) -
-that's the whole reason the axis matters, not just cosmetic grouping. A
-clashing cell gets a red ring and background, matching `TimetableGrid.tsx`'s
-existing convention.
+Clash highlighting is finding-backed, not grid-derived - see "Conflict
+highlighting is finding-backed, not a grid heuristic" below. Multiple
+entries can still land in one cell (a composite/parallel class, most
+commonly); that's shown as a small vertical stack, without implying an
+error on its own.
 
 Clicking any lesson opens the same `LessonInspector` and change-set flow
 used by the single-entity view - `LessonInspector` was already
@@ -105,3 +104,47 @@ lesson text stays legibly dark-on-near-white - a deliberate departure
 from Timetabling Solutions' own solid-fill-plus-white-text convention
 (visible in a real screenshot during this work), traded for legibility
 at this cell size rather than matched exactly.
+
+## Conflict highlighting is finding-backed, not a grid heuristic (2026-08-13)
+
+The grid used to flag a "clash" purely structurally: more than one entry
+landed in the same `{row}|{day}|{period}` cell. That was wrong in both
+directions - it missed real problems the structural check can't see at
+all (`student_double_booking`, since a student's overlapping classes
+usually sit in *different* rows/roll-classes; `room_capacity_exceeded`,
+which isn't about two entries sharing a cell), and it falsely flagged
+**approved composite/parallel classes**, which legitimately put two class
+codes in one room/period on purpose.
+
+`frontend/src/lib/findingHighlights.ts` replaces the heuristic with the
+real thing: an index built from the same `GET /findings?status=OPEN` data
+the Findings tab uses, keyed by `{day_code}|{period_code}|{entity_type}:
+{code}` for every open finding that carries `slot_refs` (teacher/room/
+student double-booking, room capacity - the four rule types that mean
+something at the level of one lesson). Findings with no `slot_refs`
+(`class_room_instability`, `teacher_over_contracted_load`, ...) describe
+a whole class or teacher, not one cell, so a grid can't usefully show
+them and they're deliberately excluded rather than highlighting every
+lesson of an affected class.
+
+Each rendered lesson checks up to three keys (its teacher, room, and
+class code at that slot) and merges to the worst severity and the union
+of matching finding titles - a lesson can be both a teacher
+double-booking *and* over room capacity at once, and both should surface.
+Verified against real data: the approved `NEAR01`/`GRE1` composite
+(12DRA1 + 11DRA1) shows no ring anywhere in the cycle, while a genuinely
+unresolved room clash at the *same* room (`BON07`, Tues A P4, where an
+approved 5-class composite collides with two unrelated classes taught by
+a different teacher) correctly rings red with both the teacher- and
+room-double-booking titles in its tooltip.
+
+Ring colour is severity-based (`ring-red-500` critical, `ring-orange-500`
+warning) via `HIGHLIGHT_RING`, distinct from the amber ring already used
+for a pending proposed move - when a lesson is both, pending wins the
+ring (it's the more actionable signal in the moment) but the finding
+titles are still appended to the tooltip either way. The index is built
+once per Timetable page visit, not refetched as the user proposes moves:
+findings only reflect the last rules-engine run against the *approved*
+timetable, and nothing in a pending change set is written until it's
+approved elsewhere (Change Sets page), so there's nothing new for the
+rules engine to have seen yet.
