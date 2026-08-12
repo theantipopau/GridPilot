@@ -33,12 +33,21 @@ REQUIRED_SECTIONS = (
     "RollClasses", "ClassNames", "ClassGroups", "Timetable", "Students",
 )
 
+# Modelled, but optional - parsed if present (see _ingest_settings/
+# _ingest_blocking_lines/_ingest_room_pools below), never required, since
+# an older/different export might lack them and that shouldn't be a hard
+# failure (docs/full-timetabler-plan.md Phase A).
+KNOWN_MODELLED_OPTIONAL_SECTIONS = ("Settings", "MRCGs", "RURs")
+
 # Present in the known format but deliberately not modelled (see
-# docs/data-formats.md). Their presence is expected; their absence is fine.
+# docs/data-formats.md and docs/full-timetabler-plan.md #4 for why
+# Meetings/UnscheduledDuties were investigated and parked - zero load data
+# and zero references respectively, in the real export). Their presence is
+# expected; their absence is fine.
 KNOWN_UNMODELLED_SECTIONS = (
-    "File ID", "Settings", "YardDutySessions", "YardDutyAreas", "YardDuties",
+    "File ID", "YardDutySessions", "YardDutyAreas", "YardDuties",
     "TeacherFiles", "StudentFiles", "UnscheduledDuties", "Meetings",
-    "RURs", "MRCGs", "Groups", "PublishedTimetables",
+    "Groups", "PublishedTimetables",
 )
 
 
@@ -60,7 +69,7 @@ def check_tfx_compatibility(data: dict[str, Any]) -> tuple[str | None, list[str]
             f"TD export, or the format has changed. File ID: {file_id!r}"
         )
 
-    known = set(REQUIRED_SECTIONS) | set(KNOWN_UNMODELLED_SECTIONS)
+    known = set(REQUIRED_SECTIONS) | set(KNOWN_MODELLED_OPTIONAL_SECTIONS) | set(KNOWN_UNMODELLED_SECTIONS)
     unknown = sorted(k for k in data.keys() if k not in known)
     return (file_id if isinstance(file_id, str) else None), missing, unknown
 
@@ -93,6 +102,10 @@ class TfxIngester:
         self.class_group_id_by_source: dict[str, int] = {}
         self.yard_duty_area_id_by_source: dict[str, int] = {}
         self.yard_duty_session_id_by_source: dict[str, int] = {}
+        # Set by _ingest_settings(), used by _ingest_teachers() as the
+        # fallback when a teacher's own LoadProposed is 0 - see
+        # docs/full-timetabler-plan.md #4.1.
+        self.default_teacher_load_minutes: float | None = None
 
     def log_discrepancy(self, check_name: str, severity: str, description: str, detail: dict | None = None) -> None:
         self.conn.execute(
@@ -103,6 +116,7 @@ class TfxIngester:
 
     def run(self) -> None:
         self._check_compatibility()
+        self._ingest_settings()
         self._ingest_days()
         self._ingest_periods()
         self._ingest_year_levels()
@@ -112,6 +126,8 @@ class TfxIngester:
         self._ingest_roll_classes()
         self._ingest_subjects_and_class_names()
         self._ingest_class_groups()
+        self._ingest_blocking_lines()
+        self._ingest_room_pools()
         self._ingest_timetable()
         self._ingest_students_and_enrolment()
         self._ingest_yard_duty()
@@ -142,6 +158,37 @@ class TfxIngester:
                 "path's patch strategy carries them through untouched.",
                 {"sections": unknown},
             )
+
+    # -- School-wide settings -----------------------------------------
+
+    def _ingest_settings(self) -> None:
+        """Settings[] is a single-element list holding one dict - the
+        school's own optimisation preferences and load default. Optional
+        (KNOWN_MODELLED_OPTIONAL_SECTIONS): an export missing it just
+        leaves school_setting empty and default_teacher_load_minutes None,
+        never a hard failure."""
+        settings_list = self.data.get("Settings") or []
+        settings = settings_list[0] if settings_list else {}
+        if not settings:
+            return
+
+        teacher_proposed_load_minutes = (settings.get("TeacherProposedLoad") or 0) / 100.0 or None
+        self.default_teacher_load_minutes = teacher_proposed_load_minutes
+
+        self.conn.execute(
+            "INSERT INTO school_setting (id, teacher_proposed_load_minutes, optimise_spread, max_day_spread, "
+            "successive_2_periods, successive_3_periods, academic_periods, timetable_notice) "
+            "VALUES (1, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                teacher_proposed_load_minutes,
+                1 if settings.get("OptimiseSpread") else 0,
+                1 if settings.get("MaxDaySpread") else 0,
+                1 if settings.get("Successive2Periods") else 0,
+                1 if settings.get("Successive3Periods") else 0,
+                settings.get("AcademicPeriods"),
+                _blank_to_none(settings.get("TimetableNotice")),
+            ),
+        )
 
     # -- Cycle structure ----------------------------------------------
 
@@ -204,12 +251,21 @@ class TfxIngester:
                     f"Unknown teacher SpareField1 code '{spare}' - not in confirmed T/GC/SO/CLT set",
                     {"teacher_code": t["Code"]},
                 )
+            # LoadProposed=0 in the source means "use the school default",
+            # not "no load" - confirmed against the real export, where the
+            # only two values present were 0 and the exact school default
+            # (Settings.TeacherProposedLoad). Without this fallback, every
+            # teacher whose file says 0 silently drops out of
+            # teacher_over_contracted_load (WHERE contracted_load_minutes
+            # IS NOT NULL) - 30 of 74 teachers in the real data. See
+            # docs/full-timetabler-plan.md #4.1.
             load_proposed = (t.get("LoadProposed") or 0) / 100.0
+            contracted_load_minutes = load_proposed or self.default_teacher_load_minutes
             cur.execute(
                 "INSERT INTO teacher (source_guid, code, first_name, last_name, email, staff_category, "
                 "contracted_load_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (t["TeacherID"], t["Code"], t.get("FirstName"), t.get("LastName"),
-                 _blank_to_none(t.get("Email")), staff_category, load_proposed or None),
+                 _blank_to_none(t.get("Email")), staff_category, contracted_load_minutes),
             )
             self.teacher_id_by_source[t["TeacherID"]] = cur.lastrowid
 
@@ -323,6 +379,81 @@ class TfxIngester:
                         "(class_group_course_id, period_id, room_id) VALUES (?, ?, ?)",
                         (course_id, period_id, override_room_id),
                     )
+
+    # -- Blocking lines and room pools --------------------------------------
+
+    def _ingest_blocking_lines(self) -> None:
+        """MRCGs[] - the blocking pattern / option lines. Optional
+        (KNOWN_MODELLED_OPTIONAL_SECTIONS). A MRCGClassGroups entry
+        referencing a ClassGroupID not seen in ClassGroups[] is logged and
+        skipped, never a hard failure - this is exploratory structural
+        data, not load-bearing for the timetable grid itself."""
+        cur = self.conn.cursor()
+        for m in self.data.get("MRCGs", []):
+            cur.execute(
+                "INSERT INTO blocking_line (source_guid, default_code, code, name) VALUES (?, ?, ?, ?)",
+                (m["MRCGID"], m.get("DefaultCode", ""), _blank_to_none(m.get("Code")), _blank_to_none(m.get("Name"))),
+            )
+            blocking_line_id = cur.lastrowid
+
+            for cg in m.get("MRCGClassGroups", []):
+                class_group_id = self.class_group_id_by_source.get(cg.get("ClassGroupID"))
+                if class_group_id is None:
+                    self.log_discrepancy(
+                        "blocking_line_class_group_unresolved", "warning",
+                        "MRCGClassGroups entry references a ClassGroupID not found in ClassGroups[]",
+                        {"mrcg_id": m["MRCGID"]},
+                    )
+                    continue
+                cur.execute(
+                    "INSERT OR IGNORE INTO blocking_line_class_group (blocking_line_id, class_group_id) "
+                    "VALUES (?, ?)",
+                    (blocking_line_id, class_group_id),
+                )
+
+    def _ingest_room_pools(self) -> None:
+        """RURs[] ("Room Utilisation Requirements") - "one of these classes
+        must use one of these rooms". Optional
+        (KNOWN_MODELLED_OPTIONAL_SECTIONS). RURReferences[].ReferencesID
+        was confirmed (by tracing a real value) to point at
+        ClassNames[].ClassNameID - anything that doesn't resolve is logged
+        and skipped rather than assumed."""
+        cur = self.conn.cursor()
+        for r in self.data.get("RURs", []):
+            cur.execute(
+                "INSERT INTO room_pool (source_guid, code, name, type_is_class) VALUES (?, ?, ?, ?)",
+                (r["RURID"], _blank_to_none(r.get("Code")), _blank_to_none(r.get("Name")),
+                 1 if r.get("TypeIsClass") else 0),
+            )
+            room_pool_id = cur.lastrowid
+
+            for rr in r.get("RURRooms", []):
+                room_id = self.room_id_by_source.get(rr.get("RoomID"))
+                if room_id is None:
+                    self.log_discrepancy(
+                        "room_pool_room_unresolved", "warning",
+                        "RURRooms entry references a RoomID not found in Rooms[]",
+                        {"rur_id": r["RURID"]},
+                    )
+                    continue
+                cur.execute(
+                    "INSERT OR IGNORE INTO room_pool_room (room_pool_id, room_id) VALUES (?, ?)",
+                    (room_pool_id, room_id),
+                )
+
+            for ref in r.get("RURReferences", []):
+                class_name_id = self.class_name_id_by_source.get(ref.get("ReferencesID"))
+                if class_name_id is None:
+                    self.log_discrepancy(
+                        "room_pool_class_name_unresolved", "warning",
+                        "RURReferences entry references a ClassNameID not found in ClassNames[]",
+                        {"rur_id": r["RURID"]},
+                    )
+                    continue
+                cur.execute(
+                    "INSERT OR IGNORE INTO room_pool_class_name (room_pool_id, class_name_id) VALUES (?, ?)",
+                    (room_pool_id, class_name_id),
+                )
 
     # -- The timetable grid -----------------------------------------------
 

@@ -59,6 +59,24 @@ CREATE TABLE IF NOT EXISTS period (
     UNIQUE (day_id, period_no)
 );
 
+-- School-wide settings (source: .tfx Settings[0]) ----------------------------
+-- Single-row table - the school's own optimisation preferences and load
+-- default, previously unparsed. teacher_proposed_load_minutes is the
+-- fallback used when a teacher's own LoadProposed is 0 (TTS's "use the
+-- school default" convention, not "no load") - see
+-- docs/full-timetabler-plan.md #4.1 and TfxIngester._ingest_teachers.
+-- Rebuilt from scratch every ingest, like every other source-derived table.
+CREATE TABLE IF NOT EXISTS school_setting (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    teacher_proposed_load_minutes REAL,
+    optimise_spread INTEGER,
+    max_day_spread INTEGER,
+    successive_2_periods INTEGER,
+    successive_3_periods INTEGER,
+    academic_periods INTEGER,
+    timetable_notice TEXT
+);
+
 -- Places and people -------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS room (
@@ -170,6 +188,51 @@ CREATE TABLE IF NOT EXISTS class_group_course_room_override (
     period_id INTEGER NOT NULL REFERENCES period(id),
     room_id INTEGER NOT NULL REFERENCES room(id),
     UNIQUE (class_group_course_id, period_id)
+);
+
+-- Blocking lines (source: .tfx MRCGs) ----------------------------------------
+-- The option-line / blocking-pattern structure: which class groups run in
+-- parallel so a student can pick one subject per line without a clash.
+-- See docs/data-formats.md #5.4 and docs/full-timetabler-plan.md Phase A/C.
+-- Source-derived like class_group - rebuilt from scratch every ingest.
+CREATE TABLE IF NOT EXISTS blocking_line (
+    id INTEGER PRIMARY KEY,
+    source_guid TEXT NOT NULL UNIQUE,   -- MRCGID
+    default_code TEXT NOT NULL,         -- year level + line letter, e.g. "10A B" - always present
+    code TEXT,                          -- school-assigned short code, e.g. "10ENG" - often blank
+    name TEXT                           -- e.g. "10 English" - often blank
+);
+
+CREATE TABLE IF NOT EXISTS blocking_line_class_group (
+    blocking_line_id INTEGER NOT NULL REFERENCES blocking_line(id),
+    class_group_id INTEGER NOT NULL REFERENCES class_group(id),
+    PRIMARY KEY (blocking_line_id, class_group_id)
+);
+
+-- Room pools (source: .tfx RURs - "Room Utilisation Requirements") ----------
+-- "one of these classes must use one of these rooms" - a room-choice
+-- constraint, not necessarily a single fixed room. TypeIsClass distinguishes
+-- a class-scoped pool from other RUR kinds TTS may support (unconfirmed -
+-- see docs/data-formats.md #5). RURReferences[] were confirmed by tracing a
+-- real ReferencesID to point at ClassNames[].ClassNameID.
+CREATE TABLE IF NOT EXISTS room_pool (
+    id INTEGER PRIMARY KEY,
+    source_guid TEXT NOT NULL UNIQUE,   -- RURID
+    code TEXT,
+    name TEXT,
+    type_is_class INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS room_pool_room (
+    room_pool_id INTEGER NOT NULL REFERENCES room_pool(id),
+    room_id INTEGER NOT NULL REFERENCES room(id),
+    PRIMARY KEY (room_pool_id, room_id)
+);
+
+CREATE TABLE IF NOT EXISTS room_pool_class_name (
+    room_pool_id INTEGER NOT NULL REFERENCES room_pool(id),
+    class_name_id INTEGER NOT NULL REFERENCES class_name(id),
+    PRIMARY KEY (room_pool_id, class_name_id)
 );
 
 -- The timetable grid --------------------------------------------------------

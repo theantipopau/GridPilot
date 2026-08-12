@@ -158,15 +158,33 @@ Key sections for the data model:
 - **`Students[].StudentLessons[]`**: each student's actual list of
   `{RollClassCode, ClassCode, LessonType}` — three `LessonType` values
   occur across the file: `O`, `C`, `S`. Meaning unconfirmed — see §5.
-- **`Faculties[]`**, **`RURs[]`** ("Room Utilisation Requirements"? —
-  name/purpose inferred from field shape, not confirmed — see §5),
-  **`MRCGs[]`** ("Multi-Roll-Class Groups"? — groups of ClassGroups,
-  purpose inferred — see §5), **`Groups[]`** (period/column allocation
+- **`Faculties[]`**, **`RURs[]`** ("Room Utilisation Requirements" —
+  confirmed a room-choice constraint, see §5 item 4), **`MRCGs[]`**
+  ("Multi-Roll-Class Groups" — confirmed the option-line/blocking-pattern
+  structure, see §5 item 4), **`Groups[]`** (period/column allocation
   scaffolding used internally by the timetabling software, not obviously
   needed for the analysis engine).
+- **`Settings`** (1 record): school-wide load default and the school's
+  own optimisation preferences (`OptimiseSpread`, `MaxDaySpread`,
+  `Successive2Periods`, `Successive3Periods`) — parsed 2026-08-12,
+  `docs/full-timetabler-plan.md` Phase A. `TeacherProposedLoad` is the
+  fallback used when a teacher's own `LoadProposed` is `0` (TTS's "use
+  the school default" convention, not "no load") — fixed a real bug
+  where 30 of 74 teachers had `NULL` contracted load and were silently
+  excluded from load analysis.
 - **`UnscheduledDuties[]`**, **`Meetings[]`**, **`YardDuties[]`**: staff
   duties/meetings outside normal teaching load — relevant to teacher load
   analysis (4.3) if the school wants total load including these.
+  Investigated 2026-08-12 alongside the Phase A work above and
+  deliberately **not** parsed yet: in the real export, all 46
+  `UnscheduledDuties[]` are template/definition rows referenced nowhere
+  else in the file (zero actual assignments this term), and all 13
+  `Meetings[]` carry `Load: 0` for every one of their 18 assigned
+  teachers - both currently carry no incremental information for load
+  analysis. `Meetings[]` does have real `{TeacherID, PeriodID}`
+  assignments though, which could matter for availability/clash checks
+  even at zero load - worth a real conversation with the school before
+  parsing, not worth guessing at.
 - **`PublishedTimetables[]`** (45 entries): metadata about past published
   snapshots (name, dates, archive) — likely just a version history, not
   needed for the current-state model.
@@ -271,16 +289,21 @@ Still open (default assumption noted, revisit if wrong):
    capacity / not used for capacity checks" (meeting rooms, quiet study,
    engineering workshops) rather than unentered data. Room-capacity-
    mismatch checks (4.3) will skip these rooms under this assumption.
-4. ~~**`RURs[]` and `MRCGs[]`** in the `.tfx`~~ — **MRCGs partially
-   resolved** by cross-referencing `Timetabler Export/import data/2026
+4. ~~**`RURs[]` and `MRCGs[]`** in the `.tfx`~~ — **both resolved and
+   now parsed** (2026-08-12, `docs/full-timetabler-plan.md` Phase A).
+   MRCGs, cross-referenced against `Timetabler Export/import data/2026
    Blocking Pattern.xlsx` (added 2026-08-03): the spreadsheet's "LINE 1",
    "LINE 2"... column structure (subjects that run in parallel so
    students can pick one per line) matches the MRCG `DefaultCode` naming
    pattern exactly (`"12 A"`, `"12 B"`, `"10A B"`, etc. = year level +
    line letter). MRCGs are **option-line/blocking-column groupings**, not
    composite-class markers (see item 9 below - a different, real
-   phenomenon this file doesn't explicitly encode). `RURs[]` still
-   unconfirmed; still not required for v1's core checks (4.3).
+   phenomenon this file doesn't explicitly encode) - now in `blocking_line`/
+   `blocking_line_class_group`. `RURs[]` ("Room Utilisation
+   Requirements") confirmed by tracing a real `RURReferences[].ReferencesID`
+   value to `ClassNames[].ClassNameID`: a room-choice constraint - "one of
+   these classes must use one of these rooms" - now in `room_pool`/
+   `room_pool_room`/`room_pool_class_name`.
 5. **`StudentLessons[].LessonType`** (`O`, `C`, `S`) — likely
    Option/Core/Support given the school runs elective lines, but treated
    as an opaque passthrough field in v1 rather than relied upon for any

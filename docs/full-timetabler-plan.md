@@ -4,6 +4,9 @@
 commitment to build all of it. It is deliberately opinionated about
 sequencing, because the wrong order here wastes months.*
 
+*2026-08-12 update: Phase A is done - see the status note at the top of
+§6.*
+
 ---
 
 ## 0. The one-paragraph version
@@ -182,7 +185,8 @@ plan (§5).
 ## 4. Three findings from this research to act on immediately
 
 These fell out of the research and are worth doing regardless of how much
-of the rest of the plan gets built.
+of the rest of the plan gets built. **All three fixed 2026-08-12** as
+part of Phase A (§6) - see the ✅ note under each.
 
 ### 4.1 🔴 40% of teachers are silently excluded from load analysis
 
@@ -209,6 +213,14 @@ which is *exactly* the value the other 44 teachers carry. Parsing
 cover 74 teachers instead of 44. **This is a real bug with a known fix
 and it directly serves the "improve teacher loads" goal.**
 
+**✅ Fixed.** `TfxIngester._ingest_settings()` now runs before
+`_ingest_teachers()`; `contracted_load_minutes` falls back to
+`Settings.TeacherProposedLoad` when a teacher's own value is 0. Verified
+against the real data: 0 of 74 teachers now have a `NULL` contracted
+load (was 30), and re-running the rules engine immediately surfaced a
+genuinely new finding that was invisible before - `MCGK13` scheduled
+3000 min/cycle against their 2580 min contracted load, 420 minutes over.
+
 ### 4.2 🟡 The blocking pattern is already in the file, unparsed
 
 `MRCGs` (Multi-Roll-Class Groups) — 29 records — *are* the blocking
@@ -232,6 +244,11 @@ This corroborates the inference already recorded in
 now from the primary source, with counts. **The data you asked to see is
 already in the file; we just aren't reading it.**
 
+**✅ Fixed.** `TfxIngester._ingest_blocking_lines()` parses all 29 MRCGs
+into `blocking_line`/`blocking_line_class_group` - 169 class-group links
+total, matching the raw file exactly, zero unresolved references. Still
+read-only (no UI yet - that's Phase C).
+
 ### 4.3 🟡 The school's own soft-constraint preferences are in `Settings`
 
 `docs/project-status.md` weakness #4 says four roadmap rules are blocked
@@ -252,6 +269,23 @@ We can implement spread/doubles analysis **matching what the school's own
 software is already optimising for**, rather than inventing thresholds —
 which is exactly the "don't guess a policy value" discipline this project
 has held throughout.
+
+**✅ Parsed.** `school_setting` now holds all four booleans plus
+`academic_periods` and `timetable_notice`. Not yet *used* by any rule -
+that's Phase B, next.
+
+**A fourth thing this pass turned up, not in the original plan:** `RURs`
+("Room Utilisation Requirements", 1 record in the real file) - confirmed
+by tracing a real `RURReferences[].ReferencesID` to `ClassNames[].ClassNameID`
+- are a room-choice constraint ("one of these classes must use one of
+these rooms"), not a single fixed room. Parsed into `room_pool`/
+`room_pool_room`/`room_pool_class_name` (5 rooms, 28 class-name
+references, all resolved). Also investigated and **deliberately not
+parsed**: `Meetings` (13 records, all `Load: 0` for their 18 assigned
+teachers - no incremental load information right now) and
+`UnscheduledDuties` (46 records, referenced nowhere else in the file -
+defined but unassigned this term). See `docs/data-formats.md` §3.1 for
+the full writeup.
 
 ---
 
@@ -307,18 +341,29 @@ Add to it the **GUID minting experiment** from §5(b).
 
 ---
 
-### Phase A — Read the whole file · **M** · *no write risk*
-Parse `Settings`, `MRCGs`, `Meetings`, `UnscheduledDuties`, `RURs`.
+### Phase A — Read the whole file · **M** · *no write risk* · **✅ done 2026-08-12**
+Parsed `Settings`, `MRCGs`, `RURs`. Deferred `Meetings`/`UnscheduledDuties`
+after investigation found zero incremental load information in the real
+export this term (§4.3) - can be revisited once there's a real
+conversation with the school about what should count toward load.
 
-- Fix the 30-teacher load blind spot (§4.1) — school-default fallback.
-- Fold meetings + unscheduled duties into a **total** load figure,
-  separately from teaching load (the existing yard-duty decision in
-  `docs/data-formats.md` §5.8 sets the precedent: keep distinct, allow
-  summing).
-- New tables: `blocking_line` (from MRCGs), `room_pool` (from RURs),
-  `school_setting`.
+- Fixed the 30-teacher load blind spot (§4.1) — school-default fallback
+  in `TfxIngester._ingest_teachers()`. Verified: 0/74 teachers now `NULL`,
+  and a genuinely new finding surfaced (`MCGK13`, 420 min/cycle over).
+- New tables: `school_setting`, `blocking_line`/`blocking_line_class_group`
+  (from MRCGs - 29 lines, 169 class-group links), `room_pool`/
+  `room_pool_room`/`room_pool_class_name` (from RURs - 1 pool, 5 rooms,
+  28 class-name references). All source-derived, wired into
+  `resync.py`'s rebuild-on-reingest list like every other source table -
+  verified by re-running ingest twice against the same database.
+- 6 new tests (`test_ingest_tfx.py`, `test_tfx_compatibility.py`); 137
+  passing overall (was 131).
 
-**Ships value alone:** load analysis becomes trustworthy and complete.
+**Shipped value alone:** load analysis is now trustworthy and complete
+(74/74 teachers, not 44/74) and the blocking pattern is captured in the
+database, ready for Phase B/C to use - **not yet surfaced anywhere in
+the UI or the rules engine**, which is exactly what those two phases are
+for.
 
 ---
 
@@ -537,8 +582,12 @@ Consistent with the project's practice of writing down refusals:
 3. **Should meetings + unscheduled duties + yard duty count toward
    contracted load?** Currently none of them do; 46 + 13 + 246 records
    are being ignored in every load figure GridPilot reports.
-4. **Is `2580 min/cycle` the right default**, and are the 30 zero-load
-   teachers genuinely on the default or genuinely unmeasured?
+4. **Is `2580 min/cycle` the right default?** Now empirically confirmed
+   that TTS's own file treats it as the default for *every* teacher who
+   doesn't carry an explicit different value (all 74 teachers now
+   resolve to exactly 2580) - the open question is whether that's the
+   right number for the ~30 who were previously unmeasured, not whether
+   the parsing is correct.
 5. **Is the goal to replace TTS, or to out-think it?** Everything through
    Phase E works alongside TTS. Phases F–H are where the answer starts to
    cost real money and time.
@@ -549,9 +598,9 @@ Consistent with the project's practice of writing down refusals:
 
 ```
 NOW (no write risk, high value, ~2–3 build sessions):
-  Phase 0  ← school, 15 min, gates everything
-  Phase A  ← read whole file; fixes the 40% load blind spot
-  Phase B  ← the analysis you asked for (rooms/teachers/loads)
+  Phase 0  ← school, 15 min, gates everything - still open
+  Phase A  ← read whole file; fixes the 40% load blind spot - ✅ done 2026-08-12
+  Phase B  ← the analysis you asked for (rooms/teachers/loads) - next
   Phase C  ← blocking pattern, read-only
 
 THEN (gated on Phase 0 passing):

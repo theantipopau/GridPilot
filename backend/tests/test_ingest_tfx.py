@@ -88,3 +88,78 @@ def test_ingest_discrepancies_are_structured_not_silent(ingested_conn):
     for check_name, severity in rows:
         assert severity in ("info", "warning", "error")
         assert check_name
+
+
+# -- Phase A: Settings / MRCGs (blocking lines) / RURs (room pools) --------
+# See docs/full-timetabler-plan.md Phase A - these sections were previously
+# in KNOWN_UNMODELLED_SECTIONS; parsing them fixed a real bug (see the next
+# test) and surfaces the blocking pattern + room-choice constraints.
+
+def test_school_setting_is_parsed_from_the_real_export(ingested_conn):
+    row = ingested_conn.execute("SELECT * FROM school_setting").fetchone()
+    assert row is not None
+    assert row["academic_periods"] == 80
+    assert row["teacher_proposed_load_minutes"] == 2580.0
+    # Booleans stored as 0/1 - the school's own optimisation preferences,
+    # previously invisible to this project.
+    assert row["optimise_spread"] == 1
+    assert row["max_day_spread"] == 1
+    assert row["successive_2_periods"] == 1
+    assert row["successive_3_periods"] == 1
+
+
+def test_no_teacher_has_a_null_contracted_load_after_the_settings_fallback(ingested_conn):
+    """The bug this fixed: LoadProposed=0 in the source means 'use the
+    school default', not 'no load' - previously became NULL and silently
+    dropped 30 of 74 teachers out of teacher_over_contracted_load (WHERE
+    contracted_load_minutes IS NOT NULL). See
+    docs/full-timetabler-plan.md #4.1."""
+    null_count = ingested_conn.execute(
+        "SELECT COUNT(*) FROM teacher WHERE contracted_load_minutes IS NULL"
+    ).fetchone()[0]
+    assert null_count == 0
+
+    covered_by_fallback = ingested_conn.execute(
+        "SELECT COUNT(*) FROM teacher WHERE contracted_load_minutes = "
+        "(SELECT teacher_proposed_load_minutes FROM school_setting)"
+    ).fetchone()[0]
+    assert covered_by_fallback == 74  # every real teacher in this export shares the one school default
+
+
+def test_blocking_lines_match_the_real_mrcg_count(ingested_conn):
+    """29 MRCGs in the real .tfx = the option-line / blocking-pattern
+    structure (docs/data-formats.md #5.4)."""
+    count = ingested_conn.execute("SELECT COUNT(*) FROM blocking_line").fetchone()[0]
+    assert count == 29
+
+    named = ingested_conn.execute(
+        "SELECT COUNT(*) FROM blocking_line WHERE code = '10ENG'"
+    ).fetchone()[0]
+    assert named == 1
+
+
+def test_every_blocking_line_class_group_resolves_with_no_data_loss(ingested_conn):
+    """169 = the raw sum of MRCGClassGroups[] across all 29 MRCGs in the
+    real file - proves every reference resolved (none silently dropped)."""
+    count = ingested_conn.execute("SELECT COUNT(*) FROM blocking_line_class_group").fetchone()[0]
+    assert count == 169
+
+    unresolved = ingested_conn.execute(
+        "SELECT COUNT(*) FROM ingest_discrepancy WHERE check_name = 'blocking_line_class_group_unresolved'"
+    ).fetchone()[0]
+    assert unresolved == 0
+
+
+def test_room_pools_match_the_real_rur_data(ingested_conn):
+    """1 RUR in the real .tfx, with 5 rooms and 28 class-name references -
+    a room-choice constraint ("one of these classes must use one of these
+    rooms")."""
+    assert ingested_conn.execute("SELECT COUNT(*) FROM room_pool").fetchone()[0] == 1
+    assert ingested_conn.execute("SELECT COUNT(*) FROM room_pool_room").fetchone()[0] == 5
+    assert ingested_conn.execute("SELECT COUNT(*) FROM room_pool_class_name").fetchone()[0] == 28
+
+    for check in ("room_pool_room_unresolved", "room_pool_class_name_unresolved"):
+        unresolved = ingested_conn.execute(
+            "SELECT COUNT(*) FROM ingest_discrepancy WHERE check_name = ?", (check,)
+        ).fetchone()[0]
+        assert unresolved == 0

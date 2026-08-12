@@ -60,6 +60,17 @@ def test_unknown_top_level_section_is_reported_not_silently_ignored():
 
 def test_known_unmodelled_sections_are_not_flagged_as_unknown():
     data = _minimal_valid_tfx()
+    data["Meetings"] = []
+    data["UnscheduledDuties"] = []
+    _, _, unknown = check_tfx_compatibility(data)
+    assert unknown == []
+
+
+def test_known_modelled_optional_sections_are_not_flagged_as_unknown():
+    """Settings/MRCGs/RURs are parsed (TfxIngester._ingest_settings/
+    _ingest_blocking_lines/_ingest_room_pools) but not REQUIRED_SECTIONS -
+    an export missing one of them is fine, not a hard failure."""
+    data = _minimal_valid_tfx()
     data["RURs"] = []
     data["MRCGs"] = []
     data["Settings"] = {}

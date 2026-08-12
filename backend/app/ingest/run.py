@@ -68,6 +68,8 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "roll_class", "student", "subject", "class_name", "class_group", "class_group_course",
         "class_group_course_room_override", "timetable_entry", "enrolment", "yard_duty_area",
         "yard_duty_session", "yard_duty_allocation", "ingest_discrepancy",
+        "school_setting", "blocking_line", "blocking_line_class_group",
+        "room_pool", "room_pool_room", "room_pool_class_name",
         "sfx_file", "sfx_line", "sfx_subject", "sfx_option", "sfx_class", "sfx_student_preference",
     ]
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}

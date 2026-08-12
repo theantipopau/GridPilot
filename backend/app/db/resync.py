@@ -58,7 +58,10 @@ SOURCE_TABLES_IN_DELETE_ORDER = [
     "sfx_file",
     "timetable_entry",
     "class_group_course",
+    "blocking_line_class_group",
+    "blocking_line",
     "class_group",
+    "room_pool_class_name",
     "class_name",
     "subject",
     "yard_duty_allocation",
@@ -69,10 +72,13 @@ SOURCE_TABLES_IN_DELETE_ORDER = [
     "teacher_faculty",
     "teacher",
     "faculty",
+    "room_pool_room",
+    "room_pool",
     "room",
     "period",
     "year_level",
     "day",
+    "school_setting",
 ]
 
 
