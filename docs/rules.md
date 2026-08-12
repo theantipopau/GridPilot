@@ -88,6 +88,33 @@ quiet study) - a legitimate refinement, skipped for now rather than
 asserting an interpretation of free-text room notes without confirming
 it first.
 
+### `class_room_instability` (info)
+
+The same ongoing class (`class_name.code`, e.g. `09MAT3`) is taught in
+more than one room across the cycle. Deliberately **threshold-free**,
+unlike `room_underutilization` above - "more than one room" is itself the
+finding, not a magnitude crossing an invented cutoff. Confirmed against
+real data before building: e.g. one Year 9 Maths class, same teacher,
+same roll class, in 5 different rooms across 7 lessons in the cycle - a
+genuine consistency problem, not a query artifact (checked by grouping on
+`class_name.id`, not `class_group_course.id`, since a handful of classes
+have more than one `class_group_course` row - team-taught/split classes -
+which would double-count rooms if grouped the wrong way).
+
+### `class_teacher_inconsistency` (info)
+
+Same shape as `class_room_instability`, for teachers instead of rooms:
+the same ongoing class taught by more than one teacher across the cycle.
+May be a deliberate team-teaching arrangement or genuinely accidental -
+this rule doesn't and can't distinguish the two, which is exactly why
+it's `info` severity and left for a human (or the AI advisor, explaining
+not deciding) to judge.
+
+Both rules see `docs/full-timetabler-plan.md` Phase B for the fuller
+writeup, including four related rules from that phase's candidate list
+that were investigated and **not** built - see "Not yet implemented"
+below for why.
+
 ## Composite classes: reviewable, not silently trusted
 
 `backend/app/analysis/composite.py` heuristically detects candidates:
@@ -141,7 +168,32 @@ blocked on data or a policy value we don't have and shouldn't guess:
   periods, "too uneven" a spread) that doesn't exist yet in any source
   file. Implementing these means either asking the school directly or
   building a configurable-threshold mechanism first - both bigger than
-  this milestone.
+  this milestone. `school_setting` (Phase A, `docs/full-timetabler-plan.md`)
+  parses the school's *directional* preferences here (`optimise_spread`,
+  `max_day_spread`, `successive_2_periods`, `successive_3_periods` are
+  all `True`) but these are booleans, not numbers - they say the school
+  wants spread and doubles, not how much spread is enough or which
+  classes specifically need doubling. Investigated properly for Phase B
+  rather than left purely theoretical:
+  - **`teacher_free_period_fragmentation`**: real data checked (isolated
+    single free periods sandwiched between two teaching periods). The
+    signal is real (37 of 74 teachers have at least one, ranging up to 9
+    in the cycle) but the distribution doesn't suggest an obvious
+    "normal vs excessive" line - confirming this genuinely needs the
+    school-confirmed threshold the roadmap already said it needs, not
+    just a missing parser.
+  - **`uneven_subject_spread`**: tested a same-day-repeat proxy (a class
+    scheduled more than once on the same cycle day). Zero genuine
+    occurrences once the pastoral/detention roll class (`RTC`, see
+    `docs/data-formats.md` #5.2) is excluded - there's no spread problem
+    to find in the current data via this proxy, so building the rule now
+    would produce nothing to show for it.
+  - **`missing_double`** (not on the original roadmap list, considered
+    during Phase B planning): no per-subject "should be a double" data
+    exists anywhere in the source - `Successive2Periods = True` says the
+    school wants doubles used somewhere, not which specific subjects.
+    Building this would mean guessing, exactly what this section exists
+    to avoid.
 
 Also deferred (roadmap Milestones 3-6, not required for this one):
 change sets, constraint-based suggestion generation, full privacy/audit

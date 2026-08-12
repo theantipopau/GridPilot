@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-131%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-143%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -48,7 +48,7 @@ synthetic data alone:
 |---|---|
 | ✅ **Ingestion + cross-validation** | `.tfx` (primary source) cross-checked against CSV and eMinerva exports; every mismatch surfaced as a structured discrepancy, never silently dropped. Auto-discovers the newest export file — a new term needs no code change. |
 | ✅ **Timetable grid** | **Master grid** by default - every lesson, every day, at once, rows switchable between Room/Teacher/Roll class (Room is the classic timetabler's view - a clash is two lessons stacked in one cell). "Single entity" mode still filters to one teacher/room/roll class. Click any lesson to move it - day, period, room, and/or teacher - and see the clash-rule impact immediately, before anything is saved. See [`docs/master-timetable.md`](docs/master-timetable.md). |
-| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation. Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. A finding can also be marked **accepted risk** (an intentional, known clash) - it drops out of the default view but is never hidden, and is reversible. See [`docs/rules.md`](docs/rules.md). |
+| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation, and class room/teacher consistency (does a class keep the same room/teacher across the cycle?). Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. A finding can also be marked **accepted risk** (an intentional, known clash) - it drops out of the default view but is never hidden, and is reversible. See [`docs/rules.md`](docs/rules.md). |
 | ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
 | ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption. Deliberately **no AI involved** — this is what the (future) AI advisor will *explain*, not invent. |
 | ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |

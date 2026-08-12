@@ -367,27 +367,36 @@ for.
 
 ---
 
-### Phase B — Analysis TTS can't give them · **M–L** · *no write risk*
+### Phase B — Analysis TTS can't give them · **M–L** · *no write risk* · **partially done 2026-08-12**
 This is the "AI to fix the huge gaps in manual labour" ask, and it is
-where GridPilot is *already* better than the incumbent. New deterministic
-rules (AI explains them; AI never computes them — the project's standing
-boundary):
+where GridPilot is *already* better than the incumbent. Seven candidate
+rules were investigated against the real data before building anything -
+same discipline as Phase A. Two were genuine, threshold-free signals;
+five needed either a policy value the school hasn't confirmed, or turned
+out to have nothing behind them in the current data:
 
-| Rule | What it measures | Grounded in |
+| Rule | Verdict | Why |
 |---|---|---|
-| `class_room_instability` | distinct rooms per class offering across the cycle | FET `same room` / `max room changes`; your "consistent rooms" |
-| `class_teacher_inconsistency` | distinct teachers per class offering | your "consistent teachers"; TTS split classes |
-| `teacher_load_imbalance` | spread of scheduled-vs-contracted across staff | your "improve loads" |
-| `teacher_day_spread` | lessons concentrated on few days | `Settings.MaxDaySpread = True` |
-| `subject_spread` | a subject's periods bunched in the cycle | `Settings.OptimiseSpread = True` |
-| `teacher_gap_fragmentation` | free periods scattered vs contiguous | FET `max gaps per day`; roadmap's unimplemented rule |
-| `missing_double` | subject wants doubles but is scheduled singly | `Settings.Successive2Periods = True` |
+| `class_room_instability` | **✅ built** | genuine signal, no threshold needed - "more than one room" is itself the finding. Confirmed real: one Y9 Maths class in 5 rooms across 7 lessons. 78/247 classes affected. |
+| `class_teacher_inconsistency` | **✅ built** | same shape, for teachers. 22/247 classes affected. |
+| `teacher_load_imbalance` (under-load) | ❌ dropped | tested it directly: 73 of 74 teachers would flag, because `contracted_load` covers non-lesson duties (meetings, coordination, leadership) that aren't in scheduled lesson minutes. Not asymmetric with the existing over-load rule the way it looked on paper - pure noise. |
+| `teacher_day_spread` / `subject_spread` | ❌ dropped | tested a same-day-repeat proxy: zero genuine occurrences once the pastoral/detention roll class is excluded. `Settings.MaxDaySpread`/`OptimiseSpread` are booleans (the school *wants* spread), not numeric thresholds - still the roadmap's original blocker, just now partially informed. |
+| `teacher_gap_fragmentation` | ❌ dropped | this is `teacher_free_period_fragmentation` from the original roadmap, already known to need a school-confirmed threshold. Real distribution checked (37/74 teachers have isolated gaps, up to 9 in the cycle) - genuinely ambiguous where "normal" ends, confirming the roadmap was right to shelve it rather than revealing a parsing gap. |
+| `missing_double` | ❌ dropped | no per-subject "should be a double" data exists anywhere in the source. `Successive2Periods = True` is a school-wide preference, not a per-subject flag. Building this means guessing. |
 
-Plus the **AI advisor's next job** (§8): move from per-finding
-explanation to **portfolio analysis** over the master timetable.
+Full reasoning and evidence in `docs/rules.md`'s "Consistency rules" and
+"Not yet implemented" sections. 6 new tests; 143 passing (was 137).
 
-**Ships value alone:** answers the actual question you asked ("look for
-consistent rooms, teachers, improve loads") without writing a single byte.
+Plus the **AI advisor's next job** (§8, still pending): move from
+per-finding explanation to **portfolio analysis** over the master
+timetable - `RULE_GUIDANCE` for the two new rules is in place, but that's
+still one-finding-at-a-time explanation, not a summarisation endpoint.
+
+**Shipped value:** answers the "consistent rooms, consistent teachers"
+half of the ask directly, without writing a single byte. The "improve
+loads" half stayed unbuilt on purpose - the data doesn't support it yet
+without either a school conversation or richer non-lesson-duty data (see
+`docs/full-timetabler-plan.md` §4.3's `Meetings`/`UnscheduledDuties` note).
 
 ---
 
@@ -600,7 +609,7 @@ Consistent with the project's practice of writing down refusals:
 NOW (no write risk, high value, ~2–3 build sessions):
   Phase 0  ← school, 15 min, gates everything - still open
   Phase A  ← read whole file; fixes the 40% load blind spot - ✅ done 2026-08-12
-  Phase B  ← the analysis you asked for (rooms/teachers/loads) - next
+  Phase B  ← rooms/teachers ✅ done 2026-08-12; loads dropped (needs school input, see §6)
   Phase C  ← blocking pattern, read-only
 
 THEN (gated on Phase 0 passing):

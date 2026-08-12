@@ -64,6 +64,15 @@ RULE_GUIDANCE = {
     "teacher_over_contracted_load": (
         "Explain this means the teacher's scheduled hours exceed what they're contracted for across the cycle."
     ),
+    "class_room_instability": (
+        "Explain this as a consistency signal, not a clash - the same ongoing class keeps moving rooms "
+        "across the cycle, which is disruptive for students and the teacher even though nothing is double-booked."
+    ),
+    "class_teacher_inconsistency": (
+        "Explain this as a consistency signal, not a clash - the same ongoing class is taught by more than "
+        "one teacher across the cycle, which may be a deliberate team-teaching arrangement or may be accidental "
+        "- worth a human check either way."
+    ),
 }
 
 
