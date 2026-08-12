@@ -25,6 +25,7 @@ TIMETABLE_ENTRY_COLUMNS = """
     p.code AS period_code, p.period_no, p.name AS period_name, p.entry_kind,
     te.entry_type,
     cn.code AS class_code, cn.name AS class_name, sub.name AS subject_name,
+    fac.code AS faculty_code,
     rm.code AS room_code, rm.name AS room_name,
     t.code AS teacher_code, t.first_name AS teacher_first_name, t.last_name AS teacher_last_name,
     rc.code AS roll_class_code
@@ -37,6 +38,7 @@ TIMETABLE_ENTRY_JOINS = """
     JOIN roll_class rc ON rc.id = te.roll_class_id
     LEFT JOIN class_name cn ON cn.id = te.class_name_id
     LEFT JOIN subject sub ON sub.id = cn.subject_id
+    LEFT JOIN faculty fac ON fac.id = cn.faculty_id
     LEFT JOIN room rm ON rm.id = te.room_id
     LEFT JOIN teacher t ON t.id = te.teacher_id
 """

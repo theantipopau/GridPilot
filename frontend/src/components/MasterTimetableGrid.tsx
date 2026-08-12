@@ -1,3 +1,4 @@
+import { facultyColor } from "../lib/facultyColors";
 import type { Day, Period, ReferenceData, TimetableEntry, ViewType } from "../types";
 
 interface RowSpec {
@@ -107,25 +108,25 @@ function MasterWeekTable({
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200">
+      <div className="max-h-[75vh] overflow-auto rounded-lg border border-slate-300 shadow-sm">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className="sticky left-0 z-20 w-40 border-b border-r border-slate-200 bg-slate-50 p-1.5 text-left font-medium text-slate-500">
+              <th className="sticky left-0 z-20 w-44 border-b-2 border-r border-slate-300 bg-slate-100 p-2 text-left font-semibold text-slate-600">
                 {axis === "teacher" ? "Teacher" : axis === "room" ? "Room" : "Roll class"}
               </th>
               {weekDays.map((d) => (
                 <th
                   key={d.code}
                   colSpan={periods.length}
-                  className="border-b border-l border-slate-200 bg-slate-50 p-1 text-center font-medium text-slate-500"
+                  className="border-b-2 border-l border-slate-300 bg-slate-100 p-1.5 text-center font-semibold text-slate-600"
                 >
                   {d.code.replace(/ [AB]$/, "")}
                 </th>
               ))}
             </tr>
             <tr>
-              <th className="sticky left-0 z-20 border-b border-r border-slate-200 bg-slate-50 p-1"></th>
+              <th className="sticky left-0 z-20 border-b border-r border-slate-300 bg-slate-50 p-1"></th>
               {weekDays.map((d) =>
                 periods.map((p) => (
                   <th
@@ -141,9 +142,9 @@ function MasterWeekTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.code} className="even:bg-slate-50/50">
+              <tr key={row.code} className="even:bg-slate-50/60">
                 <td
-                  className="sticky left-0 z-10 max-w-[10rem] truncate border-b border-r border-slate-200 bg-white p-1.5 font-medium text-slate-700"
+                  className="sticky left-0 z-10 max-w-[11rem] truncate border-b border-r border-slate-200 bg-white p-2 font-medium text-slate-700"
                   title={row.label}
                 >
                   {row.label}
@@ -184,24 +185,28 @@ function MasterCell({
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (entries.length === 0) {
-    return <td className="border-b border-l border-slate-100 p-1 text-center text-slate-200">·</td>;
+    return <td className="border-b border-l border-slate-100 p-1 text-center text-slate-300">·</td>;
   }
 
   const clash = entries.length > 1;
 
   return (
-    <td className={`border-b border-l border-slate-100 p-0.5 align-top ${clash ? "bg-red-50" : ""}`}>
-      <div className="flex flex-col gap-0.5">
+    <td className={`border-b border-l border-slate-100 p-[3px] align-top ${clash ? "bg-red-50" : ""}`}>
+      <div className="flex flex-col gap-[3px]">
         {entries.map((e, i) => {
           const primary = cellPrimary(e);
           const secondary = cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
           const pending = pendingEntryIds?.has(e.entry_id);
-          const className = `relative w-full truncate rounded px-1 py-0.5 text-left leading-tight ${
-            e.entry_type === "LESSON" ? "bg-sky-50 text-sky-900" : "bg-slate-100 text-slate-500"
-          } ${clash ? "ring-1 ring-red-400" : ""} ${editable ? "cursor-pointer hover:ring-1 hover:ring-sky-400" : ""} ${
-            pending ? "ring-1 ring-amber-400" : ""
+          const color = e.entry_type === "LESSON" ? facultyColor(e.faculty_code) : null;
+          const className = `relative w-full truncate rounded-sm py-1 pl-1.5 pr-1 text-left leading-tight ${
+            e.entry_type === "LESSON" ? "text-slate-900" : "bg-slate-100 text-slate-500"
+          } ${clash ? "ring-1 ring-red-400" : ""} ${editable ? "cursor-pointer hover:brightness-95" : ""} ${
+            pending ? "ring-2 ring-amber-400" : ""
           }`;
+          const style = color
+            ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` }
+            : undefined;
           const content = (
             <>
               <div className="truncate font-medium">{primary}</div>
@@ -210,11 +215,11 @@ function MasterCell({
           );
           const title = cellTitle(e) + (pending ? " · pending move" : "");
           return editable ? (
-            <button key={i} type="button" className={className} onClick={() => onSelectLesson!(e)} title={title}>
+            <button key={i} type="button" className={className} style={style} onClick={() => onSelectLesson!(e)} title={title}>
               {content}
             </button>
           ) : (
-            <div key={i} className={className} title={title}>
+            <div key={i} className={className} style={style} title={title}>
               {content}
             </div>
           );

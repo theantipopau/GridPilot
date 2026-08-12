@@ -43,3 +43,65 @@ master grid.
 Asked directly; the answer was Room - "the classic timetabler's master
 view. A clash is immediately visible as two lessons stacked in one cell."
 Switching to Teacher or Roll class is one dropdown away.
+
+## Pending moves render live, not as a marker (2026-08-12)
+
+Proposing a move used to only ring the entry's *original* cell amber -
+the entry never actually appeared at its new slot, so there was no way to
+see the move (or a clash it created) on the grid itself. Real feedback:
+*"if i do move something ... it needs to move interactively on the
+timetable."*
+
+`frontend/src/lib/pendingMoves.ts` relocates a pending entry to its
+proposed day/period/room/teacher before rendering. This needed more than
+overwriting the code fields - grid grouping keys off `day_code` +
+`period_no` (not just the codes), and cell display uses `room_name`/
+`teacher_first_name`/`teacher_last_name`, so all of it is recomputed from
+`reference` (days/periods/rooms/teachers), not just the four fields the
+move actually touched. The underlying assumption - that a proposed
+change's `after` endpoint is always fully resolved, never a partial diff
+- was verified directly against the live API (`app/changes/service.py`'s
+`add_proposed_change` fills in any unspecified field from the entry's
+current value) before relying on it, rather than assumed from reading the
+code alone.
+
+Applies to both `MasterTimetableGrid` and `TimetableGrid` - the transform
+happens once in `TimetablePage.tsx`, upstream of whichever grid is
+rendering.
+
+## Faculty colour coding (2026-08-12)
+
+Real feedback after the Phase 0 trial-import success: *"UI still needs
+significant work. colors would help."* Cells are now colour-coded by
+faculty, `frontend/src/lib/facultyColors.ts` + `FacultyLegend.tsx`.
+
+The categorical palette is capped at 8 fixed hues (never a generated 9th
+- see the dataviz skill), and this school has ~19 faculties, so this
+needed real-data grounding before implementation, not just an 8-into-19
+guess: only 10 faculties have any scheduled lessons at all, and the top 8
+by lesson volume cover 98.5% of faculty-tagged lessons. Those 8
+(`SCI`/`Math`/`Eng`/`RE`/`DT`/`Arts`/`PE`/`HUM`) get a **fixed** color
+each - fixed by faculty code, not recomputed by volume rank each render,
+so a future term's import can't repaint which subject is which color.
+Everything else, including the **31% of LESSON entries that have no
+faculty recorded at all** in the source data (mostly VET/extension
+subjects - checked, not guessed: `docs/data-formats.md` §3.1) falls to a
+neutral grey "Other" rather than an invented 9th hue.
+
+The exact 8 hex values are the dataviz skill's documented default
+palette, re-validated against this app's white surface before use:
+`node scripts/validate_palette.js "<8 hexes>" --mode light --surface
+"#ffffff"` - passes, with 3 slots (aqua/yellow/magenta) landing below
+3:1 contrast and requiring a "relief" channel per the skill's rule. That
+relief is satisfied by construction here: every cell always shows its
+class code as visible text, never relies on the color alone to identify
+what's in it - a `FacultyLegend` is also always shown alongside the
+grids, since the skill requires one for any ≥2-series categorical
+palette even when direct labels are present too.
+
+Applied as a `border-left` accent (full hue) plus a low-alpha tinted
+background (`${hex}1f`, ~12%) rather than a solid saturated fill, so
+lesson text stays legibly dark-on-near-white - a deliberate departure
+from Timetabling Solutions' own solid-fill-plus-white-text convention
+(visible in a real screenshot during this work), traded for legibility
+at this cell size rather than matched exactly.

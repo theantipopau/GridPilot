@@ -7,6 +7,7 @@ import {
   fetchTimetable,
   validateChangeSet,
 } from "../api";
+import FacultyLegend from "../components/FacultyLegend";
 import FilterBar from "../components/FilterBar";
 import LessonInspector, { type MoveParams } from "../components/LessonInspector";
 import LoadingState from "../components/LoadingState";
@@ -141,6 +142,8 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
           }}
         />
       )}
+
+      <FacultyLegend />
 
       {mode === "master" &&
         (masterEntries ? (

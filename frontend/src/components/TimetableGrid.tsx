@@ -1,3 +1,4 @@
+import { facultyColor } from "../lib/facultyColors";
 import type { Day, Period, TimetableEntry, ViewType } from "../types";
 
 interface Props {
@@ -9,8 +10,9 @@ interface Props {
   onSelectLesson?: (entry: TimetableEntry) => void;
 }
 
+// LESSON is coloured dynamically per faculty (see facultyColor) - not listed
+// here.
 const ENTRY_STYLES: Record<string, string> = {
-  LESSON: "bg-sky-50 border-sky-200 text-sky-900",
   BREAK: "bg-slate-100 border-slate-200 text-slate-500",
   ASSEMBLY: "bg-purple-50 border-purple-200 text-purple-900",
   GENERAL_PURPOSE: "bg-amber-50 border-amber-200 text-amber-900",
@@ -145,9 +147,14 @@ function Cell({
       {entries.map((e, i) => {
         const editable = e.entry_type === "LESSON" && !!onSelectLesson;
         const pending = pendingEntryIds?.has(e.entry_id);
-        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight transition-all duration-150 ${ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER} ${
-          editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""
-        } ${pending ? "ring-2 ring-amber-400" : ""}`;
+        const isLesson = e.entry_type === "LESSON";
+        const color = isLesson ? facultyColor(e.faculty_code) : null;
+        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight transition-all duration-150 ${
+          isLesson ? "border-transparent text-slate-900" : (ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER)
+        } ${editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""} ${
+          pending ? "ring-2 ring-amber-400" : ""
+        }`;
+        const style = color ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` } : undefined;
 
         const content = (
           <>
@@ -159,11 +166,11 @@ function Cell({
         );
 
         return editable ? (
-          <button key={i} type="button" className={className} onClick={() => onSelectLesson!(e)}>
+          <button key={i} type="button" className={className} style={style} onClick={() => onSelectLesson!(e)}>
             {content}
           </button>
         ) : (
-          <div key={i} className={className}>
+          <div key={i} className={className} style={style}>
             {content}
           </div>
         );

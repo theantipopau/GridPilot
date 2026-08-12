@@ -70,6 +70,7 @@ export interface TimetableEntry {
   class_code: string | null;
   class_name: string | null;
   subject_name: string | null;
+  faculty_code: string | null;
   room_code: string | null;
   room_name: string | null;
   teacher_code: string | null;
