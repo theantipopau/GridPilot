@@ -193,7 +193,8 @@ function MasterCell({
     <td className={`border-b border-l border-slate-100 p-0.5 align-top ${clash ? "bg-red-50" : ""}`}>
       <div className="flex flex-col gap-0.5">
         {entries.map((e, i) => {
-          const label = cellLabel(axis, e);
+          const primary = cellPrimary(e);
+          const secondary = cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
           const pending = pendingEntryIds?.has(e.entry_id);
           const className = `relative w-full truncate rounded px-1 py-0.5 text-left leading-tight ${
@@ -201,13 +202,20 @@ function MasterCell({
           } ${clash ? "ring-1 ring-red-400" : ""} ${editable ? "cursor-pointer hover:ring-1 hover:ring-sky-400" : ""} ${
             pending ? "ring-1 ring-amber-400" : ""
           }`;
+          const content = (
+            <>
+              <div className="truncate font-medium">{primary}</div>
+              {secondary && <div className="truncate text-[10px] opacity-70">{secondary}</div>}
+            </>
+          );
+          const title = cellTitle(e) + (pending ? " · pending move" : "");
           return editable ? (
-            <button key={i} type="button" className={className} onClick={() => onSelectLesson!(e)} title={cellTitle(e)}>
-              {label}
+            <button key={i} type="button" className={className} onClick={() => onSelectLesson!(e)} title={title}>
+              {content}
             </button>
           ) : (
-            <div key={i} className={className} title={cellTitle(e)}>
-              {label}
+            <div key={i} className={className} title={title}>
+              {content}
             </div>
           );
         })}
@@ -216,11 +224,16 @@ function MasterCell({
   );
 }
 
-function cellLabel(axis: ViewType, e: TimetableEntry): string {
+function cellPrimary(e: TimetableEntry): string {
   if (e.entry_type !== "LESSON") return e.entry_type.slice(0, 3);
-  if (axis === "room") return e.teacher_code ?? e.class_code ?? "—";
-  if (axis === "teacher") return e.room_code ?? e.class_code ?? "—";
   return e.class_code ?? "—";
+}
+
+function cellSecondary(axis: ViewType, e: TimetableEntry): string | null {
+  if (e.entry_type !== "LESSON") return null;
+  if (axis === "room") return e.teacher_code ?? null;
+  if (axis === "teacher") return e.room_code ?? null;
+  return [e.teacher_code, e.room_code].filter(Boolean).join(" · ") || null;
 }
 
 function cellTitle(e: TimetableEntry): string {

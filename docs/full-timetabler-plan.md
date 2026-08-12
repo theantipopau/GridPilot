@@ -7,6 +7,12 @@ sequencing, because the wrong order here wastes months.*
 *2026-08-12 update: Phase A is done - see the status note at the top of
 §6.*
 
+*2026-08-12 update 2: Phases B and C are done - see §6. Phase 0 (§6, the
+trial-import) also passed today, using a real move made in the master
+grid (ANG3 → ANG1), exported and confirmed readable by Timetabling
+Solutions itself. This unblocks scoping Tier 1+ write work (§5) for the
+first time.*
+
 ---
 
 ## 0. The one-paragraph version
@@ -331,13 +337,25 @@ negotiated-ID handshake. **Do this experiment before scoping Tier 2.**
 Sizes are T-shirts relative to work already done in this project (M ≈ the
 Teachers section; L ≈ the whole change-set + validation subsystem).
 
-### Phase 0 — Prove the existing write path 🔒 *gates everything below*
+### Phase 0 — Prove the existing write path 🔒 *gates everything below* · **✅ done 2026-08-12**
 **School task, ~15 minutes.** Take one generated `.tfx` and trial-import
 it into a **non-production** copy of TTS. Until this passes, every write
-tier is built on an unproven foundation. This has been open since
-2026-08-04 and is the highest-leverage 15 minutes available.
+tier is built on an unproven foundation. This had been open since
+2026-08-04 and was the highest-leverage 15 minutes available.
 
-Add to it the **GUID minting experiment** from §5(b).
+**Done, and it passed.** A GridPilot-proposed room move (ANG3 → ANG1) was
+exported and opened directly in Timetabling Solutions' own Master
+Timetables view - not just re-parsed by our own code, the actual
+incumbent software read the file back correctly. This is the first real
+evidence the export path produces something TTS itself accepts, not just
+something that round-trips through our own parser. Every Tier 1+ write
+capability (§5) was gated on exactly this.
+
+Still open: the **GUID minting experiment** from §5(b) - this run moved
+an *existing* lesson (patched an existing `Timetable[]` entry, Tier 0),
+which doesn't touch entity creation. Whether TTS accepts a GUID it didn't
+generate itself is still untested and still gates Tier 2 (entity
+authoring, Phase D).
 
 ---
 
@@ -613,7 +631,7 @@ Consistent with the project's practice of writing down refusals:
 
 ```
 NOW (no write risk, high value, ~2–3 build sessions):
-  Phase 0  ← school, 15 min, gates everything - still open
+  Phase 0  ← ✅ done 2026-08-12 - trial import passed against real TTS
   Phase A  ← read whole file; fixes the 40% load blind spot - ✅ done 2026-08-12
   Phase B  ← rooms/teachers ✅ done 2026-08-12; loads dropped (needs school input, see §6)
   Phase C  ← blocking pattern, read-only - ✅ done 2026-08-12

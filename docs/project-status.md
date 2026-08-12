@@ -4,7 +4,10 @@
 milestones. This is an honest self-assessment: what's solid, what's
 known-weak, and the recommended order for what's next. Updated
 2026-08-05: weakness #1 (re-ingest wiping human decisions) is fixed - see
-`docs/reingest-persistence.md`.*
+`docs/reingest-persistence.md`. Updated 2026-08-12: weakness #1's
+successor (the export never having been through real Timetabling
+Solutions) is also fixed - see below and
+`docs/full-timetabler-plan.md`.*
 
 ## Where things stand
 
@@ -46,15 +49,18 @@ fixtures - see `docs/reingest-persistence.md` for the full design and a
 real bug (period-code collisions across the 10-day cycle) this process
 caught and fixed.
 
-### 1. The export has never been through Timetabling Solutions itself (highest remaining priority)
+### ~~1. The export has never been through Timetabling Solutions itself~~ - fixed 2026-08-12
 
-Already documented in `docs/export-validation.md`, but it's the second
-biggest risk and only the school can close it: take one generated
-`.tfx` and trial-import it into a **non-production copy** of
-Timetabling Solutions. Until that's done once, the export gate's
-re-ingest-through-our-own-parser check is the only evidence the output
-is acceptable, and it's a proxy, not proof. This is a ~15-minute manual
-task and it unlocks trust in the entire export path.
+Already documented in `docs/export-validation.md`. A room move (ANG3 →
+ANG1) proposed in the master grid, approved, and exported was opened
+directly in Timetabling Solutions' own Master Timetables view and read
+back correctly - not just re-parsed by our own code, the actual
+incumbent software accepted the file. Until this, the export gate's
+re-ingest-through-our-own-parser check was the only evidence the output
+was acceptable, and it was a proxy, not proof. See
+`docs/full-timetabler-plan.md` Phase 0 for what this unblocks (entity
+authoring, scenarios) and what it doesn't yet cover (minting a new GUID
+for an entity TTS didn't create itself - still untested).
 
 ### 2. The privacy story needs one correction: OneDrive
 

@@ -12,7 +12,8 @@ import LessonInspector, { type MoveParams } from "../components/LessonInspector"
 import LoadingState from "../components/LoadingState";
 import MasterTimetableGrid from "../components/MasterTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
-import type { ReferenceData, TimetableEntry, TimetableResponse, ValidationResult, ViewType } from "../types";
+import { applyPendingMoves, buildPendingMoveMap } from "../lib/pendingMoves";
+import type { ChangeEndpoint, ReferenceData, TimetableEntry, TimetableResponse, ValidationResult, ViewType } from "../types";
 
 interface Props {
   reference: ReferenceData;
@@ -41,6 +42,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
   const [error, setError] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<TimetableEntry | null>(null);
   const [pendingEntryIds, setPendingEntryIds] = useState<Set<number>>(new Set());
+  const [pendingMoves, setPendingMoves] = useState<Map<number, ChangeEndpoint>>(new Map());
   const [changeSetName, setChangeSetName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +63,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
     const detail = await fetchChangeSet(changeSetId);
     setChangeSetName(detail.name);
     setPendingEntryIds(new Set(detail.changes.map((c) => c.timetable_entry_id)));
+    setPendingMoves(buildPendingMoveMap(detail.changes));
   };
 
   useEffect(() => {
@@ -144,7 +147,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
           <MasterTimetableGrid
             axis={axis}
             reference={reference}
-            entries={masterEntries}
+            entries={applyPendingMoves(masterEntries, pendingMoves, reference)}
             pendingEntryIds={pendingEntryIds}
             onSelectLesson={setSelectedEntry}
           />
@@ -157,7 +160,7 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
           view={view}
           days={reference.days}
           periods={reference.periods}
-          entries={timetable.entries}
+          entries={applyPendingMoves(timetable.entries, pendingMoves, reference)}
           pendingEntryIds={pendingEntryIds}
           onSelectLesson={setSelectedEntry}
         />
