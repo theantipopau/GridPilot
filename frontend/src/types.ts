@@ -205,6 +205,11 @@ export interface SuggestionCandidate {
   after: { day_code: string; period_code: string; room_code: string | null };
   movement_cost: number;
   resolves_finding_count: number;
+  why: {
+    no_new_clash: boolean;
+    room_capacity: { confirmed: false } | { confirmed: true; seats: number; enrolled: number };
+  };
+  class_room_familiarity: { same_room_elsewhere_count: number; total_other_lessons: number } | null;
 }
 
 export interface SuggestionsResponse {

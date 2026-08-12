@@ -29,7 +29,7 @@ from app.analysis.composite_review import load_approved_composites
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 MAX_ENTRIES_CONSIDERED = 3  # cap on how many conflicting entries per finding get candidates generated
-MAX_CANDIDATES_RETURNED = 8
+MAX_CANDIDATES_RETURNED = 15
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,21 @@ def _movement_cost(entry: dict, slot_day_id: int, slot_period_id: int, room_id: 
     return 2
 
 
+def _class_room_familiarity(entries_by_class: dict[int, list[dict]], entry: dict, after_room_id: int | None) -> dict | None:
+    """How "at home" the class already is in the candidate's target room -
+    the same signal class_room_instability (app/analysis/consistency_
+    rules.py) computes, surfaced here so a suggestion can say whether it
+    moves the class *towards* or *away from* a consistent room, not just
+    "5 · P3 -> RIE01"."""
+    if after_room_id is None:
+        return None
+    others = [e for e in entries_by_class.get(entry["class_name_id"], []) if e["entry_id"] != entry["entry_id"]]
+    if not others:
+        return None
+    same_room_elsewhere = sum(1 for e in others if e["room_id"] == after_room_id)
+    return {"same_room_elsewhere_count": same_room_elsewhere, "total_other_lessons": len(others)}
+
+
 def _try_candidate(
     conn: sqlite3.Connection,
     before_entries: list[dict],
@@ -91,13 +106,16 @@ def _try_candidate(
     after_period_id: int,
     after_room_id: int | None,
     class_name_ids: set[int],
+    entries_by_class: dict[int, list[dict]],
 ) -> dict | None:
-    room = None
+    room_capacity: dict = {"confirmed": False}
     if after_room_id is not None:
         room = conn.execute("SELECT seats FROM room WHERE id = ?", (after_room_id,)).fetchone()
         if room is not None and room["seats"] is not None:
-            if _enrolled_count(conn, class_name_ids) > room["seats"]:
+            enrolled = _enrolled_count(conn, class_name_ids)
+            if enrolled > room["seats"]:
                 return None  # hard constraint: room capacity
+            room_capacity = {"confirmed": True, "seats": room["seats"], "enrolled": enrolled}
 
     overrides = {
         entry["entry_id"]: {
@@ -123,6 +141,8 @@ def _try_candidate(
         },
         "movement_cost": _movement_cost(entry, after_day_id, after_period_id, after_room_id),
         "resolves_finding_count": sum(1 for k in before_findings if k not in after_findings),
+        "why": {"no_new_clash": True, "room_capacity": room_capacity},
+        "class_room_familiarity": _class_room_familiarity(entries_by_class, entry, after_room_id),
     }
 
 
@@ -157,6 +177,11 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     teacher_busy, room_busy = _busy_sets(before_entries)
     all_slots = _all_lesson_slots(conn)
 
+    entries_by_class: dict[int, list[dict]] = defaultdict(list)
+    for e in before_entries:
+        if e["class_name_id"] is not None:
+            entries_by_class[e["class_name_id"]].append(e)
+
     all_candidates = []
     for conflict in conflicting:
         entry = entries_by_id.get(conflict["entry_id"])
@@ -177,6 +202,7 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
                 candidate = _try_candidate(
                     conn, before_entries, before_findings, composites, code_lookups,
                     entry, slot.day_id, slot.period_id, entry["room_id"], class_name_ids,
+                    entries_by_class,
                 )
                 if candidate:
                     all_candidates.append(candidate)
@@ -189,11 +215,21 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
                 candidate = _try_candidate(
                     conn, before_entries, before_findings, composites, code_lookups,
                     entry, entry["day_id"], entry["period_id"], room_row["id"], class_name_ids,
+                    entries_by_class,
                 )
                 if candidate:
                     all_candidates.append(candidate)
 
-    all_candidates.sort(key=lambda c: (c["movement_cost"], -c["resolves_finding_count"]))
+    def familiarity_tiebreak(c: dict) -> int:
+        fam = c["class_room_familiarity"]
+        return -fam["same_room_elsewhere_count"] if fam else 0
+
+    # Least disruptive first, then most findings resolved, then prefer a
+    # room the class already uses elsewhere (ties back to
+    # class_room_instability - a suggestion that happens to make the class
+    # *more* consistent, not just conflict-free, ranks ahead of one that
+    # doesn't).
+    all_candidates.sort(key=lambda c: (c["movement_cost"], -c["resolves_finding_count"], familiarity_tiebreak(c)))
     return {
         "finding_id": finding_id, "supported": True, "note": None,
         "candidates": all_candidates[:MAX_CANDIDATES_RETURNED],

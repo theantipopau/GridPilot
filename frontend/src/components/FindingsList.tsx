@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding } from "../api";
 import EmptyState from "./EmptyState";
+import SuggestionCandidateCard from "./SuggestionCandidateCard";
 import { IconCheckCircle } from "./icons";
 import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
 
@@ -236,30 +237,16 @@ export default function FindingsList({
                     <p className="text-xs opacity-70">No valid alternative found that doesn't create a new clash.</p>
                   )}
                   {suggestions.supported && suggestions.candidates.length > 0 && (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
                       {suggestions.candidates.map((c, i) => {
                         const key = `${f.id}:${c.entry_id}:${c.after.day_code}:${c.after.period_code}:${c.after.room_code}`;
                         return (
-                          <div key={i} className="flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-xs">
-                            <span>
-                              {c.class_code}: {c.before.day_code} {c.before.period_code} {c.before.room_code}
-                              <span className="mx-1 opacity-50">→</span>
-                              {c.after.day_code} {c.after.period_code} {c.after.room_code}
-                              <span className="ml-1 opacity-50">
-                                ({c.movement_cost === 0 ? "room only" : c.movement_cost === 1 ? "same day" : "different day"})
-                              </span>
-                            </span>
-                            {onApplySuggestion && (
-                              <button
-                                type="button"
-                                onClick={() => applySuggestion(f, c)}
-                                disabled={applyingKey === key}
-                                className="shrink-0 rounded bg-sky-600 px-2 py-1 font-medium text-white disabled:opacity-50"
-                              >
-                                {applyingKey === key ? "Applying…" : "Use this"}
-                              </button>
-                            )}
-                          </div>
+                          <SuggestionCandidateCard
+                            key={i}
+                            candidate={c}
+                            onApply={onApplySuggestion ? () => applySuggestion(f, c) : undefined}
+                            applying={applyingKey === key}
+                          />
                         );
                       })}
                     </div>

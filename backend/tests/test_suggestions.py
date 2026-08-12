@@ -111,6 +111,59 @@ def test_candidates_sorted_by_movement_cost_ascending():
     assert costs == sorted(costs)
 
 
+def test_candidate_explains_why_it_works():
+    conn = build_richer_synthetic_db()
+    conn.execute("UPDATE room SET seats = 5 WHERE id = 1")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    add_enrolment(conn, student_id=1, class_name_id=1)
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_double_booking'").fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+    assert len(result["candidates"]) > 0
+
+    # Only R1 (seats=5, set above) and R3 (seats=1, the fixture default)
+    # have a confirmed capacity in build_richer_synthetic_db(); R2 doesn't.
+    confirmed_seats = {"R1": 5, "R3": 1}
+    for c in result["candidates"]:
+        assert c["why"]["no_new_clash"] is True
+        room_code = c["after"]["room_code"]
+        if room_code in confirmed_seats:
+            assert c["why"]["room_capacity"]["confirmed"] is True
+            assert c["why"]["room_capacity"]["seats"] == confirmed_seats[room_code]
+        else:
+            assert c["why"]["room_capacity"]["confirmed"] is False
+
+
+def test_class_room_familiarity_reflects_the_classs_own_room_history():
+    conn = build_richer_synthetic_db()
+    # CLASSA already runs in R2 twice (day1/p2/p1 pattern below) and R1
+    # once (the conflicting slot) - a candidate moving it to R2 should
+    # report 2 other lessons already there; a candidate moving it
+    # somewhere it's never been should report 0.
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
+    add_lesson(conn, day_id=3, period_id=6, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_double_booking'").fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+    classa_candidates = [c for c in result["candidates"] if c["class_code"] == "CLASSA"]
+    assert len(classa_candidates) > 0
+
+    to_r2 = [c for c in classa_candidates if c["after"]["room_code"] == "R2"]
+    assert to_r2, "expected at least one candidate offering R2, which CLASSA already uses twice"
+    for c in to_r2:
+        assert c["class_room_familiarity"]["same_room_elsewhere_count"] == 2
+        assert c["class_room_familiarity"]["total_other_lessons"] == 2  # CLASSA's other 2 lessons, excluding this one
+
+    to_new_room = [c for c in classa_candidates if c["after"]["room_code"] not in ("R1", "R2")]
+    for c in to_new_room:
+        assert c["class_room_familiarity"]["same_room_elsewhere_count"] == 0
+
+
 def test_no_candidate_ever_introduces_a_regression():
     """Every returned candidate must itself be clash-free - re-verify by
     re-running the clash rules with the candidate applied."""

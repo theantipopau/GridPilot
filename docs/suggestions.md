@@ -71,7 +71,34 @@ Candidates that survive both checks are scored by **movement cost** (a
 documented default heuristic, not a confirmed school weighting - see the
 docstring in `suggestions.py`): `0` = room-only change, `1` = same-day
 different period, `2` = different day. Room-only fixes rank first as the
-least disruptive.
+least disruptive; ties break on `resolves_finding_count`, then on
+**room familiarity** (below) - a candidate that happens to put the class
+in a room it already uses elsewhere ranks ahead of an equally-cheap move
+to a room it's never been in.
+
+## Why it works, and what else it affects (2026-08-12)
+
+Real feedback after shipping the first version: *"propose fixes needs to
+be more detailed."* Each candidate now carries two extra fields, both
+computed from data the engine already touches - no new queries beyond
+what capacity-checking and clash-checking were already doing:
+
+- **`why`**: `no_new_clash` (always `true` for a returned candidate - the
+  hard constraint check above already guarantees it, this just makes it
+  visible) and `room_capacity` (`{confirmed: false}` if the target room
+  has no confirmed seat count, or `{confirmed: true, seats, enrolled}` if
+  it does - the same numbers the capacity check itself used).
+- **`class_room_familiarity`**: `{same_room_elsewhere_count,
+  total_other_lessons}` - how many of the class's *other* lessons already
+  run in the candidate's target room. Directly reuses the same signal
+  `class_room_instability` (`docs/rules.md`) computes, surfaced here as a
+  forward-looking "does this move make the class more or less
+  consistent" rather than only a backward-looking finding. `null` when
+  the candidate has no room (nothing to compare).
+
+`MAX_CANDIDATES_RETURNED` raised from 8 to 15 - the extra candidates were
+already being computed and discarded, so returning more doesn't add
+meaningful cost.
 
 ## Performance
 
@@ -95,10 +122,28 @@ finding out it fails after the fact.
 
 ## UI
 
-Each finding in the **Findings** tab has a **"Suggest fixes"** button
-that fetches and displays ranked candidates inline, each with a **"Use
-this"** button that creates a change set, adds the proposed change (with
-`finding_ids` linking back to the originating finding), and jumps
-straight to Change Sets for review/validate/approve - the suggestion
-still has to pass through the same human-approval gate as a manually
-proposed change; nothing here applies itself.
+Two entry points, sharing one presentation component
+(`SuggestionCandidateCard.tsx`) so they can't drift apart:
+
+- Each finding in the **Findings** tab has a **"Suggest fixes"** button
+  that fetches and displays ranked candidates inline, each with a **"Use
+  this"** button that creates a *new* change set, adds the proposed
+  change (with `finding_ids` linking back to the originating finding),
+  and jumps straight to Change Sets for review/validate/approve.
+- Clicking a lesson on the **Timetable** grid opens the inspector panel
+  with a **"Suggested fixes"** tab alongside "Move manually" (added
+  2026-08-12, real feedback: *"maybe extra tabs"*). This finds every
+  *open* `teacher_double_booking`/`room_double_booking` finding whose
+  slot and teacher/room match the clicked lesson, fetches suggestions for
+  each, and keeps only the candidates that would move *this specific*
+  lesson (not the other side of the clash) - deduplicated by target slot.
+  "Use this" here reuses the grid's own in-progress change set
+  (`onPropose`, the same path "Move manually" uses) rather than creating
+  a separate one, since the panel is already scoped to one change set.
+  Lazy-loaded on tab click, not prefetched on every lesson click -
+  `suggest_fixes()` is a real computation (~2-4s against the real
+  dataset), not something to run on every single grid click.
+
+Either way, the suggestion still has to pass through the same
+human-approval gate as a manually proposed change; nothing here applies
+itself.
