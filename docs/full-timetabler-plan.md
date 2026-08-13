@@ -480,6 +480,17 @@ gaps. Adopt a subset of FET's taxonomy (§2). This is the prerequisite for
 a solver — and it is independently useful, because it makes the rules
 engine configurable instead of hard-coded.
 
+> **📄 Expanded in `docs/solver.md` (2026-08-13).** Phase G is now
+> understood to be the *keystone*, not a prerequisite chore: without
+> class→room-type constraints the solver's room domain can't be reduced,
+> and the CP-SAT model needs ~3.9M booleans instead of ~600K. Gap
+> analysis against the real database found that mapping is **78%
+> inferable** from the existing timetable (180 of 231 classes already use
+> exactly one `room_type`), acquirable through the same
+> detect→human-confirm pattern composite review already uses. The one gap
+> that *cannot* be inferred is **teacher unavailability** — now the
+> highest-value question in §10.
+
 ---
 
 ### Phase H — Solver · **XL** · *separate go/no-go decision*
@@ -494,6 +505,17 @@ autonomous** — consistent with everything this project has done:
 
 Every solver result already has a validator: `whatif.py`. That is a
 genuinely strong position to build a solver from.
+
+> **📄 Fully designed in `docs/solver.md` (2026-08-13)** — CP-SAT model
+> formulation, three modes, phasing, failure modes, and where the LLM
+> does and doesn't belong. Headline conclusions: **mass repair** (fix N
+> chosen findings, minimise movement) is both the highest-value mode and
+> the *smallest* to build, because its output is already the shape of a
+> `proposed_change`; **construction is the lowest value per unit effort**
+> and should only ever be roll-over, per §5(a); and a separate, arguably
+> larger prize sits in **blocking optimisation**, which needs no new data
+> at all because all 6,756 `.sfx` student preferences are already
+> ingested.
 
 ---
 
@@ -624,6 +646,17 @@ Consistent with the project's practice of writing down refusals:
 5. **Is the goal to replace TTS, or to out-think it?** Everything through
    Phase E works alongside TTS. Phases F–H are where the answer starts to
    cost real money and time.
+6. **When is each teacher unavailable?** *(added 2026-08-13, `docs/solver.md`
+   §4.2.)* Nothing in the source export records that a teacher can't be
+   scheduled at a given slot — part-time fractions, external commitments,
+   leadership release. It **cannot be inferred**: a free period is not an
+   unavailability, and guessing would schedule a 0.6 FTE teacher across
+   all ten days. This is now the single highest-value unanswered question
+   in this document — it degrades solver repair mode and *blocks*
+   regional rebuild and construction entirely.
+7. **What room type does each class actually require?** Same section. We
+   can propose an answer — 78% of classes already use exactly one
+   `room_type` — but it needs bulk human confirmation, not assertion.
 
 ---
 
