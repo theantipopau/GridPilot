@@ -510,16 +510,21 @@ autonomous** — consistent with everything this project has done:
 Every solver result already has a validator: `whatif.py`. That is a
 genuinely strong position to build a solver from.
 
-> **📄 Fully designed in `docs/solver.md` (2026-08-13)** — CP-SAT model
-> formulation, three modes, phasing, failure modes, and where the LLM
-> does and doesn't belong. Headline conclusions: **mass repair** (fix N
-> chosen findings, minimise movement) is both the highest-value mode and
-> the *smallest* to build, because its output is already the shape of a
-> `proposed_change`; **construction is the lowest value per unit effort**
-> and should only ever be roll-over, per §5(a); and a separate, arguably
-> larger prize sits in **blocking optimisation**, which needs no new data
-> at all because all 6,756 `.sfx` student preferences are already
-> ingested.
+> **📄 Designed in `docs/solver.md`, Mode A built 2026-08-13
+> (`docs/mass-repair.md`)** — CP-SAT model formulation, three modes,
+> phasing, failure modes, and where the LLM does and doesn't belong.
+> Headline conclusions: **mass repair** (fix N chosen findings, minimise
+> movement) is both the highest-value mode and the *smallest* to build,
+> because its output is already the shape of a `proposed_change` -
+> confirmed against real data: 6 of 20 open double-booking findings
+> resolved with 4 moves in ~4.4s; **construction is the lowest value per
+> unit effort** and should only ever be roll-over, per §5(a); and a
+> separate, arguably larger prize sits in **blocking optimisation**,
+> which needs no new data at all because all 6,756 `.sfx` student
+> preferences are already ingested. Real data also forced a mid-build
+> redesign: student clashes had to become a *native* solver constraint,
+> not just something caught after the fact - see `docs/mass-repair.md`
+> for what that looked like and why.
 
 ---
 

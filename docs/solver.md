@@ -513,12 +513,24 @@ section; L ≈ the change-set subsystem).
 |---|---|---|---|---|
 | **G1** | `constraint` tables; room-type **inference with human confirm** (composite-review pattern) | **M** | — | **✅ done 2026-08-13** - room-type half; doubles inference not built |
 | **H2** | `room_feature_mismatch` rule from G1's confirmed mapping | **S** | G1 | **✅ done 2026-08-13**, shipped alongside G1 |
+| **H1** | CP-SAT model + **Mode A repair** | **L** | G1 | **✅ done 2026-08-13** - `docs/mass-repair.md`. No `solver_run` table / run-compare UI yet - a run either becomes a change set or is discarded |
 | **G2** | Ask the school for teacher unavailability; ingest it | **S** + a conversation | School | Not started |
-| **H1** | CP-SAT model + **Mode A repair**; `solver_run` table; run/compare UI | **L** | G1 | Not started |
 | **H3** | LLM run-explanation + **infeasibility explanation** | **M** | H1 | Not started |
 | **H4** | **Mode B regional rebuild**; merge with Phase E scenarios | **L** | H1, G2 | Not started |
 | **H5** | **Blocking optimiser** (§8) — independent of H1–H4, no new data needed | **L** | G1-ish | Not started |
 | **H6** | **Mode C construction**, as roll-over only | **XL** | Everything, + explicit go/no-go | Not started |
+
+> **📄 H1 fully written up in `docs/mass-repair.md` (2026-08-13).**
+> Two real-data lessons that changed the design mid-build, both worth
+> reading before touching this code: student double-booking had to
+> become a **native** CP-SAT constraint, not just something the
+> re-validation loop catches after the fact (a first real-data attempt
+> produced 257 new student-clash findings from one 23-move solve before
+> this fix); and a fully-infeasible batch needs to shrink by one entry
+> and retry, not give up on the whole batch, because the *joint* problem
+> across many findings at once can be unsatisfiable even when large
+> subsets of it solve cleanly. Verified against real Sophia College data:
+> resolved 6 of 20 open double-booking findings with 4 moves in ~4.4s.
 
 **G1 was the keystone, and it's built** - see `docs/room-constraints.md`
 for the full design and real-data verification. It unblocks the solver's
@@ -610,6 +622,8 @@ with the school.
 - `docs/suggestions.md` — the single-lesson search this generalises
 - `docs/change-sets.md`, `docs/export-validation.md` — the pipeline a
   solver run lands in
+- `docs/room-constraints.md` — Phase G1, the room-type constraints Mode A repair reads
+- `docs/mass-repair.md` — Mode A repair itself, fully built 2026-08-13
 - [OR-Tools CP-SAT](https://developers.google.com/optimization/cp/cp_solver)
   (Apache-2.0)
 - Primary evidence: the GridPilot database, 2026-08-13 — all counts in

@@ -124,6 +124,16 @@ export function IconColumns({ className = base }: IconProps) {
   );
 }
 
+export function IconWand({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M4 16 14 6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15.5 2.5v2M18.5 5.5h-2M13.2 4.3l1.1 1.1M16.6 7.7l1.1 1.1" strokeLinecap="round" />
+      <path d="M4.5 12v2M3.5 13h2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSpinner({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={`${className} animate-spin`}>

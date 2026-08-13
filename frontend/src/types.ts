@@ -354,3 +354,27 @@ export interface BlockingGroup {
 export interface BlockingLinesResponse {
   groups: BlockingGroup[];
 }
+
+export type RepairStatus = "SOLVED" | "PARTIAL" | "INFEASIBLE" | "NO_MOVABLE_ENTRIES";
+
+export interface RepairFindingRef {
+  id: number;
+  title: string | null;
+}
+
+export interface RepairNotEligible {
+  finding_id: number;
+  rule_id: string;
+  reason: string;
+}
+
+export interface RepairResult {
+  status: RepairStatus;
+  change_set_id: number | null;
+  moved_count: number;
+  movable_entry_count: number;
+  solve_time_seconds: number;
+  findings_resolved: RepairFindingRef[];
+  findings_unresolved: RepairFindingRef[];
+  not_eligible: RepairNotEligible[];
+}

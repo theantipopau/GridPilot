@@ -199,6 +199,7 @@ export default function App() {
               setTab("changes");
             }}
             onApplySuggestion={handleApplySuggestion}
+            onOpenChangeSet={openChangeSetInTab}
           />
         )}
         {tab === "composites" && <CompositeReviewPage />}

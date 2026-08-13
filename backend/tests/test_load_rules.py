@@ -1,6 +1,7 @@
 """Synthetic-fixture tests for the capacity/load/utilisation rules. No
 real school data - see tests/synthetic.py."""
 
+from app.analysis.clash_rules import lesson_entries
 from app.analysis.load_rules import (
     room_capacity_exceeded,
     room_underutilization,
@@ -15,7 +16,7 @@ def test_room_capacity_not_exceeded_when_under_seats():
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
     add_enrolment(conn, student_id=1, class_name_id=1)
 
-    assert room_capacity_exceeded(conn) == []
+    assert room_capacity_exceeded(conn, lesson_entries(conn)) == []
 
 
 def test_room_capacity_exceeded_genuine_issue():
@@ -26,7 +27,7 @@ def test_room_capacity_exceeded_genuine_issue():
     add_enrolment(conn, student_id=1, class_name_id=1)
     add_enrolment(conn, student_id=2, class_name_id=1)
 
-    findings = room_capacity_exceeded(conn)
+    findings = room_capacity_exceeded(conn, lesson_entries(conn))
     assert len(findings) == 1
     assert findings[0].evidence["enrolled_count"] == 2
     assert findings[0].evidence["seats"] == 1
@@ -44,7 +45,7 @@ def test_room_capacity_sums_composite_classes_sharing_one_room():
     conn.execute("INSERT INTO student (id, code, roll_class_id) VALUES (2, '100002', 2)")
     add_enrolment(conn, student_id=2, class_name_id=2)
 
-    findings = room_capacity_exceeded(conn)
+    findings = room_capacity_exceeded(conn, lesson_entries(conn))
     assert len(findings) == 1
     assert findings[0].evidence["enrolled_count"] == 2
 
@@ -57,7 +58,7 @@ def test_room_with_unconfirmed_capacity_is_skipped():
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
     add_enrolment(conn, student_id=1, class_name_id=1)
 
-    assert room_capacity_exceeded(conn) == []
+    assert room_capacity_exceeded(conn, lesson_entries(conn)) == []
 
 
 def test_teacher_within_contracted_load_no_finding():

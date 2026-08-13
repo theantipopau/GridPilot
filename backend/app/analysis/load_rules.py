@@ -14,6 +14,7 @@ it's a fact about physical time, not an administrative judgement."""
 import sqlite3
 from collections import defaultdict
 
+from app.analysis.clash_rules import lesson_entries
 from app.analysis.models import EntityRef, Finding, SlotRef
 
 # Rooms below this utilisation are flagged as `info`. This is a default
@@ -22,25 +23,21 @@ from app.analysis.models import EntityRef, Finding, SlotRef
 LOW_UTILISATION_THRESHOLD = 0.20
 
 
-def room_capacity_exceeded(conn: sqlite3.Connection) -> list[Finding]:
+def room_capacity_exceeded(conn: sqlite3.Connection, entries: list[dict]) -> list[Finding]:
+    """entries: LESSON rows shaped like app.analysis.clash_rules.lesson_
+    entries() output (room_id, class_name_id, day_code, period_code) - an
+    explicit parameter, not an internal query, so a what-if caller (the
+    solver's validation loop, app/analysis/repair_solver.py) can check a
+    hypothetical timetable without writing to the database. Every other
+    caller just passes lesson_entries(conn)."""
     rooms = {r["id"]: r for r in conn.execute("SELECT id, code, seats FROM room WHERE seats IS NOT NULL")}
     if not rooms:
         return []
 
-    entries = conn.execute(
-        """
-        SELECT te.room_id, d.code AS day_code, p.code AS period_code, te.class_name_id
-        FROM timetable_entry te
-        JOIN day d ON d.id = te.day_id
-        JOIN period p ON p.id = te.period_id
-        WHERE te.entry_type = 'LESSON' AND te.room_id IS NOT NULL AND te.class_name_id IS NOT NULL
-        """
-    ).fetchall()
-
     slot_classes: dict[tuple, set[int]] = defaultdict(set)
     slot_meta: dict[tuple, tuple[str, str]] = {}
     for e in entries:
-        if e["room_id"] not in rooms:
+        if e["room_id"] not in rooms or e["class_name_id"] is None:
             continue
         key = (e["room_id"], e["day_code"], e["period_code"])
         slot_classes[key].add(e["class_name_id"])
@@ -169,7 +166,7 @@ def room_underutilization(conn: sqlite3.Connection) -> list[Finding]:
 
 def run_load_rules(conn: sqlite3.Connection) -> list[Finding]:
     return [
-        *room_capacity_exceeded(conn),
+        *room_capacity_exceeded(conn, lesson_entries(conn)),
         *teacher_over_contracted_load(conn),
         *room_underutilization(conn),
     ]

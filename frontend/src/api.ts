@@ -10,6 +10,7 @@ import type {
   IngestStatus,
   IngestUploadResult,
   ReferenceData,
+  RepairResult,
   ReviewStatus,
   RoomTypeConstraintCandidate,
   StaffRole,
@@ -117,6 +118,18 @@ export function reviewRoomConstraintCandidate(
   note?: string,
 ): Promise<{ id: number; review_status: ReviewStatus }> {
   return postJson(`${BASE}/room-constraints/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
+}
+
+export function runMassRepair(
+  findingIds: number[] | null,
+  createdBy: string,
+  timeBudgetSeconds?: number,
+): Promise<RepairResult> {
+  return postJson(`${BASE}/solver/repair`, {
+    finding_ids: findingIds,
+    created_by: createdBy,
+    time_budget_seconds: timeBudgetSeconds,
+  });
 }
 
 export function findTimetableEntries(filters: {

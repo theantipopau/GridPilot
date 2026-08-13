@@ -3,6 +3,7 @@
 class_room_type_constraint review queue. No real school data - see
 tests/synthetic.py."""
 
+from app.analysis.clash_rules import lesson_entries
 from app.analysis.room_feature_rules import room_feature_mismatch
 from tests.synthetic import add_lesson, build_richer_synthetic_db
 
@@ -27,7 +28,7 @@ def test_no_findings_without_any_approved_constraint():
     _set_room_type(conn, 2, "Classroom")
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
 
-    assert room_feature_mismatch(conn) == []
+    assert room_feature_mismatch(conn, lesson_entries(conn)) == []
 
 
 def test_mismatch_flagged_when_constraint_is_approved():
@@ -37,7 +38,7 @@ def test_mismatch_flagged_when_constraint_is_approved():
     _insert_constraint(conn, class_name_id=1, room_type="Science", review_status="APPROVED")
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
 
-    findings = room_feature_mismatch(conn)
+    findings = room_feature_mismatch(conn, lesson_entries(conn))
     assert len(findings) == 1
     f = findings[0]
     assert f.rule_id == "room_feature_mismatch"
@@ -55,7 +56,7 @@ def test_no_finding_when_room_matches_the_required_type():
     _insert_constraint(conn, class_name_id=1, room_type="Science", review_status="APPROVED")
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
 
-    assert room_feature_mismatch(conn) == []
+    assert room_feature_mismatch(conn, lesson_entries(conn)) == []
 
 
 def test_no_finding_while_constraint_is_only_pending():
@@ -65,7 +66,7 @@ def test_no_finding_while_constraint_is_only_pending():
     _insert_constraint(conn, class_name_id=1, room_type="Science", review_status="PENDING")
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
 
-    assert room_feature_mismatch(conn) == []
+    assert room_feature_mismatch(conn, lesson_entries(conn)) == []
 
 
 def test_no_finding_when_constraint_was_rejected():
@@ -75,7 +76,7 @@ def test_no_finding_when_constraint_was_rejected():
     _insert_constraint(conn, class_name_id=1, room_type="Science", review_status="REJECTED")
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
 
-    assert room_feature_mismatch(conn) == []
+    assert room_feature_mismatch(conn, lesson_entries(conn)) == []
 
 
 def test_untyped_room_still_flags_as_a_mismatch():
@@ -88,6 +89,6 @@ def test_untyped_room_still_flags_as_a_mismatch():
     # room 2 stays untyped (NULL) by default
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
 
-    findings = room_feature_mismatch(conn)
+    findings = room_feature_mismatch(conn, lesson_entries(conn))
     assert len(findings) == 1
     assert findings[0].evidence["actual_room_type"] is None
