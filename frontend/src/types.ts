@@ -136,6 +136,19 @@ export interface CompositeCandidate {
   review_note: string | null;
 }
 
+export interface RoomTypeConstraintCandidate {
+  id: number;
+  class_code: string;
+  room_type: string;
+  matching_lesson_count: number;
+  total_lesson_count: number;
+  review_status: ReviewStatus;
+  detected_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+}
+
 export interface TimetableEntryLookup {
   entry_id: number;
   day_code: string;

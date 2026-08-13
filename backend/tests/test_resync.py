@@ -1,6 +1,7 @@
 """Tests for app.db.resync - re-ingest that carries forward human-made
-decisions (composite group reviews, proposed changes, the audit trail)
-instead of wiping them, per docs/reingest-persistence.md.
+decisions (composite group reviews, room-type constraint reviews,
+proposed changes, the audit trail) instead of wiping them, per
+docs/reingest-persistence.md.
 
 Deliberately reseeds source tables in a different insertion order than
 tests/synthetic.build_synthetic_db() uses (a decoy row inserted first
@@ -130,6 +131,51 @@ def test_composite_review_dropped_when_member_class_disappears():
     ).fetchone()
     assert audit is not None
     assert "CLASSB" not in (audit["detail_json"] or "") or "CLASSA" in audit["detail_json"]
+
+
+def _insert_room_type_constraint(conn: sqlite3.Connection, *, class_name_id: int, room_type: str = "Science",
+                                  review_status: str = "APPROVED") -> int:
+    cur = conn.execute(
+        "INSERT INTO class_room_type_constraint (class_name_id, room_type, review_status, "
+        "matching_lesson_count, total_lesson_count, detected_at, reviewed_at, reviewed_by, review_note) "
+        "VALUES (?, ?, ?, 2, 2, 'test', 'test', 'reviewer', 'confirmed real')",
+        (class_name_id, room_type, review_status),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_approved_room_type_constraint_survives_reingest_by_code():
+    conn = build_synthetic_db()
+    _insert_room_type_constraint(conn, class_name_id=1)
+
+    resync_source_tables(conn, lambda: _reseed_shifted(conn))
+
+    rows = conn.execute("SELECT * FROM class_room_type_constraint").fetchall()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["review_status"] == "APPROVED"
+    assert row["room_type"] == "Science"
+    assert row["reviewed_by"] == "reviewer"
+    assert row["review_note"] == "confirmed real"
+
+    new_class_a_id = conn.execute("SELECT id FROM class_name WHERE code = 'CLASSA'").fetchone()["id"]
+    assert row["class_name_id"] == new_class_a_id
+
+
+def test_room_type_constraint_dropped_when_class_disappears():
+    conn = build_synthetic_db()
+    _insert_room_type_constraint(conn, class_name_id=2)  # CLASSB
+
+    result = resync_source_tables(conn, lambda: _reseed_shifted(conn, include_class_b=False))
+
+    assert result["room_type_constraints"] == {"restored": 0, "dropped": 1}
+    assert conn.execute("SELECT COUNT(*) FROM class_room_type_constraint").fetchone()[0] == 0
+
+    audit = conn.execute(
+        "SELECT * FROM audit_event WHERE event_type = 'room_type_constraint_dropped_on_reingest'"
+    ).fetchone()
+    assert audit is not None
 
 
 def test_proposed_change_moved_to_a_different_day_with_the_same_period_code_resolves_correctly():

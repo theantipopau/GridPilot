@@ -10,6 +10,7 @@ from app.api import (
     findings,
     ingest,
     reference,
+    room_constraints,
     teachers,
     timetable,
     timetable_entries,
@@ -36,6 +37,7 @@ app.include_router(ingest.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(teachers.router, prefix="/api")
 app.include_router(blocking.router, prefix="/api")
+app.include_router(room_constraints.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -180,6 +180,7 @@ Timetabling Solutions export actually contains.
 | [`docs/project-status.md`](docs/project-status.md) | Honest health review — what's solid, known weaknesses, what's next |
 | [`docs/full-timetabler-plan.md`](docs/full-timetabler-plan.md) | The long game: what Timetabling Solutions actually does, what the open-source field offers, and the phased plan to go from companion tool to full timetabling program |
 | [`docs/solver.md`](docs/solver.md) | **Mass optimisation**: how a "fix everything" button and from-scratch generation could actually work — CP-SAT model, why the LLM is *not* the solver, the three modes in build order, and the two constraint-data gaps that block all of it |
+| [`docs/room-constraints.md`](docs/room-constraints.md) | Phase G1 of the solver plan: inferring which room_type each class needs from real usage (78% is a clean signal), human review before it's trusted, and the `room_feature_mismatch` rule it unblocks |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
 | [`docs/design/`](docs/design/) | UI mockup and logo source assets |
 

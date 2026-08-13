@@ -480,16 +480,20 @@ gaps. Adopt a subset of FET's taxonomy (§2). This is the prerequisite for
 a solver — and it is independently useful, because it makes the rules
 engine configurable instead of hard-coded.
 
-> **📄 Expanded in `docs/solver.md` (2026-08-13).** Phase G is now
-> understood to be the *keystone*, not a prerequisite chore: without
-> class→room-type constraints the solver's room domain can't be reduced,
-> and the CP-SAT model needs ~3.9M booleans instead of ~600K. Gap
-> analysis against the real database found that mapping is **78%
-> inferable** from the existing timetable (180 of 231 classes already use
-> exactly one `room_type`), acquirable through the same
-> detect→human-confirm pattern composite review already uses. The one gap
-> that *cannot* be inferred is **teacher unavailability** — now the
-> highest-value question in §10.
+> **📄 Expanded in `docs/solver.md` (2026-08-13), room-type half now
+> built (`docs/room-constraints.md`).** Phase G is the *keystone*, not a
+> prerequisite chore: without class→room-type constraints the solver's
+> room domain can't be reduced, and the CP-SAT model needs ~3.9M booleans
+> instead of ~600K. Gap analysis against the real database found that
+> mapping is **78% inferable** from the existing timetable (180 of 231
+> classes already use exactly one `room_type`) — acquired through the
+> same detect→human-confirm pattern composite review uses
+> (`class_room_type_constraint`, Room Constraints page), and it
+> immediately unblocked `room_feature_mismatch` (stuck since Milestone 1)
+> as a side effect. Doubles/triples inference, the other half of G1 as
+> originally scoped, is deliberately not yet built — see `docs/solver.md`
+> Phasing. The one gap that *cannot* be inferred is **teacher
+> unavailability** — still the highest-value open question, §10.6.
 
 ---
 
@@ -654,9 +658,12 @@ Consistent with the project's practice of writing down refusals:
    all ten days. This is now the single highest-value unanswered question
    in this document — it degrades solver repair mode and *blocks*
    regional rebuild and construction entirely.
-7. **What room type does each class actually require?** Same section. We
-   can propose an answer — 78% of classes already use exactly one
-   `room_type` — but it needs bulk human confirmation, not assertion.
+7. **What room type does each class actually require?** ~~Open~~ **Built
+   2026-08-13** - `docs/room-constraints.md`. 78% of classes already use
+   exactly one `room_type`; proposed as a candidate, confirmed by a human
+   in the Room Constraints page, never asserted outright. What's left is
+   the school actually working through the review queue - 199 candidates
+   detected against the real data, 0 reviewed yet.
 
 ---
 

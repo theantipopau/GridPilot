@@ -115,6 +115,22 @@ writeup, including four related rules from that phase's candidate list
 that were investigated and **not** built - see "Not yet implemented"
 below for why.
 
+### `room_feature_mismatch` (warning) - added 2026-08-13
+
+Originally blocked (see the note that used to be here, now moved below):
+`room.room_type` is free text from the export's Notes column, no
+authoritative subject-to-required-room mapping exists anywhere in the
+source. Unblocked not by finding new data but by **inferring** the
+mapping from how each class is already scheduled and putting it in front
+of a human - same discipline as composite-class review. See
+`docs/room-constraints.md` for the full design; in short: a class whose
+lessons already sit overwhelmingly in one `room_type` is proposed as a
+candidate (`class_room_type_constraint`, `PENDING`), a human confirms or
+rejects it in the **Room Constraints** page, and only an `APPROVED`
+constraint produces a `room_feature_mismatch` finding when a lesson lands
+in a room of the wrong type. A `PENDING` or `REJECTED` constraint never
+does - same suppression discipline as `composite_group.review_status`.
+
 ## Composite classes: reviewable, not silently trusted
 
 `backend/app/analysis/composite.py` heuristically detects candidates:
@@ -159,9 +175,6 @@ still live; a finding the engine has already marked `RESOLVED` returns a
 From the roadmap's Milestone 1 "first rules" list, the remainder are
 blocked on data or a policy value we don't have and shouldn't guess:
 
-- `room_feature_mismatch` - no authoritative subject-to-required-feature
-  mapping exists; `room.room_type` is free text from the source export's
-  Notes column, not a controlled vocabulary (see `docs/data-formats.md`).
 - `teacher_daily_overload`, `teacher_consecutive_load`,
   `teacher_free_period_fragmentation`, `uneven_subject_spread` - all need
   a school-confirmed threshold (what counts as "too many" consecutive

@@ -316,6 +316,32 @@ CREATE TABLE IF NOT EXISTS composite_group_member (
     PRIMARY KEY (composite_group_id, class_name_id)
 );
 
+-- Class room-type constraints: human-reviewed, same discipline as composite
+-- classes above -------------------------------------------------------------
+-- Nothing in the source export declares which room_type a class actually
+-- needs. Detected candidates (app/analysis/room_type_constraints.py) infer
+-- one from how the class is already scheduled - "most of this class's
+-- lessons already run in a Science room" - and are upserted here as
+-- PENDING, never asserted as fact. Only an APPROVED row feeds
+-- room_feature_mismatch or a future solver's room domain (docs/solver.md
+-- section 4.2). One row per class: a class has at most one required room
+-- type. Re-syncing refreshes a PENDING row's evidence to the latest
+-- detection, but never rewrites room_type once a human has reviewed it -
+-- see app/analysis/room_type_review.py.
+
+CREATE TABLE IF NOT EXISTS class_room_type_constraint (
+    id INTEGER PRIMARY KEY,
+    class_name_id INTEGER NOT NULL UNIQUE REFERENCES class_name(id),
+    room_type TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (review_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    matching_lesson_count INTEGER NOT NULL,
+    total_lesson_count INTEGER NOT NULL,
+    detected_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    review_note TEXT
+);
+
 -- Findings ---------------------------------------------------------------
 -- Structured output of the deterministic rules engine. entity/slot refs are
 -- codes and internal ids only - never names or emails (see

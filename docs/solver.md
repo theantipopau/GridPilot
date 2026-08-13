@@ -509,22 +509,35 @@ data at all.
 Sizes relative to `full-timetabler-plan.md`'s scale (M ≈ the Teachers
 section; L ≈ the change-set subsystem).
 
-| Phase | Work | Size | Gated on |
-|---|---|---|---|
-| **G1** | `constraint` tables; room-type + doubles **inference with human confirm** (composite-review pattern) | **M** | — |
-| **G2** | Ask the school for teacher unavailability; ingest it | **S** + a conversation | School |
-| **H1** | CP-SAT model + **Mode A repair**; `solver_run` table; run/compare UI | **L** | G1 |
-| **H2** | `room_feature_mismatch` rule from G1's confirmed mapping (free once G1 lands) | **S** | G1 |
-| **H3** | LLM run-explanation + **infeasibility explanation** | **M** | H1 |
-| **H4** | **Mode B regional rebuild**; merge with Phase E scenarios | **L** | H1, G2 |
-| **H5** | **Blocking optimiser** (§8) — independent of H1–H4, no new data needed | **L** | G1-ish |
-| **H6** | **Mode C construction**, as roll-over only | **XL** | Everything, + explicit go/no-go |
+| Phase | Work | Size | Gated on | Status |
+|---|---|---|---|---|
+| **G1** | `constraint` tables; room-type **inference with human confirm** (composite-review pattern) | **M** | — | **✅ done 2026-08-13** - room-type half; doubles inference not built |
+| **H2** | `room_feature_mismatch` rule from G1's confirmed mapping | **S** | G1 | **✅ done 2026-08-13**, shipped alongside G1 |
+| **G2** | Ask the school for teacher unavailability; ingest it | **S** + a conversation | School | Not started |
+| **H1** | CP-SAT model + **Mode A repair**; `solver_run` table; run/compare UI | **L** | G1 | Not started |
+| **H3** | LLM run-explanation + **infeasibility explanation** | **M** | H1 | Not started |
+| **H4** | **Mode B regional rebuild**; merge with Phase E scenarios | **L** | H1, G2 | Not started |
+| **H5** | **Blocking optimiser** (§8) — independent of H1–H4, no new data needed | **L** | G1-ish | Not started |
+| **H6** | **Mode C construction**, as roll-over only | **XL** | Everything, + explicit go/no-go | Not started |
 
-**G1 is the keystone.** It unblocks the solver's domain reduction, it
-unblocks a roadmap rule that has been stuck since Milestone 1, and it
-delivers value on its own even if H1 never gets built — because a
-confirmed class→room-type mapping immediately makes `suggest_fixes()`
-stop proposing Drama in a science lab.
+**G1 was the keystone, and it's built** - see `docs/room-constraints.md`
+for the full design and real-data verification. It unblocks the solver's
+future domain reduction, it unblocked a roadmap rule that had been stuck
+since Milestone 1 (`room_feature_mismatch`, done alongside it as H2), and
+it delivers value on its own with no solver at all: a confirmed
+class→room-type mapping is exactly the signal that would stop
+`suggest_fixes()` proposing Drama in a science lab, once that mapping is
+wired into the suggestion engine's room search (not yet done - the
+mapping exists and is queryable, `suggest_fixes()` doesn't consult it
+yet).
+
+**Doubles/triples inference (the other half of G1 as originally scoped)
+was deliberately deferred**, not built alongside room-type: it's a
+smaller, separate signal (adjacency in the timetable rather than a room
+join), and shipping room-type alone - the harder, higher-value half -
+first let it be validated end-to-end (detection → review → rule →
+grid highlighting → resync persistence) before taking on a second
+constraint type through the same pipeline.
 
 Reasonable first target: **G1 + H1 + H3.** That is "select some findings,
 hit Fix, get a reviewed change set with an English explanation" — the

@@ -1,6 +1,7 @@
 """Re-ingest that preserves human-made review decisions (composite group
-reviews, change sets, audit trail) across a refreshed .tfx/.sfx export,
-instead of wiping the whole working database on every ingest.
+reviews, room-type constraint reviews, change sets, audit trail) across a
+refreshed .tfx/.sfx export, instead of wiping the whole working database
+on every ingest.
 
 Previously every ingest called app.db.connection.fresh_database(), which
 deletes the entire SQLite file - meaning approved/rejected composite
@@ -42,9 +43,9 @@ from app.audit import log_event
 # deleted in an order that respects every foreign key among them (a child
 # table - the one holding the FK column - always comes before the parent
 # table it references). Anything NOT in this list (finding, audit_event,
-# change_set, ingest_run, ingest_discrepancy, and the
-# composite_group*/proposed_change* tables, handled separately below) is
-# left untouched by this delete pass.
+# change_set, ingest_run, ingest_discrepancy, and the composite_group*/
+# class_room_type_constraint/proposed_change* tables, handled separately
+# below) is left untouched by this delete pass.
 SOURCE_TABLES_IN_DELETE_ORDER = [
     "class_group_course_room_override",
     "enrolment",
@@ -113,6 +114,16 @@ def _snapshot_composite_groups(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
+def _snapshot_room_type_constraints(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT crtc.room_type, crtc.review_status, crtc.matching_lesson_count, crtc.total_lesson_count, "
+        "crtc.detected_at, crtc.reviewed_at, crtc.reviewed_by, crtc.review_note, cn.code AS class_code "
+        "FROM class_room_type_constraint crtc "
+        "JOIN class_name cn ON cn.id = crtc.class_name_id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def _snapshot_proposed_changes(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT pc.id, pc.change_set_id, pc.reason, rc.code AS roll_class_code, "
@@ -141,11 +152,13 @@ def _snapshot_proposed_changes(conn: sqlite3.Connection) -> list[dict]:
 
 def _detach_app_owned_links(conn: sqlite3.Connection) -> None:
     """Removes the rows that hold a *live* FK into source tables, now that
-    they've been snapshotted by code above. composite_group/proposed_change
-    are re-created after the rebuild from the snapshot; their parent
-    change_set row is untouched throughout."""
+    they've been snapshotted by code above. composite_group/proposed_change/
+    class_room_type_constraint are re-created after the rebuild from their
+    snapshots; their parent change_set row (proposed_change's case) is
+    untouched throughout."""
     conn.execute("DELETE FROM composite_group_member")
     conn.execute("DELETE FROM composite_group")
+    conn.execute("DELETE FROM class_room_type_constraint")
     conn.execute("DELETE FROM proposed_change_finding")
     conn.execute("DELETE FROM proposed_change")
 
@@ -187,6 +200,34 @@ def _restore_composite_groups(conn: sqlite3.Connection, snapshot: list[dict]) ->
         conn.executemany(
             "INSERT INTO composite_group_member (composite_group_id, class_name_id) VALUES (?, ?)",
             [(group_id, mid) for mid in member_ids],
+        )
+        restored += 1
+    return {"restored": restored, "dropped": dropped}
+
+
+def _restore_room_type_constraints(conn: sqlite3.Connection, snapshot: list[dict]) -> dict[str, int]:
+    class_name_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM class_name")}
+
+    restored = 0
+    dropped = 0
+    for c in snapshot:
+        class_name_id = class_name_id_by_code.get(c["class_code"])
+        if class_name_id is None:
+            dropped += 1
+            log_event(
+                conn, "room_type_constraint_dropped_on_reingest",
+                f"A {c['review_status']} room-type constraint could not be carried forward into the "
+                "new export - its class code no longer exists.",
+                entity_type="class_room_type_constraint",
+                detail={"class_code": c["class_code"], "room_type": c["room_type"], "review_status": c["review_status"]},
+            )
+            continue
+        conn.execute(
+            "INSERT INTO class_room_type_constraint (class_name_id, room_type, review_status, "
+            "matching_lesson_count, total_lesson_count, detected_at, reviewed_at, reviewed_by, review_note) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (class_name_id, c["room_type"], c["review_status"], c["matching_lesson_count"], c["total_lesson_count"],
+             c["detected_at"], c["reviewed_at"], c["reviewed_by"], c["review_note"]),
         )
         restored += 1
     return {"restored": restored, "dropped": dropped}
@@ -280,6 +321,7 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
     working database might already hold human-made decisions worth
     keeping - i.e. every ingest after the first."""
     composite_snapshot = _snapshot_composite_groups(conn)
+    room_type_snapshot = _snapshot_room_type_constraints(conn)
     proposed_change_snapshot = _snapshot_proposed_changes(conn)
 
     _detach_app_owned_links(conn)
@@ -289,16 +331,20 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
     ingest_fn()
 
     composite_result = _restore_composite_groups(conn, composite_snapshot)
+    room_type_result = _restore_room_type_constraints(conn, room_type_snapshot)
     proposed_result = _restore_proposed_changes(conn, proposed_change_snapshot)
     conn.commit()
 
     log_event(
         conn, "reingest_state_carried_forward",
         f"Re-ingest carried forward {composite_result['restored']} composite review(s) "
-        f"({composite_result['dropped']} dropped) and {proposed_result['restored']} proposed "
-        f"change(s) ({proposed_result['dropped']} dropped).",
-        detail={"composite_groups": composite_result, "proposed_changes": proposed_result},
+        f"({composite_result['dropped']} dropped), {room_type_result['restored']} room-type "
+        f"constraint(s) ({room_type_result['dropped']} dropped), and {proposed_result['restored']} "
+        f"proposed change(s) ({proposed_result['dropped']} dropped).",
+        detail={"composite_groups": composite_result, "room_type_constraints": room_type_result,
+                "proposed_changes": proposed_result},
     )
     conn.commit()
 
-    return {"composite_groups": composite_result, "proposed_changes": proposed_result}
+    return {"composite_groups": composite_result, "room_type_constraints": room_type_result,
+            "proposed_changes": proposed_result}

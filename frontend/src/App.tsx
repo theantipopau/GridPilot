@@ -7,6 +7,7 @@ import {
   fetchFindings,
   fetchIngestStatus,
   fetchReference,
+  fetchRoomConstraintCandidates,
 } from "./api";
 import ImportPanel from "./components/ImportPanel";
 import LoadingState from "./components/LoadingState";
@@ -16,6 +17,7 @@ import {
   IconCalendar,
   IconClipboardList,
   IconColumns,
+  IconDoor,
   IconGitBranch,
   IconHome,
   IconLayers,
@@ -27,6 +29,7 @@ import CompositeReviewPage from "./pages/CompositeReviewPage";
 import ChangeSetsPage, { type ProposeFixContext } from "./pages/ChangeSetsPage";
 import DashboardPage from "./pages/DashboardPage";
 import FindingsPage from "./pages/FindingsPage";
+import RoomConstraintsPage from "./pages/RoomConstraintsPage";
 import TeachersPage from "./pages/TeachersPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "./types";
@@ -38,6 +41,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
   { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
   { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
+  { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
   { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
   { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
 ];
@@ -59,6 +63,7 @@ function buildProposeFixContext(finding: Finding): ProposeFixContext {
 interface BadgeCounts {
   findings: number;
   composites: number;
+  roomConstraints: number;
   changes: number;
 }
 
@@ -70,7 +75,7 @@ export default function App() {
   const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({ findings: 0, composites: 0, changes: 0 });
+  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({ findings: 0, composites: 0, roomConstraints: 0, changes: 0 });
   const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
 
   const openChangeSetInTab = (id: number) => {
@@ -98,9 +103,12 @@ export default function App() {
     Promise.all([
       fetchFindings().then((r) => r.total),
       fetchCompositeCandidates("PENDING").then((r) => r.candidates.length),
+      fetchRoomConstraintCandidates("PENDING").then((r) => r.candidates.length),
       fetchChangeSets().then((r) => r.change_sets.filter((c) => c.approval_status === "DRAFT").length),
     ])
-      .then(([findings, composites, changes]) => setBadgeCounts({ findings, composites, changes }))
+      .then(([findings, composites, roomConstraints, changes]) =>
+        setBadgeCounts({ findings, composites, roomConstraints, changes }),
+      )
       .catch(() => {
         // Badge counts are a convenience, not core data - a transient failure here shouldn't block the tab.
       });
@@ -149,6 +157,7 @@ export default function App() {
   const badgeFor = (id: Tab): number => {
     if (id === "findings") return badgeCounts.findings;
     if (id === "composites") return badgeCounts.composites;
+    if (id === "room-constraints") return badgeCounts.roomConstraints;
     if (id === "changes") return badgeCounts.changes;
     return 0;
   };
@@ -193,6 +202,7 @@ export default function App() {
           />
         )}
         {tab === "composites" && <CompositeReviewPage />}
+        {tab === "room-constraints" && <RoomConstraintsPage />}
         {tab === "changes" && (
           <ChangeSetsPage
             reference={reference}

@@ -11,6 +11,7 @@ import type {
   IngestUploadResult,
   ReferenceData,
   ReviewStatus,
+  RoomTypeConstraintCandidate,
   StaffRole,
   SuggestionsResponse,
   TeacherSummary,
@@ -100,6 +101,22 @@ export function reviewCompositeCandidate(
   note?: string,
 ): Promise<{ id: number; review_status: ReviewStatus }> {
   return postJson(`${BASE}/composites/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
+}
+
+export function fetchRoomConstraintCandidates(
+  reviewStatus?: ReviewStatus,
+): Promise<{ candidates: RoomTypeConstraintCandidate[] }> {
+  const qs = reviewStatus ? `?review_status=${reviewStatus}` : "";
+  return getJson(`${BASE}/room-constraints/candidates${qs}`);
+}
+
+export function reviewRoomConstraintCandidate(
+  id: number,
+  decision: "approve" | "reject",
+  reviewedBy: string,
+  note?: string,
+): Promise<{ id: number; review_status: ReviewStatus }> {
+  return postJson(`${BASE}/room-constraints/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
 }
 
 export function findTimetableEntries(filters: {
