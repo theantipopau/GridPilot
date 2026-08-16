@@ -1,14 +1,43 @@
 """Central path configuration. Source exports are read-only; everything the
-app writes goes under DATA_DIR / OUTPUT_DIR, never back into SOURCE_DIR."""
+app writes goes under DATA_DIR / OUTPUT_DIR, never back into SOURCE_DIR.
+
+Two different notions of "root" once this can run as a frozen PyInstaller
+exe (docs/packaging.md Phase 2), previously conflated into one PROJECT_ROOT:
+
+- Where *bundled, read-only* resources live at runtime (the built frontend
+  under frontend/dist) - the source checkout in dev, PyInstaller's
+  extraction/install directory when frozen.
+- Where this app's *own writable working data* defaults to - the source
+  checkout in dev (matching every doc/test that assumes ./data), but a
+  real per-user writable location when frozen, since a frozen bundle's own
+  directory may not be writable (a onefile build extracts to a temp
+  directory that's wiped between runs; a onedir build may be installed
+  somewhere the user has no write access, e.g. Program Files)."""
 
 import os
+import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-SOURCE_DIR = Path(os.environ.get("TT_SOURCE_DIR", PROJECT_ROOT / "Timetabler Export"))
-DATA_DIR = Path(os.environ.get("TT_DATA_DIR", PROJECT_ROOT / "data"))
-OUTPUT_DIR = Path(os.environ.get("TT_OUTPUT_DIR", PROJECT_ROOT / "output"))
+def _bundle_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    return Path(__file__).resolve().parents[2]
+
+
+def _default_writable_root() -> Path:
+    if getattr(sys, "frozen", False):
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+        return Path(base) / "GridPilot"
+    return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = _bundle_root()
+_WRITABLE_ROOT = _default_writable_root()
+
+SOURCE_DIR = Path(os.environ.get("TT_SOURCE_DIR", _WRITABLE_ROOT / "Timetabler Export"))
+DATA_DIR = Path(os.environ.get("TT_DATA_DIR", _WRITABLE_ROOT / "data"))
+OUTPUT_DIR = Path(os.environ.get("TT_OUTPUT_DIR", _WRITABLE_ROOT / "output"))
 
 DB_PATH = DATA_DIR / "sophia_tt.sqlite3"
 

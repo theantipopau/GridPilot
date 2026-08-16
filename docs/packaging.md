@@ -13,10 +13,11 @@ the frontend code assumes it's served from a different origin than the
 API. That means **no second UI framework is needed** to make this feel
 like a real program. The path is three phases, each independently
 useful, each a real increment: **(1) collapse two dev servers into one
-process** (built today), **(2) freeze that one process into a `.exe`**
-with a native window instead of a bare browser tab (not built), **(3) an
-actual installer** with the data-directory and update questions a real
-rollout needs answered (not built, not urgent).
+process** (done), **(2) freeze that one process into a `.exe`** with a
+native window instead of a bare browser tab (done — a real 185MB
+`GridPilot.exe` built and smoke-tested against real requests), **(3) an
+actual installer** with the signing and update questions a real rollout
+needs answered (not built, not urgent).
 
 ## 1. Why not Electron or Tauri
 
@@ -63,30 +64,66 @@ working app in a browser at `localhost:8000`, freezing that process is
 the entire remaining problem — there's no frontend build step left to
 solve inside the `.exe`.**
 
-### Phase 2 — Freeze it, give it a window · **not built, the actual "exe" step**
+### Phase 2 — Freeze it, give it a window · **done 2026-08-16**
 1. **PyInstaller** (MIT-compatible, mature, handles FastAPI/uvicorn/
    SQLite fine — this is a well-trodden combination) freezes the
-   single process from Phase 1 into a standalone `.exe`. `ortools`
-   (the CP-SAT solver, `docs/mass-repair.md`) is a native-extension
-   dependency and is the one part of this worth a dedicated build-and-
-   launch smoke test before trusting the frozen result — pure-Python
-   dependencies essentially never surprise PyInstaller, native ones
-   occasionally do.
-2. Replace "open your browser to localhost:8000" with a **pywebview**
-   window that points at the same local server the frozen process
-   starts — a few lines, not a rewrite.
-3. **The real blocker to solve at this phase, not before:**
-   `app/config.py`'s `PROJECT_ROOT = Path(__file__).resolve().parents[2]`
-   resolves relative to the *source layout*. Inside a PyInstaller bundle
-   this either points at a temporary extraction directory (onefile mode)
-   or the install directory (onedir mode) — neither is guaranteed
-   writable, and `DATA_DIR`/`OUTPUT_DIR` **must** be writable (the whole
-   app's working database lives there). The fix is well-understood
-   (check `sys.frozen`, fall back to a real writable per-user location
-   such as `%LOCALAPPDATA%\GridPilot` on Windows instead of a path next
-   to the executable) but is deliberately **not implemented yet** — doing
-   it before Phase 2 actually exists would be solving a problem that
-   doesn't exist until there's a frozen exe to test it against.
+   single process from Phase 1 into a standalone `.exe`.
+   `backend/gridpilot.spec` is the checked-in build spec — run
+   `pyinstaller gridpilot.spec` from `backend/` (after `npm run build`
+   in `frontend/` and `pip install -e ".[packaging]"`). `ortools` (the
+   CP-SAT solver, `docs/mass-repair.md`) is a native-extension
+   dependency and was, as expected, the one package that needed
+   explicit help — `collect_all("ortools")` in the spec, rather than
+   trusting PyInstaller's static import scanning to find its `.pyd`
+   binaries and data files on its own. The two warnings the build
+   actually produced (`pycparser.lextab`/`yacctab` not found) are a
+   known-benign artifact of `pythonnet`'s `cffi` dependency — those
+   tables regenerate themselves at runtime and aren't part of this
+   app's own code path.
+2. `backend/app/launcher.py` is the frozen entry point: starts the same
+   FastAPI app from Phase 1 in a background thread, polls
+   `/api/health` until it actually answers (so the window never shows a
+   connection-refused blank page on a slow first start), then opens a
+   **pywebview** window onto it instead of asking the user to find a
+   browser tab.
+3. **The data-directory fix landed as part of this phase, not before
+   it** — `app/config.py` now splits "where do read-only bundled
+   resources live" (`frontend/dist`, via `sys._MEIPASS` when frozen)
+   from "where does this app's own writable data default to" (a real
+   per-user location, `%LOCALAPPDATA%\GridPilot`, when frozen — the
+   dev-mode default of a path next to the source checkout is
+   unchanged). Verified, not assumed: running the actual frozen `.exe`
+   created `%LOCALAPPDATA%\GridPilot\{data,output}` on its own,
+   completely separate from the dev database, and answered
+   `/api/dashboard` with "no data imported yet" — exactly correct for a
+   fresh, isolated data directory rather than an error or (worse)
+   silently reading the dev database.
+
+**What the smoke test actually verified:** the built `.exe`
+(`backend/dist/GridPilot/GridPilot.exe`, **185MB** — in the "expect a
+large exe" range this doc originally flagged, since it bundles a full
+Python runtime plus `ortools`) was launched as a real standalone
+process — no `PROJECT_ROOT`-relative dev checkout nearby, no `python`
+on a dev PATH assumption — and correctly served `/` (the built frontend,
+200 OK), `/api/health`, and `/api/dashboard` (the "not imported yet"
+response, from its own fresh data directory) before being stopped and
+its empty test data directory removed.
+
+**Not yet verified:** what the actual `pywebview` **window** looks like
+on screen — this environment can drive a browser pane but has no way to
+screenshot a native desktop window, so `_wait_until_ready()` passing and
+the backend answering real requests is as far as automated verification
+goes here. The window is the same well-known WebView2-backed pywebview
+window the library ships for every other app that uses it, but genuinely
+seeing it open is worth doing once, by hand, before calling this done
+end to end.
+
+**Still deliberately `console=True`** in `gridpilot.spec` (a console
+window opens alongside the app window) — kept on through this first
+build so a startup failure would be visible instead of a window that
+silently never appears. Flip to `console=False` once someone has
+confirmed the window itself opens correctly by hand; that's a one-line
+change, not a rebuild-everything one.
 
 ### Phase 3 — An actual installer · **not built, not urgent**
 Code signing (an unsigned `.exe` will trigger a SmartScreen warning on
@@ -113,16 +150,22 @@ produces something to actually install.
   packaged `.exe` is for the school's day-to-day use once a phase of
   work is stable, not a replacement for `npm run dev` while building.
 
-## 4. Open questions for the school (only relevant once Phase 2 starts)
+## 4. Open questions for the school (relevant now that Phase 2 is built)
 
-1. **Where should the per-user data directory live?** `%LOCALAPPDATA%`
-   is the Windows-conventional answer, but if the school wants the
-   working database on a shared/synced drive (the same OneDrive
-   consideration `docs/privacy-threat-model.md` already flags as a real
-   caveat for this environment) that changes the default.
+1. **Is `%LOCALAPPDATA%\GridPilot` actually the right data directory?**
+   It's implemented and verified (§Phase 2) as the default, but if the
+   school wants the working database on a shared/synced drive instead
+   (the same OneDrive consideration `docs/privacy-threat-model.md`
+   already flags as a real caveat for this environment) that's a
+   one-line change to `_default_writable_root()` in `app/config.py`, not
+   a redesign — worth deciding before this goes to more than one machine,
+   not after.
 2. **Does IT need a signed executable**, or is an internal/unsigned
    build with a documented SmartScreen click-through acceptable for a
-   single-school internal tool?
+   single-school internal tool? An unsigned 185MB unfamiliar `.exe` is
+   exactly the shape of thing SmartScreen and some antivirus products
+   flag on first run — expected, not a bug, but worth IT knowing in
+   advance rather than discovering during a demo.
 3. **Single machine, or several?** If more than one person needs to run
    this, "an exe on a shared drive" and "an installed program per
    machine" have different data-directory and concurrent-access

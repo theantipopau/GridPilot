@@ -159,6 +159,22 @@ to-day development still uses the two-server setup above (`npm run dev`
 gives hot reload; a built `frontend/dist` is ignored by git and this
 single-process path does nothing until you build it).
 
+### Building the desktop .exe
+
+```bash
+cd frontend && npm run build
+cd ../backend && pip install -e ".[packaging]"
+pyinstaller gridpilot.spec
+./dist/GridPilot/GridPilot.exe
+```
+
+Produces a standalone `GridPilot.exe` (~185MB — it bundles a full Python
+runtime plus the CP-SAT solver) that opens its own window, with its own
+data directory under `%LOCALAPPDATA%\GridPilot` — separate from
+whatever database `TT_DATA_DIR` points at in dev. See
+[`docs/packaging.md`](docs/packaging.md) for what's actually been
+verified about this build versus what's still open.
+
 ### Overriding data locations
 
 - `TT_SOURCE_DIR` — defaults to `./Timetabler Export`

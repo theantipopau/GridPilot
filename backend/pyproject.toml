@@ -16,6 +16,12 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# Only needed to build the desktop .exe (docs/packaging.md Phase 2) -
+# never imported by the normal web app, dev or otherwise.
+packaging = [
+    "pywebview>=5.0",
+    "pyinstaller>=6.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
