@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from app.config import PROJECT_ROOT
 from app.api import (
     audit,
     blocking,
@@ -45,3 +47,12 @@ app.include_router(solver.router, prefix="/api")
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+# Serves the built frontend (npm run build -> frontend/dist) from the same
+# process/port as the API - see docs/packaging.md Phase 1. Mounted last, and
+# only if the directory exists, so normal dev (two servers, no dist/ built)
+# is completely unaffected.
+_FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")

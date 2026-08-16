@@ -141,6 +141,24 @@ python -m app.retention --confirm
 python -m pytest tests/ -v
 ```
 
+### Running as one process (no separate frontend server)
+
+`frontend/src/api.ts` talks to the backend over relative `/api` paths, so
+a *built* frontend can be served directly by the backend on one port —
+no Vite dev server needed:
+
+```bash
+cd frontend && npm run build   # writes frontend/dist
+cd ../backend && python -m uvicorn app.api.main:app --port 8000
+```
+
+Open **http://localhost:8000** — the whole app, API and UI together, one
+process. This is the first step toward a double-clickable `.exe`; see
+[`docs/packaging.md`](docs/packaging.md) for the rest of that plan. Day-
+to-day development still uses the two-server setup above (`npm run dev`
+gives hot reload; a built `frontend/dist` is ignored by git and this
+single-process path does nothing until you build it).
+
 ### Overriding data locations
 
 - `TT_SOURCE_DIR` — defaults to `./Timetabler Export`
@@ -184,6 +202,7 @@ Timetabling Solutions export actually contains.
 | [`docs/room-constraints.md`](docs/room-constraints.md) | Phase G1 of the solver plan: inferring which room_type each class needs from real usage (78% is a clean signal), human review before it's trusted, and the `room_feature_mismatch` rule it unblocks |
 | [`docs/mass-repair.md`](docs/mass-repair.md) | **The mass-fix button**: a real CP-SAT solver (not an LLM) that finds a minimal set of moves to resolve chosen findings, lands them in a normal change set for review. Two real-data lessons that changed the design: student clashes had to become a native constraint, and an infeasible joint batch needs to shrink and retry, not give up entirely |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
+| [`docs/packaging.md`](docs/packaging.md) | Turning this into a double-clickable program: why not Electron/Tauri, the three phases (one process → a frozen `.exe` with a native window → an installer), and what's actually built so far |
 | [`docs/design/`](docs/design/) | UI mockup and logo source assets |
 
 ## Privacy and data handling
