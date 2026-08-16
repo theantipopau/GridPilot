@@ -137,6 +137,12 @@ function WeekTable({
   );
 }
 
+// Same rationale as MasterTimetableGrid's MAX_VISIBLE_PER_CELL - a single
+// packed slot shouldn't force every other cell in its row to grow with it.
+// Rarer here (single-entity view is already filtered to one teacher/room/
+// roll class) but still possible for a busy composite/registration slot.
+const MAX_VISIBLE_PER_CELL = 4;
+
 function Cell({
   view,
   entries,
@@ -154,9 +160,12 @@ function Cell({
     return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-slate-300">Free</div>;
   }
 
+  const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);
+  const overflow = entries.slice(MAX_VISIBLE_PER_CELL);
+
   return (
     <div className={entries.length > 1 ? "flex flex-col gap-1" : undefined}>
-      {entries.map((e, i) => {
+      {visible.map((e, i) => {
         const editable = e.entry_type === "LESSON" && !!onSelectLesson;
         const pending = pendingEntryIds?.has(e.entry_id);
         const highlight = findingHighlights ? highlightForEntry(findingHighlights, e) : null;
@@ -191,6 +200,14 @@ function Cell({
           </div>
         );
       })}
+      {overflow.length > 0 && (
+        <div
+          className="truncate rounded bg-slate-200 px-1.5 py-1 text-center text-[11px] font-semibold text-slate-500"
+          title={`Also here: ${overflow.map((e) => e.class_code ?? entryTypeLabel(e.entry_type)).join(", ")}`}
+        >
+          +{overflow.length} more
+        </div>
+      )}
     </div>
   );
 }

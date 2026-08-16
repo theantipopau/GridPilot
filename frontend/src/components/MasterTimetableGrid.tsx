@@ -134,10 +134,12 @@ function MasterWeekTable({
             <tr>
               <th className="sticky left-0 z-20 border-b border-r border-slate-300 bg-slate-50 p-1"></th>
               {weekDays.map((d) =>
-                periods.map((p) => (
+                periods.map((p, pIdx) => (
                   <th
                     key={`${d.code}-${p.period_no}`}
-                    className="border-b border-l border-slate-200 bg-slate-50 p-1 text-center font-normal text-slate-400"
+                    className={`border-b bg-slate-50 p-1 text-center font-normal text-slate-400 ${
+                      pIdx === 0 ? "border-l-2 border-l-slate-300" : "border-l border-l-slate-200"
+                    }`}
                     title={p.name}
                   >
                     {p.name.length > 4 ? p.period_no : p.name}
@@ -156,7 +158,7 @@ function MasterWeekTable({
                   {row.label}
                 </td>
                 {weekDays.map((d) =>
-                  periods.map((p) => {
+                  periods.map((p, pIdx) => {
                     const key = `${row.code}|${d.code}|${p.period_no}`;
                     const cellEntries = entriesByRowKey.get(key) ?? [];
                     return (
@@ -164,6 +166,7 @@ function MasterWeekTable({
                         key={`${d.code}-${p.period_no}`}
                         axis={axis}
                         entries={cellEntries}
+                        firstOfDay={pIdx === 0}
                         pendingEntryIds={pendingEntryIds}
                         findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
@@ -180,27 +183,45 @@ function MasterWeekTable({
   );
 }
 
+// A shared physical space (a hall, an "Assisi Centre"-style multi-purpose
+// room) can host a dozen+ parallel classes in one slot. Rendering all of
+// them stacked would balloon that one cell's height - and every other
+// cell in the same table row, since a <tr> takes the height of its
+// tallest <td> - dragging the whole row's height along with it (measured
+// on real data: one such cell alone forced a 350px row, next to ~40px
+// rows either side). Capping what renders inline and summarising the
+// rest keeps every row a predictable height regardless of how packed any
+// single cell in it is.
+const MAX_VISIBLE_PER_CELL = 4;
+
 function MasterCell({
   axis,
   entries,
+  firstOfDay,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
 }: {
   axis: ViewType;
   entries: TimetableEntry[];
+  firstOfDay: boolean;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
+  const borderClass = firstOfDay ? "border-l-2 border-l-slate-200" : "border-l border-l-slate-100";
+
   if (entries.length === 0) {
-    return <td className="border-b border-l border-slate-100 p-1 text-center text-slate-300">·</td>;
+    return <td className={`border-b p-1 text-center text-slate-300 ${borderClass}`}>·</td>;
   }
 
+  const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);
+  const overflow = entries.slice(MAX_VISIBLE_PER_CELL);
+
   return (
-    <td className="border-b border-l border-slate-100 p-[3px] align-top">
+    <td className={`border-b p-[3px] align-top ${borderClass}`}>
       <div className="flex flex-col gap-[3px]">
-        {entries.map((e, i) => {
+        {visible.map((e, i) => {
           const primary = cellPrimary(e);
           const secondary = cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
@@ -220,7 +241,7 @@ function MasterCell({
           const content = (
             <>
               <div className="truncate font-medium">{primary}</div>
-              {secondary && <div className="truncate text-[10px] opacity-70">{secondary}</div>}
+              {secondary && <div className="truncate text-[11px] opacity-75">{secondary}</div>}
             </>
           );
           const title =
@@ -235,6 +256,14 @@ function MasterCell({
             </div>
           );
         })}
+        {overflow.length > 0 && (
+          <div
+            className="truncate rounded-sm bg-slate-200 py-0.5 pl-1.5 pr-1 text-left text-[10px] font-semibold text-slate-500"
+            title={`Also here: ${overflow.map((e) => cellPrimary(e)).join(", ")}`}
+          >
+            +{overflow.length} more
+          </div>
+        )}
       </div>
     </td>
   );
