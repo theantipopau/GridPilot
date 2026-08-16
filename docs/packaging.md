@@ -109,6 +109,28 @@ on a dev PATH assumption — and correctly served `/` (the built frontend,
 response, from its own fresh data directory) before being stopped and
 its empty test data directory removed.
 
+**What real use immediately caught that the smoke test didn't:** the
+first build's smoke test only checked `/api/health` and `/api/dashboard`
+against an *empty* fresh install — it never actually imported a `.tfx`.
+The very first real attempt to do that (uploading the school's real
+export through the onboarding screen) failed with a 500. Cause:
+`app/db/schema.sql` — a plain `.sql` file next to `app/db/connection.py`,
+loaded at runtime via `Path(__file__).parent / "schema.sql"` — was never
+declared in `gridpilot.spec`'s `datas`. PyInstaller's `Analysis` step
+bundles `.py` source automatically; a non-Python data file sitting in the
+same directory does not come along for free and needs its own explicit
+`datas` entry (`("app/db/schema.sql", "app/db")`, added and rebuilt).
+Confirmed fixed against the real data end to end this time, not just an
+empty install: uploaded the actual `.tfx` + one `.sfx` to the rebuilt
+exe, got a real 200 with 2,181 timetable entries and 352 findings back,
+confirmed the dashboard reflected it, then stopped the exe and wiped the
+`%LOCALAPPDATA%\GridPilot` directory the test had just filled with real
+student/staff data. **The lesson, consistent with every other real-data
+surprise in this project's history (`docs/mass-repair.md`'s two
+sections, `docs/room-constraints.md`'s detection pass): a smoke test
+against an empty database is not the same as a smoke test against the
+actual thing the app exists to do.**
+
 **Not yet verified:** what the actual `pywebview` **window** looks like
 on screen — this environment can drive a browser pane but has no way to
 screenshot a native desktop window, so `_wait_until_ready()` passing and

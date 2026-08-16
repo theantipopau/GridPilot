@@ -5,7 +5,17 @@
 # and the "packaging" extra installed (pip install -e ".[packaging]").
 from PyInstaller.utils.hooks import collect_all
 
-datas = [("../frontend/dist", "frontend/dist")]
+datas = [
+    ("../frontend/dist", "frontend/dist"),
+    # A plain .sql file next to app/db/connection.py, loaded at runtime via
+    # Path(__file__).parent / "schema.sql" - PyInstaller's Analysis only
+    # auto-bundles .py source into the archive, so a non-Python data file
+    # sitting in the source tree needs its own explicit datas entry or it
+    # silently isn't there at all when frozen (this was missing from the
+    # first build and broke every fresh-database path, including the
+    # browser upload flow, with a 500).
+    ("app/db/schema.sql", "app/db"),
+]
 binaries = []
 hiddenimports = [
     "uvicorn.logging",
