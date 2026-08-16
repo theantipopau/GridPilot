@@ -9,9 +9,10 @@ import {
   fetchReference,
   fetchRoomConstraintCandidates,
 } from "./api";
+import CommandPalette from "./components/CommandPalette";
 import ImportPanel from "./components/ImportPanel";
 import LoadingState from "./components/LoadingState";
-import Sidebar, { type SidebarItem, type Tab } from "./components/Sidebar";
+import Sidebar, { type SidebarGroup, type Tab } from "./components/Sidebar";
 import {
   IconAlertTriangle,
   IconCalendar,
@@ -32,18 +33,31 @@ import FindingsPage from "./pages/FindingsPage";
 import RoomConstraintsPage from "./pages/RoomConstraintsPage";
 import TeachersPage from "./pages/TeachersPage";
 import TimetablePage from "./pages/TimetablePage";
-import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate } from "./types";
+import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
 
-const SIDEBAR_ITEMS: SidebarItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> },
-  { id: "timetable", label: "Timetable", icon: (c) => <IconCalendar className={c} /> },
-  { id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> },
-  { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
-  { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
-  { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
-  { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
-  { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
-  { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
+// Grouped per docs/full-timetabler-plan.md §7.1 - the flat list stops
+// scaling around 10 items, and this mirrors the school's own mental model
+// (structure vs people vs places vs the grid itself vs quality control).
+const SIDEBAR_GROUPS: SidebarGroup[] = [
+  { title: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> }] },
+  { title: "Structure", items: [{ id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> }] },
+  { title: "People", items: [{ id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> }] },
+  { title: "Timetable", items: [{ id: "timetable", label: "Master grid", icon: (c) => <IconCalendar className={c} /> }] },
+  {
+    title: "Quality",
+    items: [
+      { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
+      { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
+      { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
+    ],
+  },
+  {
+    title: "Changes",
+    items: [
+      { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
+      { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
+    ],
+  },
 ];
 
 function buildProposeFixContext(finding: Finding): ProposeFixContext {
@@ -77,11 +91,24 @@ export default function App() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({ findings: 0, composites: 0, roomConstraints: 0, changes: 0 });
   const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [jumpTarget, setJumpTarget] = useState<{ view: ViewType; code: string } | null>(null);
 
   const openChangeSetInTab = (id: number) => {
     setOpenChangeSetId(id);
     setTab("changes");
   };
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowSearch((s) => !s);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Sequenced, not parallel: fetching reference data before we know an
   // import has ever happened would 503 against a schema-less database
@@ -165,13 +192,25 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar
-        items={SIDEBAR_ITEMS}
+        groups={SIDEBAR_GROUPS}
         activeTab={tab}
         onTabChange={setTab}
         badgeFor={badgeFor}
         ingestStatus={ingestStatus}
         onImportClick={() => setShowImportModal(true)}
+        onSearchClick={() => setShowSearch(true)}
       />
+      {showSearch && (
+        <CommandPalette
+          reference={reference}
+          onClose={() => setShowSearch(false)}
+          onNavigateTab={(t) => setTab(t)}
+          onJumpToEntity={(view, code) => {
+            setJumpTarget({ view, code });
+            setTab("timetable");
+          }}
+        />
+      )}
       <main className="min-w-0 flex-1 overflow-y-auto">
         {showImportModal && (
           <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
@@ -188,6 +227,8 @@ export default function App() {
             gridChangeSetId={gridChangeSetId}
             onGridChangeSetCreated={setGridChangeSetId}
             onOpenChangeSet={openChangeSetInTab}
+            jumpTarget={jumpTarget}
+            onJumpConsumed={() => setJumpTarget(null)}
           />
         )}
         {tab === "blocking" && <BlockingPage />}

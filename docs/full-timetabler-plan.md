@@ -530,39 +530,62 @@ genuinely strong position to build a solver from.
 
 ## 7. UI/UX
 
-### 7.1 Information architecture
+### 7.1 Information architecture · **done 2026-08-16**
 
-Current sidebar: Dashboard · Timetable · Teachers · Findings · Composite
-Review · Change Sets · Audit.
+Was a flat sidebar: Dashboard · Timetable · Blocking · Teachers ·
+Findings · Composite Review · Room Constraints · Change Sets · Audit.
 
-Target, grouped (the flat list stops scaling around 10 items):
+Now grouped, matching what's actually built rather than the full target
+list (no separate Curriculum/Classes/Students/Rooms/Export pages exist
+yet, so those don't get their own group until they do):
 
 ```
 OVERVIEW     Dashboard
-STRUCTURE    Curriculum · Blocking · Classes
-PEOPLE       Teachers · Students
-PLACES       Rooms
-TIMETABLE    Master grid · Scenarios
-QUALITY      Findings · Composite Review · Constraints
-CHANGES      Change Sets · Audit · Export
+STRUCTURE    Blocking
+PEOPLE       Teachers
+TIMETABLE    Master grid
+QUALITY      Findings · Composite Review · Room Constraints
+CHANGES      Change Sets · Audit
 ```
+
+`frontend/src/components/Sidebar.tsx` takes `groups` instead of a flat
+`items` array; `App.tsx` owns the grouping. Re-splitting is cheap once
+Curriculum/Students/Rooms pages exist (Phase D).
 
 ### 7.2 The five interactions that beat TTS
 
 1. **Live constraint feedback, not run-then-check.** Dragging a lesson
    should shade every legal target slot *before* the drop. We already
    compute this (`suggestions.py` searches the full legal space) — it's
-   currently behind a button instead of under the cursor.
-2. **A better Clash Matrix.** TTS's headline diagnostic is a matrix. Ours
-   should be the master grid with a severity heat overlay, filterable by
-   rule — same information, spatially situated instead of in a separate
-   report.
-3. **Explain-on-hover.** The AI advisor is behind a click on a list item.
-   It should be reachable from any cell in the grid.
-4. **Branch and compare.** Two scenarios side by side, diff highlighted.
-   TTS has save files; we can have real comparison.
-5. **Search everything.** One box: teacher code, room, class, student —
-   jump straight to their grid.
+   currently behind a button instead of under the cursor. **Not built** —
+   needs a new per-entry (not per-finding) legal-candidate endpoint; see
+   §12.6.
+2. **A better Clash Matrix.** ✅ **Done** (2026-08-13, before this
+   update) — the master grid with a finding-backed severity ring,
+   filterable implicitly by what's open. See `docs/master-timetable.md`.
+3. **Explain-on-hover.** The AI advisor is still behind a click on a list
+   item in Findings, not reachable from a grid cell directly. **Not
+   built.**
+4. **Branch and compare.** ✅ **Half done, 2026-08-16** — the Timetable
+   page's master grid has a **Viewing** selector: any DRAFT change set
+   (however it was created — hand-edited, a suggestion, or a solver
+   repair run) can be selected and the whole grid renders "through" it,
+   pending moves ringed exactly like the live editing flow already did.
+   This is Phase E's core mechanism (`docs/full-timetabler-plan.md` §6
+   Phase E) exposed as a first-class control instead of something only
+   reachable by clicking into an existing edit session. **Still missing:
+   side-by-side** — two scenarios rendered next to each other with a
+   diff highlight. Today you can view them one at a time, not both at
+   once.
+5. **Search everything.** ✅ **Done, 2026-08-16** — `Ctrl+K` (or the
+   sidebar's Search button) opens a command palette
+   (`frontend/src/components/CommandPalette.tsx`) that matches teacher
+   code/name, room code/name, or roll class code, and jumps straight to
+   that entity's single-entity timetable view; also matches page names
+   for keyboard-only navigation. Client-side only — matches against
+   `ReferenceData` already loaded, no new endpoint. Does not yet search
+   class/subject codes (e.g. `10RE3`) or students, since those aren't in
+   `ReferenceData` — see §12.6 if this needs extending.
 
 ### 7.3 🔒 Identity governance — a line to hold
 
@@ -697,6 +720,149 @@ for consistent rooms, teachers, improve loads"*, it fixes a real bug
 affecting 40% of staff, it surfaces the blocking pattern you asked to
 see — and it does all of that without writing a single byte back to the
 school's data.
+
+---
+
+## 12. What else could be inferred, and how — *added 2026-08-16*
+
+Room type (`docs/room-constraints.md`) proved a pattern worth repeating:
+**a lot of what looks like "missing data" is actually already sitting in
+the resolved timetable, just not yet aggregated and asked back to a
+human to confirm.** The same detect → human-review → use shape that
+unblocked `room_feature_mismatch` applies to several more FET-taxonomy
+constraints (§2). Ranked by the same real-data-first discipline this
+project has used throughout — cheapest to verify, most likely to be a
+clean signal, first:
+
+### 12.1 Doubles/triples per subject — the other deferred half of Phase G1
+`Successive2Periods`/`Successive3Periods` in `school_setting` say the
+*school* wants doubles/triples somewhere; they don't say which subjects.
+But real usage might: for each `(subject, roll_class)` pair, compute what
+fraction of its weekly lessons already occur as two-in-a-row (same
+teacher, same room, consecutive periods, same day). A subject sitting at
+90%+ "always doubled" is exactly as strong a signal as room type's 78%
+was. **Before building:** run the query against the real database first
+(same as `docs/room-constraints.md` §"Detection" did) — if the real
+distribution is muddy rather than bimodal, this is a `❌ dropped, no
+threshold` outcome like `missing_double` already was in §6 Phase B, not a
+build.
+
+### 12.2 Preferred/required room by *faculty*, not just by class
+`class_room_type_constraint` is per-class. FET also models room
+preference at the activity-tag/subject level, and separately, "home room
+for a teacher." Real data question worth running: do individual teachers
+(not classes) have a room they're in for the overwhelming majority of
+their lessons, independent of what they're teaching? If yes, a
+`teacher_home_room` candidate table, same review flow.
+
+### 12.3 Max room changes per day / consecutive-lesson room stability
+FET's `same room for consecutive activities` + `max room changes per
+week`. This is a *metric*, not a binary constraint — closer to
+`docs/rules.md`'s `class_room_instability` in shape (a count, not a
+pass/fail), but computed per **teacher-day** instead of per-class-cycle:
+"how many times does this teacher change rooms between back-to-back
+periods on a real day." Directly serves the "improve teacher experience"
+half of the original ask that Phase B's `teacher_load_imbalance` had to
+drop for lack of a threshold — a *count* doesn't need a threshold to be
+useful as a sortable dashboard column, only a rule needs one to fire.
+
+### 12.4 Elective/preference data as a structural signal, not just a solver constraint
+6,756 `.sfx` student preference rows are ingested and, today, used for
+exactly one thing: `student_double_booking` in the repair solver's native
+constraints (`docs/mass-repair.md`). They're never read for *analysis*.
+Two candidate findings, both computable with zero new data:
+- **Under-subscribed elective offering** — a class offering with far
+  fewer enrolled students than its blocking line's other parallel
+  options, which is normally invisible until roll day.
+- **Blocking-line pressure** — per `docs/full-timetabler-plan.md` §4.2's
+  MRCG data, which lines have the tightest student-choice competition for
+  a scarce elective, informing where blocking *structure* (not the
+  resolved timetable) is the actual constraint. This is the "separate,
+  arguably larger prize" `docs/solver.md`'s Phase H write-up already
+  flagged as blocking-optimisation territory — reading it for analysis
+  first, before ever trying to optimise it, is the same "read before you
+  write" discipline as everything else in this document.
+
+### 12.5 Teacher unavailability — still the one that can't be inferred
+Repeating §10.6 deliberately, because every item above *can* be
+bootstrapped from the resolved timetable and this one cannot. A teacher
+who is free every Tuesday period 3 might be 0.6 FTE, might have a
+standing external commitment, or might just be free that day this cycle.
+Guessing wrongly here doesn't just mislabel a finding — it's the one
+inference in this whole list that could actively cause the solver
+(`docs/mass-repair.md`) to schedule someone during time they are
+genuinely unavailable. **This is the one item on this list that must stay
+a school-answered question, never a detect-and-review candidate.**
+
+### 12.6 Infrastructure two of the above (and the still-open live-drag item) share
+Both §12.1's per-subject doubles detection and §7.2 item 1's live-drag
+legal-slot shading need something that doesn't exist yet: a
+**per-entry** (not per-finding) legal-candidate endpoint — today
+`suggestions.py`'s candidate search is only reachable via a finding id.
+Factoring the existing candidate-search logic to also accept an arbitrary
+`entry_id` (no finding required) is a small, self-contained refactor that
+unblocks both features at once — worth doing together rather than twice.
+
+---
+
+## 13. Instructions for continuing this build — *added 2026-08-16*
+
+Written so a future session (human or AI) picking this project back up
+doesn't have to re-derive the working style from the git log. These are
+the disciplines that have held for every phase in this document so far,
+not aspirational ones:
+
+1. **Real data before real code.** Every rule, every inference, every
+   solver redesign in this project's history was checked against the
+   school's actual `.tfx`/`.sfx` export *before* being built, and several
+   were **not built** as a direct result (`teacher_load_imbalance`,
+   `missing_double`, `teacher_day_spread` — all in §6 Phase B). A clean
+   idea that turns out to be noisy real data is a successful investigation,
+   not a wasted one — write down why it was dropped (see `docs/rules.md`'s
+   "Not yet implemented" section for the template) rather than silently
+   discarding it.
+2. **Detect, never assert.** Anything inferred from the current timetable
+   (room type, and every §12 candidate above) is a *candidate* a human
+   reviews, never a fact the system asserts on its own. This is the same
+   reason `CURRENT_TIMETABLE_INFERRED` in `docs/staff-capability-model.md`
+   must always resolve to `REVIEW_REQUIRED`, never automatic eligibility.
+3. **A dropped threshold-dependent rule is a valid outcome, not a gap to
+   fill by guessing.** If a rule needs a numeric threshold the school
+   hasn't confirmed (`teacher_gap_fragmentation`, spread rules), leave it
+   documented and unbuilt rather than picking a number. The open-questions
+   list (§10) is not clutter — it is the actual blocker list.
+4. **The write ceiling is real. Respect it.** `tfx_writer.py` patches
+   existing `Timetable[]` entries; it does not create GUIDs or new
+   entities. Every write-adjacent feature (mass repair included) works
+   entirely inside that ceiling. Don't reach past Tier 0/1 (§5) without
+   first re-reading §5(b)'s GUID-minting open question — it is still
+   unanswered.
+5. **Every new capability gets a doc, in the same repo, written for the
+   next reader, not as a changelog.** Explain *why*, including the
+   real-data evidence and any dead ends (`docs/mass-repair.md`'s two
+   "what real data taught us" sections are the reference example of this
+   — they document a wrong first attempt and why it was wrong, not just
+   the final design).
+6. **Live-verify against the real database, then clean up.** Every
+   feature in this project that touches the change-set/findings pipeline
+   has been exercised end-to-end against the school's real live data
+   through the actual running app (not just pytest) before being called
+   done — and any state that verification created (an approved/rejected
+   test change set, a flipped review status) gets reverted afterward so
+   the school's real data is left exactly as found.
+7. **Recommend, then build — don't silently start the big ones.** Small,
+   clearly-scoped increments (a new rule, a UI polish pass) can just be
+   built. Anything that opens a new category of risk or effort
+   (student-identity fields, teacher reassignment, a new net-new schema
+   like `docs/staff-capability-model.md`) gets presented as a choice
+   first, with the trade-off stated in one or two sentences — consistent
+   with every phase boundary in this document being an explicit decision
+   point, not an inevitability.
+
+**If picking a next task with no other steer:** §12.6's per-entry
+candidate endpoint is the highest-leverage next unit of work — it's small,
+self-contained, and unblocks two separately-requested features (live-drag
+feedback, §7.2 item 1; per-subject doubles detection, §12.1) at once.
 
 ---
 

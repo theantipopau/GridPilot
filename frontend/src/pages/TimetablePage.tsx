@@ -4,6 +4,7 @@ import {
   createChangeSet,
   fetchAllTimetableEntries,
   fetchChangeSet,
+  fetchChangeSets,
   fetchFindings,
   fetchTimetable,
   validateChangeSet,
@@ -16,13 +17,24 @@ import MasterTimetableGrid from "../components/MasterTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
 import { buildFindingHighlightIndex } from "../lib/findingHighlights";
 import { applyPendingMoves, buildPendingMoveMap } from "../lib/pendingMoves";
-import type { ChangeEndpoint, Finding, ReferenceData, TimetableEntry, TimetableResponse, ValidationResult, ViewType } from "../types";
+import type {
+  ChangeEndpoint,
+  ChangeSetSummary,
+  Finding,
+  ReferenceData,
+  TimetableEntry,
+  TimetableResponse,
+  ValidationResult,
+  ViewType,
+} from "../types";
 
 interface Props {
   reference: ReferenceData;
   gridChangeSetId: number | null;
-  onGridChangeSetCreated: (id: number) => void;
+  onGridChangeSetCreated: (id: number | null) => void;
   onOpenChangeSet: (id: number) => void;
+  jumpTarget: { view: ViewType; code: string } | null;
+  onJumpConsumed: () => void;
 }
 
 type Mode = "master" | "single";
@@ -33,7 +45,14 @@ const AXIS_OPTIONS: { value: ViewType; label: string }[] = [
   { value: "roll_class", label: "Roll class" },
 ];
 
-export default function TimetablePage({ reference, gridChangeSetId, onGridChangeSetCreated, onOpenChangeSet }: Props) {
+export default function TimetablePage({
+  reference,
+  gridChangeSetId,
+  onGridChangeSetCreated,
+  onOpenChangeSet,
+  jumpTarget,
+  onJumpConsumed,
+}: Props) {
   const [mode, setMode] = useState<Mode>("master");
   const [axis, setAxis] = useState<ViewType>("room");
   const [masterEntries, setMasterEntries] = useState<TimetableEntry[] | null>(null);
@@ -48,6 +67,33 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
   const [pendingMoves, setPendingMoves] = useState<Map<number, ChangeEndpoint>>(new Map());
   const [changeSetName, setChangeSetName] = useState<string | null>(null);
   const [openFindings, setOpenFindings] = useState<Finding[]>([]);
+  const [draftChangeSets, setDraftChangeSets] = useState<ChangeSetSummary[]>([]);
+
+  useEffect(() => {
+    if (!jumpTarget) return;
+    setMode("single");
+    setView(jumpTarget.view);
+    setCode(jumpTarget.code);
+    onJumpConsumed();
+  }, [jumpTarget, onJumpConsumed]);
+
+  // A "scenario" is just an existing draft change set viewed through the
+  // grid instead of edited via a finding/repair flow - refresh the list
+  // whenever master mode is opened so a scenario made elsewhere shows up.
+  useEffect(() => {
+    if (mode !== "master") return;
+    fetchChangeSets()
+      .then((r) => setDraftChangeSets(r.change_sets.filter((c) => c.approval_status === "DRAFT")))
+      .catch(() => setDraftChangeSets([]));
+  }, [mode]);
+
+  useEffect(() => {
+    if (gridChangeSetId == null) {
+      setPendingEntryIds(new Set());
+      setPendingMoves(new Map());
+      setChangeSetName(null);
+    }
+  }, [gridChangeSetId]);
 
   useEffect(() => {
     fetchFindings("OPEN")
@@ -129,19 +175,40 @@ export default function TimetablePage({ reference, gridChangeSetId, onGridChange
         </div>
 
         {mode === "master" && (
-          <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Rows by</label>
-            <select
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
-              value={axis}
-              onChange={(e) => setAxis(e.target.value as ViewType)}
-            >
-              {AXIS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-end gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Rows by</label>
+              <select
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+                value={axis}
+                onChange={(e) => setAxis(e.target.value as ViewType)}
+              >
+                {AXIS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Viewing</label>
+              <select
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  gridChangeSetId != null
+                    ? "border-violet-300 bg-violet-50 text-violet-800"
+                    : "border-slate-300 text-slate-900"
+                }`}
+                value={gridChangeSetId ?? ""}
+                onChange={(e) => onGridChangeSetCreated(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Live timetable</option>
+                {draftChangeSets.map((cs) => (
+                  <option key={cs.id} value={cs.id}>
+                    Scenario: {cs.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
       </div>

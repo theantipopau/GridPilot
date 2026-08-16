@@ -134,6 +134,24 @@ export function IconWand({ className = base }: IconProps) {
   );
 }
 
+export function IconSearch({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <circle cx="8.75" cy="8.75" r="5.25" />
+      <path d="m17 17-4.35-4.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function IconBeaker({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M8 2.5h4M8.5 2.5v5.2L4.3 15a1.5 1.5 0 0 0 1.3 2.5h8.8a1.5 1.5 0 0 0 1.3-2.5L11.5 7.7V2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.2 12.5h7.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSpinner({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={`${className} animate-spin`}>
