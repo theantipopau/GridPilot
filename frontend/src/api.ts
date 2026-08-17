@@ -265,6 +265,7 @@ export function addLoadRule(
     max_contact_hours_per_week: number;
     prep_correction_pct?: number;
     max_cover_periods_per_year?: number;
+    contact_entry_types?: string[];
     clause_reference?: string;
   },
 ): Promise<{ id: number }> {

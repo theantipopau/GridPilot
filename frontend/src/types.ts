@@ -391,6 +391,7 @@ export interface AgreementLoadRule {
   max_contact_hours_per_week: number;
   prep_correction_pct: number | null;
   max_cover_periods_per_year: number | null;
+  contact_entry_types: string[] | null;
   clause_reference: string | null;
 }
 

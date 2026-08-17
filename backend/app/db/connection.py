@@ -30,6 +30,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE finding ADD COLUMN {column} TEXT")
 
+    # agreement_load_rule predates contact_entry_types (docs/roadmap-v2.md
+    # 0.2) by one commit - PRAGMA table_info on a table that doesn't exist
+    # yet returns no rows rather than erroring, so this is safe to run
+    # unconditionally even before industrial_agreement's first ingest.
+    load_rule_columns = {row["name"] for row in conn.execute("PRAGMA table_info(agreement_load_rule)")}
+    if load_rule_columns and "contact_entry_types" not in load_rule_columns:
+        conn.execute("ALTER TABLE agreement_load_rule ADD COLUMN contact_entry_types TEXT")
+
 
 def fresh_database(db_path: Path | None = None) -> sqlite3.Connection:
     """Delete any existing working database and recreate it from schema.sql.

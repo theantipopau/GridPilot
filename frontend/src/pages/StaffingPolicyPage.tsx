@@ -41,7 +41,17 @@ function AgreementCard({
   const [sector, setSector] = useState<AgreementSector>("SECONDARY");
   const [ordinaryHours, setOrdinaryHours] = useState("");
   const [maxContactHours, setMaxContactHours] = useState("");
+  const [contactTypes, setContactTypes] = useState<Set<string>>(new Set(["LESSON"]));
   const [clauseRef, setClauseRef] = useState("");
+
+  const toggleContactType = (t: string) => {
+    setContactTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  };
 
   const [tier, setTier] = useState<LeadershipTier>("MIDDLE");
   const [enrolMin, setEnrolMin] = useState("");
@@ -75,10 +85,12 @@ function AgreementCard({
         sector,
         ordinary_hours_per_week: Number(ordinaryHours),
         max_contact_hours_per_week: Number(maxContactHours),
+        contact_entry_types: [...contactTypes],
         clause_reference: clauseRef.trim() || undefined,
       });
       setOrdinaryHours("");
       setMaxContactHours("");
+      setContactTypes(new Set(["LESSON"]));
       setClauseRef("");
       setShowLoadForm(false);
       onChanged();
@@ -174,6 +186,10 @@ function AgreementCard({
                 <span className="font-medium text-slate-800">{r.sector}</span> — max{" "}
                 {r.max_contact_hours_per_week}h contact of {r.ordinary_hours_per_week}h ordinary/week
                 {r.clause_reference && <span className="text-slate-400"> ({r.clause_reference})</span>}
+                <div className="mt-0.5 text-slate-400">
+                  Counts as contact:{" "}
+                  {r.contact_entry_types ? r.contact_entry_types.join(", ") : "LESSON only (app default)"}
+                </div>
               </li>
             ))}
           </ul>
@@ -201,6 +217,19 @@ function AgreementCard({
                 type="number"
                 className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
+              <div>
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  Counts as contact time
+                </p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {["LESSON", "REGISTRATION", "ASSEMBLY", "GENERAL_PURPOSE"].map((t) => (
+                    <label key={t} className="flex items-center gap-1 text-xs text-slate-600">
+                      <input type="checkbox" checked={contactTypes.has(t)} onChange={() => toggleContactType(t)} />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <input
                 value={clauseRef}
                 onChange={(e) => setClauseRef(e.target.value)}

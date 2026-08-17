@@ -599,6 +599,13 @@ CREATE TABLE IF NOT EXISTS agreement_load_rule (
     max_contact_hours_per_week REAL NOT NULL,
     prep_correction_pct REAL,
     max_cover_periods_per_year INTEGER,
+    -- Comma-separated timetable_entry.entry_type values that count as EA
+    -- "contact time" (docs/roadmap-v2.md 0.2 - EA S3.3.3 includes
+    -- programmed teaching, sporting, pastoral care and assembly, wider
+    -- than the LESSON-only default app/analysis/load_rules.py has always
+    -- used). NULL = not specified, in which case teacher_over_contracted_
+    -- load keeps its LESSON-only default - see app/analysis/contact_time.py.
+    contact_entry_types TEXT,
     clause_reference TEXT,
     UNIQUE (agreement_id, sector)
 );

@@ -15,6 +15,7 @@ import sqlite3
 from collections import defaultdict
 
 from app.analysis.clash_rules import lesson_entries
+from app.analysis.contact_time import resolve_contact_entry_types
 from app.analysis.models import EntityRef, Finding, SlotRef
 
 # Rooms below this utilisation are flagged as `info`. This is a default
@@ -83,13 +84,20 @@ def teacher_over_contracted_load(conn: sqlite3.Connection) -> list[Finding]:
     if not teachers:
         return []
 
+    # LESSON-only unless a confirmed agreement states otherwise - see
+    # app/analysis/contact_time.py and docs/roadmap-v2.md 0.2. Changing
+    # what counts as "contact time" changes what every load number in
+    # this app means, so it never happens silently.
+    contact_entry_types = resolve_contact_entry_types(conn)
+    placeholders = ",".join("?" for _ in contact_entry_types)
     entries = conn.execute(
-        """
+        f"""
         SELECT te.teacher_id, te.period_id, p.load_minutes
         FROM timetable_entry te
         JOIN period p ON p.id = te.period_id
-        WHERE te.entry_type = 'LESSON' AND te.teacher_id IS NOT NULL
-        """
+        WHERE te.entry_type IN ({placeholders}) AND te.teacher_id IS NOT NULL
+        """,
+        contact_entry_types,
     ).fetchall()
 
     # Distinct (teacher, period) - a composite lesson must not be counted
@@ -115,6 +123,7 @@ def teacher_over_contracted_load(conn: sqlite3.Connection) -> list[Finding]:
                 "scheduled_minutes": scheduled_minutes,
                 "contracted_load_minutes": t["contracted_load_minutes"],
                 "over_by_minutes": scheduled_minutes - t["contracted_load_minutes"],
+                "contact_entry_types": list(contact_entry_types),
             },
         ))
     return findings

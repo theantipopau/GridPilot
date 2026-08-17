@@ -22,12 +22,16 @@ def _agreement_detail(conn: sqlite3.Connection, agreement_id: int) -> dict:
         "FROM industrial_agreement WHERE id = ?",
         (agreement_id,),
     ).fetchone()
-    load_rules = conn.execute(
+    load_rule_rows = conn.execute(
         "SELECT id, sector, ordinary_hours_per_week, max_contact_hours_per_week, prep_correction_pct, "
-        "max_cover_periods_per_year, clause_reference FROM agreement_load_rule WHERE agreement_id = ? "
-        "ORDER BY sector",
+        "max_cover_periods_per_year, contact_entry_types, clause_reference FROM agreement_load_rule "
+        "WHERE agreement_id = ? ORDER BY sector",
         (agreement_id,),
     ).fetchall()
+    load_rules = [
+        {**dict(r), "contact_entry_types": r["contact_entry_types"].split(",") if r["contact_entry_types"] else None}
+        for r in load_rule_rows
+    ]
     bands = conn.execute(
         "SELECT id, tier, enrolment_min, enrolment_max, units, hours_per_year, release_fte, clause_reference "
         "FROM agreement_leadership_band WHERE agreement_id = ? ORDER BY tier, enrolment_min",
@@ -94,12 +98,20 @@ def confirm_agreement(
     return {"id": agreement_id, "confirmed_by": request.confirmed_by, "confirmed_at": now}
 
 
+ENTRY_TYPES = {"LESSON", "BREAK", "ASSEMBLY", "GENERAL_PURPOSE", "DETENTION", "REGISTRATION", "OTHER"}
+
+
 class LoadRuleRequest(BaseModel):
     sector: str
     ordinary_hours_per_week: float
     max_contact_hours_per_week: float
     prep_correction_pct: float | None = None
     max_cover_periods_per_year: int | None = None
+    # Which timetable_entry.entry_type values count as EA contact time -
+    # see app/analysis/contact_time.py. Left unset (None), the app keeps
+    # its existing LESSON-only default; this is how a school opts into
+    # the wider EA S3.3.3 definition, deliberately never automatic.
+    contact_entry_types: list[str] | None = None
     clause_reference: str | None = None
 
 
@@ -109,13 +121,19 @@ def add_load_rule(
 ) -> dict:
     if request.sector not in ("SECONDARY", "PRIMARY"):
         raise HTTPException(status_code=400, detail="sector must be SECONDARY or PRIMARY")
+    if request.contact_entry_types is not None:
+        unknown = set(request.contact_entry_types) - ENTRY_TYPES
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown entry type(s): {sorted(unknown)}")
+    contact_entry_types = ",".join(request.contact_entry_types) if request.contact_entry_types else None
     try:
         cur = conn.execute(
             "INSERT INTO agreement_load_rule (agreement_id, sector, ordinary_hours_per_week, "
-            "max_contact_hours_per_week, prep_correction_pct, max_cover_periods_per_year, clause_reference) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "max_contact_hours_per_week, prep_correction_pct, max_cover_periods_per_year, "
+            "contact_entry_types, clause_reference) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (agreement_id, request.sector, request.ordinary_hours_per_week, request.max_contact_hours_per_week,
-             request.prep_correction_pct, request.max_cover_periods_per_year, request.clause_reference),
+             request.prep_correction_pct, request.max_cover_periods_per_year, contact_entry_types,
+             request.clause_reference),
         )
     except sqlite3.IntegrityError as e:
         raise HTTPException(status_code=400, detail=f"A {request.sector} load rule already exists for this agreement") from e

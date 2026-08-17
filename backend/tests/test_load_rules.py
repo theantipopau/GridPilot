@@ -101,7 +101,44 @@ def test_teacher_with_no_contracted_load_is_skipped():
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
     add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
 
+
+def test_registration_is_excluded_from_load_by_default():
+    """docs/roadmap-v2.md 0.2: the LESSON-only default is unchanged unless
+    a school has confirmed a wider EA definition - see test_contact_time.py."""
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 60 WHERE id = 1")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    conn.execute(
+        "INSERT INTO timetable_entry (source_ref, day_id, period_id, roll_class_id, teacher_id, entry_type) "
+        "VALUES ('test-reg', 2, 3, 1, 1, 'REGISTRATION')"
+    )
+    conn.commit()
+
     assert teacher_over_contracted_load(conn) == []
+
+
+def test_confirmed_agreement_widens_load_to_include_registration():
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 60 WHERE id = 1")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    conn.execute(
+        "INSERT INTO timetable_entry (source_ref, day_id, period_id, roll_class_id, teacher_id, entry_type) "
+        "VALUES ('test-reg', 2, 3, 1, 1, 'REGISTRATION')"
+    )
+    conn.execute(
+        "INSERT INTO industrial_agreement (id, name, effective_from, confirmed_by, confirmed_at, created_at) "
+        "VALUES (1, 'Test EA', '2023-01-01', 'hr-rep', '2026-01-01T00:00:00', 'test')"
+    )
+    conn.execute(
+        "INSERT INTO agreement_load_rule (agreement_id, sector, ordinary_hours_per_week, "
+        "max_contact_hours_per_week, contact_entry_types) VALUES (1, 'SECONDARY', 30.5, 21.5, 'LESSON,REGISTRATION')"
+    )
+    conn.commit()
+
+    findings = teacher_over_contracted_load(conn)
+    assert len(findings) == 1
+    assert findings[0].evidence["scheduled_minutes"] == 120  # 60 (lesson) + 60 (registration period's load_minutes)
+    assert findings[0].evidence["contact_entry_types"] == ["LESSON", "REGISTRATION"]
 
 
 def test_room_underutilization_flags_unused_room():

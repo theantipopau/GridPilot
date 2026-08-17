@@ -77,12 +77,20 @@ but two more teachers land in the 90–100% band and the highest
 non-outlier moves to 20 minutes under the industrial maximum. That's a
 materially different risk picture from the same underlying timetable.
 
-**Recommendation:** change the rule to count EA-defined contact types,
-but *not* silently — this changes what "load" means in every number the
-app reports, so it needs one confirmation from the school first (does
-Sophia treat its `REGISTRATION` slot as the EA's "administrative/pastoral
-care class"? Almost certainly yes, but it's their call, not ours).
-Yard duty stays **excluded** and that's now confirmed rather than assumed
+**Recommendation, built 2026-08-17:** `app/analysis/contact_time.py`
+resolves which `entry_type`s count as contact from the confirmed
+agreement's load rule (`agreement_load_rule.contact_entry_types`, set
+via the Staffing Policy page's checkboxes) — LESSON-only unless and
+until one is confirmed, so nothing changes silently. Re-verified against
+the live database with the mechanism itself, not a manual query:
+temporarily confirmed a test agreement with the EA's wider definition,
+confirmed `teacher_over_contracted_load` produced the same single
+finding (MCGK13) with `scheduled_minutes` correctly rising 3000 → 3100,
+matching this table exactly, then deleted the test agreement. Still
+needs the school's actual confirmation (does Sophia treat its
+`REGISTRATION` slot as the EA's "administrative/pastoral care class"?
+Almost certainly yes, but it's their call) before it means anything for
+real. Yard duty stays **excluded** and that's now confirmed rather than assumed
 — see §0.3.
 
 ### 0.3 🟢 Yard duty and meetings are settled: they are *not* contact time
@@ -663,7 +671,7 @@ back, this is the section to work on meanwhile.
 | 4 | ✅ Rooms page (§3.3) | — | M |
 | 5 | ✅ Blocking analytics, read-only (§3.4.1) — partial, see §3.4 | — | M |
 | 6 | ✅ EA tables + release reconciliation (§2.1, §2.3) — mechanism built, **no real figures seeded** | school still needs to enter/confirm its own figures via the new Staffing Policy page | M |
-| 7 | Contact-time definition change (§0.2) | **school confirms `REGISTRATION` = pastoral care** | S |
+| 7 | ✅ Contact-time definition change (§0.2) — mechanism built, off by default | school still needs to confirm `REGISTRATION` = pastoral care before switching it on | S |
 | 8 | `teacher_capability` + bootstrap-for-review (§2.2) | nothing to start; HR feed to finish | L |
 | 9 | `class_teacher_inconsistency` suggestions | #8 | M |
 | 10 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
