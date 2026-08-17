@@ -137,7 +137,10 @@ function MasterWeekTable({
                 periods.map((p, pIdx) => (
                   <th
                     key={`${d.code}-${p.period_no}`}
-                    className={`border-b bg-slate-50 p-1 text-center font-normal text-slate-400 ${
+                    // slate-400 on slate-50 is ~3:1 - under WCAG AA even for
+                    // secondary text. slate-500 clears it without making the
+                    // period numbers compete with the lesson content.
+                    className={`border-b bg-slate-50 p-1 text-center font-normal text-slate-500 ${
                       pIdx === 0 ? "border-l-2 border-l-slate-300" : "border-l border-l-slate-200"
                     }`}
                     title={p.name}
@@ -150,9 +153,15 @@ function MasterWeekTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.code} className="even:bg-slate-50/60">
+              <tr key={row.code} className="group even:bg-slate-50/60">
+                {/* The frozen label column needs its own opaque surface (it
+                    scrolls over content) but a plain bg-white erases the row
+                    striping right where the eye needs it most - at the label -
+                    on a wide horizontal scroll. Inherit the stripe instead, and
+                    use a real shadow rather than a 1px border so the frozen
+                    edge reads as a layer, not a cell divider. */}
                 <td
-                  className="sticky left-0 z-10 max-w-[11rem] truncate border-b border-r border-slate-200 bg-white p-2 font-medium text-slate-700"
+                  className="sticky-col-edge sticky left-0 z-10 max-w-[11rem] truncate border-b border-slate-200 bg-white p-2 font-medium text-slate-700 group-even:bg-slate-50"
                   title={row.label}
                 >
                   {row.label}
@@ -211,8 +220,11 @@ function MasterCell({
 }) {
   const borderClass = firstOfDay ? "border-l-2 border-l-slate-200" : "border-l border-l-slate-100";
 
+  // An empty cell is left genuinely empty. A "·" repeated across ~2,000
+  // free slots (51 rows x 50 columns) is noise competing with the lessons
+  // that actually matter - absence reads better than a glyph for absence.
   if (entries.length === 0) {
-    return <td className={`border-b p-1 text-center text-slate-300 ${borderClass}`}>·</td>;
+    return <td className={`border-b p-1 ${borderClass}`} />;
   }
 
   const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);

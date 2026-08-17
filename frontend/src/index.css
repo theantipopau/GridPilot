@@ -1,5 +1,57 @@
 @import "tailwindcss";
 
+/* Design tokens - docs/roadmap-v2.md 4.1.
+ *
+ * Two rules this file exists to enforce:
+ *
+ * 1. Semantic colour communicates STATE (severity, pending, scenario);
+ *    lib/facultyColors.ts communicates IDENTITY (which faculty). They are
+ *    separate scales and must never borrow from each other - the faculty
+ *    palette is validated colour-blind-safe and is load-bearing.
+ * 2. No webfonts. GridPilot is local-first and runs offline (and inside a
+ *    frozen .exe, see docs/packaging.md) - a Google Fonts link would be a
+ *    network dependency and a silent fallback when it fails. System UI
+ *    faces on Windows (Segoe UI Variable) carry real tabular figures,
+ *    which is the only typographic property the grid genuinely needs.
+ */
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Dense-grid secondary line. Was a scattered mix of text-[10px]/[11px]. */
+  --text-grid: 0.6875rem;
+
+  --color-surface: oklch(1 0 0);
+  --color-surface-sunken: oklch(0.985 0.002 250);
+  --color-border-subtle: oklch(0.93 0.004 250);
+  --color-ink-muted: oklch(0.55 0.012 250);
+
+  --color-severity-critical: oklch(0.58 0.2 25);
+  --color-severity-warning: oklch(0.72 0.16 65);
+  --color-severity-info: oklch(0.65 0.1 240);
+  --color-pending: oklch(0.76 0.15 80); /* amber - a lesson with a pending move */
+  --color-scenario: oklch(0.58 0.19 300); /* violet - scenario / solver output */
+}
+
 body {
   margin: 0;
+}
+
+/* Digits that line up in a column. Period times, load minutes, seat counts
+ * and finding counts are all read by scanning DOWN a column, and
+ * proportional figures make that ragged. Applied to the grids and to any
+ * element opting in with .tabular-figures. */
+table,
+.tabular-figures {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The frozen first column of the master grid. A named class rather than a
+ * `shadow-[...]` arbitrary value: the arbitrary form did not generate a
+ * rule here (verified in the browser - computed box-shadow stayed empty),
+ * which silently left the frozen column with no edge at all. A real
+ * shadow, not a border, so the column reads as a layer floating over the
+ * scrolled content rather than as one more cell divider. */
+.sticky-col-edge {
+  box-shadow: 2px 0 4px -2px rgb(15 23 42 / 0.18);
 }
