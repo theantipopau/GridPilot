@@ -28,6 +28,7 @@ const PAGES: { label: string; tab: Tab }[] = [
   { label: "Findings", tab: "findings" },
   { label: "Composite Review", tab: "composites" },
   { label: "Room Constraints", tab: "room-constraints" },
+  { label: "Teacher Capabilities", tab: "teacher-capabilities" },
   { label: "Change Sets", tab: "changes" },
   { label: "Audit", tab: "audit" },
 ];

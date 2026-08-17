@@ -150,7 +150,16 @@ CREATE TABLE IF NOT EXISTS subject (
     id INTEGER PRIMARY KEY,
     source_code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
-    faculty_id INTEGER REFERENCES faculty(id)
+    faculty_id INTEGER REFERENCES faculty(id),
+    -- docs/staff-capability-model.md's identified gap: nothing in the
+    -- source export states a course's year-level range at the subject
+    -- level (it's implicit per class_name/class_group instance). Columns
+    -- reserved for CapabilityService's faculty+year-range precedence step
+    -- (docs/roadmap-v2.md 2.2) - deliberately left unpopulated for now,
+    -- since there's no source data to fill them from yet, not silently
+    -- guessed.
+    minimum_year_level INTEGER,
+    maximum_year_level INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS class_name (
@@ -639,4 +648,47 @@ CREATE TABLE IF NOT EXISTS school_enrolment_declaration (
     entered_by TEXT NOT NULL,
     note TEXT,
     created_at TEXT NOT NULL
+);
+
+-- "Permission to teach" - docs/roadmap-v2.md 2.2, from
+-- docs/staff-capability-model.md's CapabilityService design. This is
+-- deliberately narrower than that doc's full proposal: teaching_
+-- requirement and requirement_teacher_preference (the "requirement lock /
+-- requirement preference" precedence steps, for per-requirement teacher
+-- overrides ahead of a solver run) are NOT built here - they matter for
+-- Mode C construction (docs/solver.md), which is not what this table is
+-- unblocking. What's built is exactly enough to answer "is this teacher
+-- qualified for this subject" today: an exact subject match, a broader
+-- faculty match, or NOT_ELIGIBLE. Bootstrapped from the current
+-- timetable (app/analysis/teacher_capability.py) as REVIEW_REQUIRED
+-- candidates - CURRENT_TIMETABLE_INFERRED must always resolve to
+-- REVIEW_REQUIRED, never automatic eligibility, exactly as
+-- docs/staff-capability-model.md specifies.
+--
+-- Keyed by teacher/subject/faculty *code*, not id, for the same reason
+-- staff_role/teacher_role_assignment above are: teacher, subject, and
+-- faculty are all source-derived tables fully rebuilt (new surrogate
+-- ids) on every re-ingest (app/db/resync.py). A code is the one thing
+-- about each that's stable across terms - this table needs no
+-- resync.py snapshot/restore handling as a result, same as staff_role.
+CREATE TABLE IF NOT EXISTS teacher_capability (
+    id INTEGER PRIMARY KEY,
+    teacher_code TEXT NOT NULL,
+    faculty_code TEXT,
+    subject_code TEXT,
+    minimum_year_level INTEGER,
+    maximum_year_level INTEGER,
+    capability_status TEXT NOT NULL CHECK (capability_status IN ('ELIGIBLE', 'NOT_ELIGIBLE', 'REVIEW_REQUIRED')),
+    default_preference TEXT NOT NULL DEFAULT 'NEUTRAL'
+        CHECK (default_preference IN ('REQUIRED', 'STRONGLY_PREFERRED', 'PREFERRED', 'NEUTRAL', 'FALLBACK', 'AVOID')),
+    source_type TEXT NOT NULL
+        CHECK (source_type IN ('IMPORTED', 'SCHOOL_CONFIRMED', 'STAFF_DECLARED', 'CURRENT_TIMETABLE_INFERRED')),
+    source_reference TEXT,
+    effective_from TEXT NOT NULL,
+    effective_to TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (faculty_code IS NOT NULL OR subject_code IS NOT NULL)
 );

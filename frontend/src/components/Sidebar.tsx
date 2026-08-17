@@ -13,6 +13,7 @@ export type Tab =
   | "findings"
   | "composites"
   | "room-constraints"
+  | "teacher-capabilities"
   | "changes"
   | "audit";
 

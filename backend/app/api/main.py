@@ -16,6 +16,7 @@ from app.api import (
     rooms,
     solver,
     staffing_policy,
+    teacher_capability,
     teachers,
     timetable,
     timetable_entries,
@@ -46,6 +47,7 @@ app.include_router(room_constraints.router, prefix="/api")
 app.include_router(rooms.router, prefix="/api")
 app.include_router(solver.router, prefix="/api")
 app.include_router(staffing_policy.router, prefix="/api")
+app.include_router(teacher_capability.router, prefix="/api")
 
 
 @app.get("/api/health")

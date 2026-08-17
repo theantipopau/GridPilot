@@ -52,3 +52,28 @@ def test_fresh_database_already_has_the_column_via_create_table():
     init_schema(conn)
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(agreement_load_rule)")}
     assert "contact_entry_types" in columns
+
+
+def test_subject_year_level_columns_are_added_to_a_pre_existing_table():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    conn.execute("DROP TABLE subject")
+    conn.execute(
+        "CREATE TABLE subject (id INTEGER PRIMARY KEY, source_code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, "
+        "faculty_id INTEGER REFERENCES faculty(id))"
+    )
+    conn.execute("INSERT INTO subject (source_code, name) VALUES ('SUBA', 'Subject A')")
+    conn.commit()
+    columns_before = {row["name"] for row in conn.execute("PRAGMA table_info(subject)")}
+    assert "minimum_year_level" not in columns_before
+
+    init_schema(conn)
+
+    columns_after = {row["name"] for row in conn.execute("PRAGMA table_info(subject)")}
+    assert {"minimum_year_level", "maximum_year_level"} <= columns_after
+    # The existing row survived the migration (ALTER TABLE ADD COLUMN, not a rebuild).
+    assert conn.execute("SELECT source_code FROM subject").fetchone()["source_code"] == "SUBA"
+
+    init_schema(conn)  # idempotent

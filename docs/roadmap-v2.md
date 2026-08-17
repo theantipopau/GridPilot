@@ -303,24 +303,50 @@ verbatim — `teaching_requirement`, `teacher_capability`,
 validates. Build those *as written there*; nothing in this pass changes
 their shape.
 
-### 2.2 "Permission to teach" — `teacher_capability`
+### 2.2 "Permission to teach" — `teacher_capability` — **built 2026-08-17**
 
-The addendum model in `docs/staff-capability-model.md` §"CapabilityService"
-stands as written: an ordered precedence resolution (requirement lock →
-requirement preference → exact subject+year → faculty+year-range → no
-match = `NOT_ELIGIBLE`), resolved once in `app/analysis/capability.py`,
-never duplicated as raw SQL.
+Built narrower than the addendum's full six-step precedence, on purpose:
+`app/analysis/capability.py`'s `resolve()` implements exact-subject match
+→ faculty-level match → no match = `NOT_ELIGIBLE`. The "requirement
+lock"/"requirement preference" steps (the first two of the addendum's
+six) need `teaching_requirement`/`requirement_teacher_preference`, which
+are **not built** - those matter for solver Mode C construction
+(per-requirement teacher overrides ahead of a generation run), not for
+"is this teacher qualified for this subject," which is all this phase
+set out to answer. Also **not built**: `subject`'s year-range columns
+are reserved (schema only) but never populated or used in resolution -
+there's no source data to fill them from, so a real year-range
+precedence step would be guessing, not resolving.
 
-Two rules it unlocks, both currently impossible:
+One correctness catch worth recording: the addendum's own SQL sketch
+keyed `teacher_capability` by `teacher_id`/`subject_id`/`faculty_id`
+(integer foreign keys). All three are source-derived tables fully
+rebuilt with new surrogate ids on every re-ingest
+(`docs/reingest-persistence.md`) - exactly the bug
+`teacher_role_assignment` already exists to avoid, by keying on
+`teacher_code` instead. Caught before it shipped; `teacher_capability`
+is keyed by `teacher_code`/`subject_code`/`faculty_code` instead, with a
+test that simulates a teacher-table rebuild and confirms a review
+decision still resolves correctly afterward.
 
-- `teacher_not_qualified_for_class` — a scheduled lesson whose teacher
-  resolves to `NOT_ELIGIBLE` for that subject. Severity `critical`;
-  this is a compliance question, not a preference.
-- `capability_rule_conflict` — two equally-specific active rules
-  disagreeing (one `ELIGIBLE`, one `NOT_ELIGIBLE`). Surfaced for human
-  resolution, never silently resolved by pick-one.
+Two rules the addendum said this would unlock:
 
-**And it unblocks `class_teacher_inconsistency` suggestions** — the
+- `teacher_not_qualified_for_class` (`docs/rules.md`) — **built**. A
+  scheduled lesson whose teacher resolves `NOT_ELIGIBLE` for that
+  subject. `critical` severity - a compliance question, not a
+  preference. Verified against real data: bootstrap-sync created 213
+  real (teacher, subject) candidates and correctly produced zero
+  findings (nothing reviewed yet is not the same as nothing wrong);
+  rejecting one real candidate (a teacher against a subject they're
+  currently scheduled to teach) correctly produced one finding per
+  actual lesson slot (8, for the pairing tested).
+- `capability_rule_conflict` — **deliberately not built**. The bootstrap
+  upserts at most one row per (teacher, subject); there's no authoring
+  UI yet for a second, overlapping dated row. No path exists that could
+  produce a genuine conflict, so there's nothing for this rule to
+  detect yet - building it now would be untested, unreachable code.
+
+**And it unblocks `class_teacher_inconsistency` suggestions (B4)** — the
 boundary hit earlier in this project's life, where the suggestion engine
 correctly refused to guess a replacement teacher. With
 `teacher_capability` populated, "who else could take this class" becomes
@@ -329,15 +355,14 @@ a *search over a known-legal set* rather than a guess, and the
 be relaxed for that rule — with the same "rank by disruption, explain
 why each candidate works" treatment every other suggestion type gets.
 
-**The unresolved input problem stays unresolved.** `docs/staff-capability-model.md`
-§"Open questions" #2 asks where authoritative capability data comes
-from, and nothing in this pass answers it. The `source_type` enum
-already encodes the safe default: `CURRENT_TIMETABLE_INFERRED` must
-always resolve to `REVIEW_REQUIRED`, never automatic eligibility. So
-v1 can bootstrap "who currently teaches what" as *candidates for
-review* — the same detect→confirm pattern that worked for room types —
-and the school confirms or corrects. That is the only honest starting
-point without an HR feed.
+**The unresolved input problem stays unresolved, exactly as flagged.**
+`docs/staff-capability-model.md` §"Open questions" #2 asks where
+authoritative capability data comes from, and nothing in this pass
+answers it - it's still bootstrap-from-timetable, reviewed by a human,
+same as room types. `CURRENT_TIMETABLE_INFERRED` always resolves to
+`REVIEW_REQUIRED`, verified by test and by the real 213-candidate,
+zero-finding sync above - not automatic eligibility, exactly as the
+addendum specifies.
 
 ### 2.3 Release time, auto-calculated — **built 2026-08-17**
 
@@ -672,7 +697,7 @@ back, this is the section to work on meanwhile.
 | 5 | ✅ Blocking analytics, read-only (§3.4.1) — partial, see §3.4 | — | M |
 | 6 | ✅ EA tables + release reconciliation (§2.1, §2.3) — mechanism built, **no real figures seeded** | school still needs to enter/confirm its own figures via the new Staffing Policy page | M |
 | 7 | ✅ Contact-time definition change (§0.2) — mechanism built, off by default | school still needs to confirm `REGISTRATION` = pastoral care before switching it on | S |
-| 8 | `teacher_capability` + bootstrap-for-review (§2.2) | nothing to start; HR feed to finish | L |
+| 8 | ✅ `teacher_capability` + bootstrap-for-review (§2.2) | — for the review queue itself; a real HR feed would still improve on the bootstrap | L |
 | 9 | `class_teacher_inconsistency` suggestions | #8 | M |
 | 10 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
 | 11 | Editable blocking (§3.4.2) | #10 + #5 | L |

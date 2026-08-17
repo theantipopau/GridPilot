@@ -156,6 +156,32 @@ and undo rather than never proposing in the first place. Confirmed
 against the real data: `solve_repair()` resolves both real violations
 by moving each class into an actual pool room (`RIE05`, `RIE07`).
 
+### `teacher_not_qualified_for_class` (critical) - added 2026-08-17
+
+Unblocked by `teacher_capability` (docs/roadmap-v2.md 2.2) - "permission
+to teach," bootstrapped from who currently teaches what in the real
+timetable. Same review discipline as `room_feature_mismatch`: a
+currently-observed (teacher, subject) pairing starts as a
+`REVIEW_REQUIRED` candidate on the **Teacher Capabilities** page, never
+auto-approved - `CURRENT_TIMETABLE_INFERRED` must always resolve to
+`REVIEW_REQUIRED`, per `docs/staff-capability-model.md`. Only a pairing a
+human has explicitly marked `NOT_ELIGIBLE` produces a finding; a fresh,
+unreviewed bootstrap candidate produces none. Verified against the real
+database: syncing created 213 real candidates and 0 findings (correct -
+nothing has been reviewed yet); rejecting one (a teacher against a
+subject they're currently scheduled to teach) correctly produced one
+finding per actual lesson slot.
+
+`app/analysis/capability.py`'s `resolve()` implements the exact-subject
+and faculty-level precedence steps from `docs/staff-capability-model.md`'s
+`CapabilityService` design; the "requirement lock/preference" steps are
+deliberately not built (they need `teaching_requirement`, which matters
+for solver Mode C construction, not this). `capability_rule_conflict`
+(two equally-specific rules disagreeing) is also deliberately not built -
+the bootstrap-sync upserts at most one row per (teacher, subject), and
+there's no authoring UI yet for a second overlapping row, so there's no
+path that could produce a genuine conflict to detect.
+
 ## Composite classes: reviewable, not silently trusted
 
 `backend/app/analysis/composite.py` heuristically detects candidates:

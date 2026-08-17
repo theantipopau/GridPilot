@@ -8,6 +8,7 @@ import {
   fetchIngestStatus,
   fetchReference,
   fetchRoomConstraintCandidates,
+  fetchTeacherCapabilityCandidates,
 } from "./api";
 import CommandPalette from "./components/CommandPalette";
 import ImportPanel from "./components/ImportPanel";
@@ -17,6 +18,7 @@ import {
   IconAlertTriangle,
   IconBuilding,
   IconCalendar,
+  IconCheckCircle,
   IconClipboardList,
   IconColumns,
   IconDoor,
@@ -34,6 +36,7 @@ import FindingsPage from "./pages/FindingsPage";
 import RoomConstraintsPage from "./pages/RoomConstraintsPage";
 import RoomsPage from "./pages/RoomsPage";
 import StaffingPolicyPage from "./pages/StaffingPolicyPage";
+import TeacherCapabilitiesPage from "./pages/TeacherCapabilitiesPage";
 import TeachersPage from "./pages/TeachersPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
@@ -59,6 +62,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
       { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
       { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
+      { id: "teacher-capabilities", label: "Teacher Capabilities", icon: (c) => <IconCheckCircle className={c} /> },
     ],
   },
   {
@@ -88,6 +92,7 @@ interface BadgeCounts {
   findings: number;
   composites: number;
   roomConstraints: number;
+  teacherCapabilities: number;
   changes: number;
 }
 
@@ -99,7 +104,9 @@ export default function App() {
   const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({ findings: 0, composites: 0, roomConstraints: 0, changes: 0 });
+  const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({
+    findings: 0, composites: 0, roomConstraints: 0, teacherCapabilities: 0, changes: 0,
+  });
   const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [jumpTarget, setJumpTarget] = useState<{ view: ViewType; code: string } | null>(null);
@@ -141,10 +148,11 @@ export default function App() {
       fetchFindings().then((r) => r.total),
       fetchCompositeCandidates("PENDING").then((r) => r.candidates.length),
       fetchRoomConstraintCandidates("PENDING").then((r) => r.candidates.length),
+      fetchTeacherCapabilityCandidates("REVIEW_REQUIRED").then((r) => r.candidates.length),
       fetchChangeSets().then((r) => r.change_sets.filter((c) => c.approval_status === "DRAFT").length),
     ])
-      .then(([findings, composites, roomConstraints, changes]) =>
-        setBadgeCounts({ findings, composites, roomConstraints, changes }),
+      .then(([findings, composites, roomConstraints, teacherCapabilities, changes]) =>
+        setBadgeCounts({ findings, composites, roomConstraints, teacherCapabilities, changes }),
       )
       .catch(() => {
         // Badge counts are a convenience, not core data - a transient failure here shouldn't block the tab.
@@ -195,6 +203,7 @@ export default function App() {
     if (id === "findings") return badgeCounts.findings;
     if (id === "composites") return badgeCounts.composites;
     if (id === "room-constraints") return badgeCounts.roomConstraints;
+    if (id === "teacher-capabilities") return badgeCounts.teacherCapabilities;
     if (id === "changes") return badgeCounts.changes;
     return 0;
   };
@@ -265,6 +274,7 @@ export default function App() {
         )}
         {tab === "composites" && <CompositeReviewPage />}
         {tab === "room-constraints" && <RoomConstraintsPage />}
+        {tab === "teacher-capabilities" && <TeacherCapabilitiesPage />}
         {tab === "changes" && (
           <ChangeSetsPage
             reference={reference}

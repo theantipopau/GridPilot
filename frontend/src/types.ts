@@ -452,6 +452,22 @@ export interface ReleaseReconciliation {
   total_allocated_minutes_per_cycle: number;
 }
 
+export type CapabilityStatus = "ELIGIBLE" | "NOT_ELIGIBLE" | "REVIEW_REQUIRED";
+
+export interface TeacherCapabilityCandidate {
+  id: number;
+  teacher_code: string;
+  faculty_code: string | null;
+  subject_code: string | null;
+  capability_status: CapabilityStatus;
+  source_type: string;
+  notes: string | null;
+  effective_from: string;
+  effective_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RoomPoolMembership {
   pool_code: string;
   room_codes: string[];

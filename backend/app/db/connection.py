@@ -38,6 +38,16 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if load_rule_columns and "contact_entry_types" not in load_rule_columns:
         conn.execute("ALTER TABLE agreement_load_rule ADD COLUMN contact_entry_types TEXT")
 
+    # subject predates minimum_year_level/maximum_year_level
+    # (docs/roadmap-v2.md 2.2) - unlike agreement_load_rule, subject is a
+    # source-derived table that already existed in every real database
+    # long before this column was added, so this path is the one that
+    # actually matters in practice, not just a defensive no-op.
+    subject_columns = {row["name"] for row in conn.execute("PRAGMA table_info(subject)")}
+    for column in ("minimum_year_level", "maximum_year_level"):
+        if subject_columns and column not in subject_columns:
+            conn.execute(f"ALTER TABLE subject ADD COLUMN {column} INTEGER")
+
 
 def fresh_database(db_path: Path | None = None) -> sqlite3.Connection:
     """Delete any existing working database and recreate it from schema.sql.

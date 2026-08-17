@@ -2,6 +2,7 @@ import type {
   AgreementSector,
   AuditEvent,
   BlockingLinesResponse,
+  CapabilityStatus,
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
@@ -21,6 +22,7 @@ import type {
   RoomTypeConstraintCandidate,
   StaffRole,
   SuggestionsResponse,
+  TeacherCapabilityCandidate,
   TeacherSummary,
   TimetableEntry,
   TimetableEntryLookup,
@@ -304,6 +306,22 @@ export function declareEnrolment(params: {
 export function fetchReleaseReconciliation(planningYear?: string): Promise<ReleaseReconciliation> {
   const qs = planningYear ? `?planning_year=${encodeURIComponent(planningYear)}` : "";
   return getJson(`${BASE}/staffing-policy/reconciliation${qs}`);
+}
+
+export function fetchTeacherCapabilityCandidates(
+  capabilityStatus?: CapabilityStatus,
+): Promise<{ candidates: TeacherCapabilityCandidate[] }> {
+  const qs = capabilityStatus ? `?capability_status=${capabilityStatus}` : "";
+  return getJson(`${BASE}/teacher-capabilities/candidates${qs}`);
+}
+
+export function reviewTeacherCapabilityCandidate(
+  id: number,
+  decision: "approve" | "reject",
+  reviewedBy: string,
+  note?: string,
+): Promise<{ id: number; capability_status: CapabilityStatus }> {
+  return postJson(`${BASE}/teacher-capabilities/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
 }
 
 export function fetchBlockingLines(): Promise<BlockingLinesResponse> {
