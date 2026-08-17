@@ -29,6 +29,7 @@ function Cell({ line, rollClassCode }: { line: BlockingLine; rollClassCode: stri
             <div className="font-medium text-slate-800">{c.class_name_code ?? "—"}</div>
             <div className="text-slate-500">
               {c.teacher_code ?? "—"} · {c.room_code ?? "no room"}
+              {c.enrolled_count != null && <> · {c.enrolled_count} enrolled</>}
             </div>
           </div>
         ))}
@@ -57,7 +58,17 @@ function GroupTable({ group }: { group: BlockingGroup }) {
                   key={line.id}
                   className="min-w-[9rem] border-b border-l border-slate-200 bg-slate-50 p-2 text-left text-xs font-medium text-slate-500"
                 >
-                  <div className="text-slate-700">Line {line.line}</div>
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    Line {line.line}
+                    {line.open_finding_count > 0 && (
+                      <span
+                        className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                        title={`${line.open_finding_count} open finding${line.open_finding_count === 1 ? "" : "s"} touch a class, teacher, or room on this line`}
+                      >
+                        {line.open_finding_count}
+                      </span>
+                    )}
+                  </div>
                   <div className="font-normal normal-case text-slate-400">
                     {line.name ?? line.code ?? "(option line)"}
                   </div>
@@ -102,7 +113,10 @@ export default function BlockingPage() {
           currently has to infer from a spreadsheet. A line with a name/code (e.g. '10 English') runs the same
           subject for every roll class; a blank one is a genuine option line where different subjects run in parallel.
           Each group's label is TTS's own internal grouping code, not always a year level - one group covers every
-          roll class's Fratelli/Assembly/Break slot, for example."
+          roll class's Fratelli/Assembly/Break slot, for example. A line's badge counts open findings that touch a
+          class, teacher, or room on it - which structures are actually producing the clashes the Findings page
+          reports. Enrolled counts are shown as fact, not a judgement - a course reading 0 isn't necessarily
+          under-subscribed, it may mean its roll class is routed through a different offering entirely."
       />
       <div className="flex flex-col gap-8">
         {data.groups.map((group) => (

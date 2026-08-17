@@ -473,13 +473,33 @@ ingested).
 
 Sequenced:
 
-1. **Read-only analytics first** (no write risk, buildable now):
-   per-line student-preference pressure, under-subscribed offerings, and
-   which lines are structurally responsible for the most open findings.
-   This is §12.4 of `docs/full-timetabler-plan.md` and it needs nothing
-   new.
-2. **Then** drag-a-class-group-between-lines authoring, once (1) has
-   shown the analytics are trustworthy and the GUID question is settled.
+1. **Read-only analytics — done 2026-08-17, partially.** Shipped: an
+   open-finding-count badge per line (any finding touching a class,
+   teacher, or room that line's class groups actually use - "structurally
+   responsible for," not mutually exclusive, since one finding like a
+   teacher double-booking can implicate two lines at once) and each
+   course's real enrolment shown as plain fact. **Deliberately not
+   shipped: "under-subscribed offerings" as a judgement, or the
+   per-line student-preference-pressure metric from §12.4 of
+   `docs/full-timetabler-plan.md`.** Checking the real data before
+   building either turned up something too ambiguous to build on
+   confidently: several "10A A/B/C/D"-shaped lines show exactly 0
+   enrolled for their `10D` roll-class offering (`10RE4`, `10ENG4`,
+   `10MAT4`, `10SCI4`, ...) despite `10D` carrying 228 real enrolment
+   rows elsewhere in the database - meaning those particular students
+   are very likely routed through a different offering entirely (a
+   composite, a support pathway) rather than genuinely having zero
+   uptake. Flagging that as "under-subscribed" would be a false
+   positive dressed as a rule. The `.sfx` preference-pressure join has a
+   real but partial link (only 245 of 303 `sfx_class` codes match a
+   `class_name` code, ~81%) - not necessarily wrong, but not verified
+   clean either. Both stay documented-not-built rather than guessed,
+   same discipline as every dropped rule in §6 Phase B of
+   `docs/full-timetabler-plan.md`. Enrolment is shown as raw data
+   specifically so a human can look at that `10D` pattern and judge it
+   themselves.
+2. **Then** drag-a-class-group-between-lines authoring, once (1)'s
+   remaining pieces are trustworthy and the GUID question is settled.
 
 Doing (2) before (1) would be authoring a structure we can't yet
 evaluate.
@@ -618,7 +638,7 @@ back, this is the section to work on meanwhile.
 | 2 | ✅ Full-height grid, toolbar consolidation (§4.3) | — | S |
 | 3 | ✅ `room_pool` rule + solver constraint (§3.3b) | — | S |
 | 4 | ✅ Rooms page (§3.3) | — | M |
-| 5 | Blocking analytics, read-only (§3.4.1) | nothing | M |
+| 5 | ✅ Blocking analytics, read-only (§3.4.1) — partial, see §3.4 | — | M |
 | 6 | EA tables + release reconciliation (§2.1, §2.3) | **school confirms the agreement figures** | M |
 | 7 | Contact-time definition change (§0.2) | **school confirms `REGISTRATION` = pastoral care** | S |
 | 8 | `teacher_capability` + bootstrap-for-review (§2.2) | nothing to start; HR feed to finish | L |

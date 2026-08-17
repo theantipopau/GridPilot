@@ -68,19 +68,26 @@ def test_blocking_lines_grouped_by_default_code_prefix(client):
                     "line": "B",
                     "code": "ENG",
                     "name": "English",
+                    "open_finding_count": 0,
                     "class_groups": [
                         {
                             "roll_class_code": "7A",
                             "periods_per_cycle": 4,
                             "courses": [
-                                {"class_name_code": "CLASSA", "teacher_code": "T1", "room_code": "R1"}
+                                {
+                                    "class_name_code": "CLASSA", "teacher_code": "T1", "room_code": "R1",
+                                    "enrolled_count": None,
+                                }
                             ],
                         },
                         {
                             "roll_class_code": "7B",
                             "periods_per_cycle": 4,
                             "courses": [
-                                {"class_name_code": "CLASSB", "teacher_code": "T2", "room_code": "R2"}
+                                {
+                                    "class_name_code": "CLASSB", "teacher_code": "T2", "room_code": "R2",
+                                    "enrolled_count": None,
+                                }
                             ],
                         },
                     ],
@@ -88,6 +95,46 @@ def test_blocking_lines_grouped_by_default_code_prefix(client):
             ],
         }
     ]
+
+
+def test_enrolled_count_reflects_real_enrolment(client, db_path):
+    conn = sqlite3.connect(db_path)
+    conn.execute("INSERT INTO enrolment (student_id, class_name_id, source) VALUES (1, 1, 'test')")
+    conn.commit()
+    conn.close()
+
+    resp = client.get("/api/blocking-lines")
+    line = resp.json()["groups"][0]["lines"][0]
+    courses_by_class = {
+        c["class_name_code"]: c for cg in line["class_groups"] for c in cg["courses"]
+    }
+    assert courses_by_class["CLASSA"]["enrolled_count"] == 1
+    assert courses_by_class["CLASSB"]["enrolled_count"] is None
+
+
+def test_open_finding_count_reflects_findings_touching_the_line(client, db_path):
+    from app.analysis.run import _persist
+    from app.analysis.models import EntityRef, Finding
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    # A finding touching T1 (on the line) and a finding touching neither
+    # class/teacher/room on the line - only the first should count.
+    _persist(conn, [
+        Finding(
+            rule_id="teacher_double_booking", severity="critical", title="test",
+            entity_refs=(EntityRef("teacher", "T1"),), slot_refs=(), evidence={},
+        ),
+        Finding(
+            rule_id="teacher_double_booking", severity="critical", title="unrelated",
+            entity_refs=(EntityRef("teacher", "NOBODY"),), slot_refs=(), evidence={},
+        ),
+    ])
+    conn.close()
+
+    resp = client.get("/api/blocking-lines")
+    line = resp.json()["groups"][0]["lines"][0]
+    assert line["open_finding_count"] == 1
 
 
 def test_no_blocking_lines_returns_empty_groups(client, db_path):

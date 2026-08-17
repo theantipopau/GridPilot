@@ -329,6 +329,7 @@ export interface BlockingLineCourse {
   class_name_code: string | null;
   teacher_code: string | null;
   room_code: string | null;
+  enrolled_count: number | null;
 }
 
 export interface BlockingLineClassGroup {
@@ -344,6 +345,7 @@ export interface BlockingLine {
   code: string | null;
   name: string | null;
   class_groups: BlockingLineClassGroup[];
+  open_finding_count: number;
 }
 
 export interface BlockingGroup {
