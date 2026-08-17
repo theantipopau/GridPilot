@@ -227,3 +227,62 @@ def test_never_returns_a_solution_with_a_new_regression():
     after_entries = apply_overrides(before_entries, overrides, code_lookups)
     after_keys = {f.dedupe_key() for f in run_clash_findings(conn, after_entries, composites)}
     assert after_keys - before_keys == set(), "solver produced a regression"
+
+
+def _make_pool(conn, *, pool_id=1, code="RUR 1", room_ids, class_name_ids):
+    conn.execute(
+        "INSERT INTO room_pool (id, source_guid, code, name, type_is_class) VALUES (?, ?, ?, ?, 1)",
+        (pool_id, f"guid-{pool_id}", code, code),
+    )
+    for room_id in room_ids:
+        conn.execute("INSERT INTO room_pool_room (room_pool_id, room_id) VALUES (?, ?)", (pool_id, room_id))
+    for class_name_id in class_name_ids:
+        conn.execute(
+            "INSERT INTO room_pool_class_name (room_pool_id, class_name_id) VALUES (?, ?)",
+            (pool_id, class_name_id),
+        )
+    conn.commit()
+
+
+def test_repairs_a_room_pool_violation_into_a_pool_room():
+    """Same shape as the room-feature-mismatch test: a single movable
+    entry, no competing class - the only question is whether the pool
+    domain filter actually excludes rooms outside the declared pool,
+    including the entry's own current (out-of-pool) room."""
+    from app.analysis.room_pool_rules import run_room_pool_rules
+
+    conn = build_richer_synthetic_db()
+    _make_pool(conn, room_ids=[1], class_name_ids=[1])
+    # CLASSA scheduled in R2, outside its declared pool (R1 only).
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=2)
+    conn.commit()
+    _persist(conn, run_room_pool_rules(conn))
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_pool_violation'").fetchone()["id"]
+    result = solve_repair(conn, [finding_id])
+
+    assert result.status == "SOLVED"
+    assert result.findings_resolved == [finding_id]
+    assert len(result.moves) == 1
+    move = result.moves[0]
+    assert move.after["room_code"] == "R1"  # the only room in the pool
+    assert move.before["day_code"] == move.after["day_code"]
+    assert move.before["period_code"] == move.after["period_code"]  # room-only, cheapest possible fix
+
+
+def test_never_proposes_a_pooled_class_outside_its_pool_even_for_an_unrelated_fix():
+    """Defense in depth: repairing a teacher_double_booking for a class
+    that happens to be in a room_pool must never "solve" it by parking
+    the class in a room outside that pool - the domain filter has to
+    apply regardless of which finding triggered the repair."""
+    conn = build_richer_synthetic_db()
+    _make_pool(conn, room_ids=[1], class_name_ids=[1])  # CLASSA restricted to R1 only
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=1, teacher_id=1, room_id=3)
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'teacher_double_booking'").fetchone()["id"]
+    result = solve_repair(conn, [finding_id])
+
+    classa_moves = [m for m in result.moves if m.class_code == "CLASSA"]
+    assert all(m.after["room_code"] == "R1" for m in classa_moves)

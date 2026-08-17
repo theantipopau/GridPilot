@@ -434,17 +434,19 @@ Two separate things:
 **(a) Authoring rooms** — Tier 2, same provenance/GUID treatment.
 Straightforward once the GUID question is settled.
 
-**(b) Using `room_pool` — already parsed, never used.** The RUR data
-(1 pool, 5 rooms, 28 class-name references) sits in the database from
-Phase A and no rule or solver constraint reads it. That's a free win
-requiring no new ingestion at all:
+**(b) Using `room_pool` — done 2026-08-17.** The RUR data (1 pool, 5
+rooms, 28 class-name references) sat in the database unread since Phase
+A. Now:
 
-- Rule `room_pool_violation` — a class in a room outside its declared
-  pool.
-- Solver constraint — restrict the room domain in
-  `repair_solver._feasible_candidates()` to the pool where one exists,
-  exactly as `class_room_type_constraint` already does. This *shrinks*
-  the search space, so it makes repair faster as well as more correct.
+- Rule `room_pool_violation` (`docs/rules.md`) — a class in a room
+  outside its declared pool. Fires on 2 real lessons (`12PHY1` in
+  `ANG7`, `11BIO1` in `SPO05`).
+- Solver constraint — `repair_solver._feasible_candidates()` restricts a
+  pooled class's candidate rooms to its pool for *every* repair, not
+  just ones targeting a `room_pool_violation` finding directly, exactly
+  as `class_room_type_constraint` already does. Confirmed against real
+  data: `solve_repair()` resolves both real violations by moving each
+  class into an actual pool room.
 
 Also unbuilt and cheap: a **Rooms page**. There is no room-centric view
 anywhere in the app despite `room` being the default axis of the master
@@ -604,9 +606,9 @@ back, this is the section to work on meanwhile.
 
 | # | Item | Blocked on | Size |
 |---|---|---|---|
-| 1 | Tokens + tabular numerals + sticky-column contrast (§4.1, §4.2) | nothing | S |
-| 2 | Full-height grid, toolbar consolidation (§4.3) | nothing | S |
-| 3 | `room_pool` rule + solver constraint (§3.3b) | nothing — data already parsed | S |
+| 1 | ✅ Tokens + tabular numerals + sticky-column contrast (§4.1, §4.2) | — | S |
+| 2 | ✅ Full-height grid, toolbar consolidation (§4.3) | — | S |
+| 3 | ✅ `room_pool` rule + solver constraint (§3.3b) | — | S |
 | 4 | Rooms page (§3.3) | nothing | M |
 | 5 | Blocking analytics, read-only (§3.4.1) | nothing | M |
 | 6 | EA tables + release reconciliation (§2.1, §2.3) | **school confirms the agreement figures** | M |

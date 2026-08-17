@@ -8,7 +8,8 @@ design writeup.
 Two-layer correctness, deliberately:
 
 1. **Native hard constraints** (teacher/room/student double-booking, room
-   capacity, approved room-type) are encoded directly in the CP-SAT
+   capacity, approved room-type, declared room pools - docs/roadmap-v2.md
+   3.3b) are encoded directly in the CP-SAT
    model. Student clashes are modelled the same way as room/teacher ones
    - AtMostOne per (slot, student) - even though suggest_fixes() and
    REPAIR_ELIGIBLE_RULES both correctly refuse to treat
@@ -46,6 +47,7 @@ from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.load_rules import room_capacity_exceeded
 from app.analysis.room_feature_rules import room_feature_mismatch
+from app.analysis.room_pool_rules import room_pool_violation
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 # Rule types with an obvious single lesson to move and an obvious search
@@ -53,7 +55,10 @@ from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_fi
 # suggestions.md's Scope section) and for the same reason:
 # student_double_booking has no single "the" entry, and consistency/load
 # rules aren't slot-scoped at all.
-REPAIR_ELIGIBLE_RULES = {"teacher_double_booking", "room_double_booking", "room_capacity_exceeded", "room_feature_mismatch"}
+REPAIR_ELIGIBLE_RULES = {
+    "teacher_double_booking", "room_double_booking", "room_capacity_exceeded",
+    "room_feature_mismatch", "room_pool_violation",
+}
 
 MAX_MOVABLE_ENTRIES = 60  # keeps CP-SAT model size and CEGAR-loop iteration count bounded - a v1 default, not a hard architectural limit
 DEFAULT_TIME_BUDGET_SECONDS = 20.0
@@ -120,6 +125,28 @@ def _period_id_by_day_and_code(conn: sqlite3.Connection) -> dict[tuple, int]:
     return {(r["day_id"], r["code"]): r["id"] for r in conn.execute("SELECT id, day_id, code FROM period")}
 
 
+def _pool_room_ids_by_class(conn: sqlite3.Connection) -> dict[int, frozenset[int]]:
+    """A class in a room_pool (docs/roadmap-v2.md 3.3b) may only occupy
+    one of that pool's rooms - a school-declared constraint (from the
+    .tfx's RURs), not something needing human review first the way
+    class_room_type_constraint does. Restricting the candidate room
+    domain here, the same way required_room_type already does, is both a
+    correctness fix (the solver could otherwise "resolve" a clash by
+    creating a brand new room_pool_violation) and a speed-up (fewer
+    candidates to search)."""
+    rows = conn.execute(
+        """
+        SELECT rpc.class_name_id, rpr.room_id
+        FROM room_pool_class_name rpc
+        JOIN room_pool_room rpr ON rpr.room_pool_id = rpc.room_pool_id
+        """
+    ).fetchall()
+    by_class: dict[int, set[int]] = defaultdict(set)
+    for r in rows:
+        by_class[r["class_name_id"]].add(r["room_id"])
+    return {cid: frozenset(rids) for cid, rids in by_class.items()}
+
+
 def _students_by_class(conn: sqlite3.Connection) -> dict[int, frozenset[int]]:
     by_class: dict[int, set[int]] = defaultdict(set)
     for r in conn.execute("SELECT class_name_id, student_id FROM enrolment"):
@@ -183,6 +210,7 @@ def _feasible_candidates(
     student_busy: dict[int, set],
     students: frozenset[int],
     required_room_type: str | None,
+    required_room_ids: frozenset[int] | None,
     enrolled: int,
 ) -> tuple[list[tuple[int, int, int | None]], bool]:
     """Every (day_id, period_id, room_id) this entry could occupy without
@@ -218,6 +246,8 @@ def _feasible_candidates(
                 continue
             if required_room_type is not None and room["room_type"] != required_room_type:
                 continue
+            if required_room_ids is not None and room_id not in required_room_ids:
+                continue
             cand = (slot.day_id, slot.period_id, room_id)
             if cand in seen:
                 continue
@@ -240,6 +270,7 @@ def _solve_cp_model(
     student_busy: dict[int, set],
     students_by_class: dict[int, frozenset[int]],
     required_room_type_by_class: dict[int, str],
+    pool_room_ids_by_class: dict[int, frozenset[int]],
     enrolled_by_class: dict[int, int],
     time_budget_seconds: float,
 ) -> dict[int, tuple[int, int, int | None]] | None:
@@ -255,10 +286,12 @@ def _solve_cp_model(
 
     for entry in movable:
         required_type = required_room_type_by_class.get(entry["class_name_id"])
+        required_room_ids = pool_room_ids_by_class.get(entry["class_name_id"])
         enrolled = enrolled_by_class.get(entry["class_name_id"], 0)
         students = students_by_class.get(entry["class_name_id"], frozenset())
         candidates, home_is_valid = _feasible_candidates(
-            entry, all_slots, rooms, teacher_busy, room_busy, student_busy, students, required_type, enrolled
+            entry, all_slots, rooms, teacher_busy, room_busy, student_busy, students,
+            required_type, required_room_ids, enrolled,
         )
         bool_vars = []
         for idx, (day_id, period_id, room_id) in enumerate(candidates):
@@ -377,7 +410,8 @@ def solve_repair(
     before_clash = {f.dedupe_key(): f for f in run_clash_findings(conn, before_entries, composites)}
     before_capacity = {f.dedupe_key(): f for f in room_capacity_exceeded(conn, before_entries)}
     before_feature = {f.dedupe_key(): f for f in room_feature_mismatch(conn, before_entries)}
-    before_all = {**before_clash, **before_capacity, **before_feature}
+    before_pool = {f.dedupe_key(): f for f in room_pool_violation(conn, before_entries)}
+    before_all = {**before_clash, **before_capacity, **before_feature, **before_pool}
 
     code_lookups = load_code_lookups(conn)
     rooms = {r["id"]: dict(r) for r in conn.execute("SELECT id, code, seats, room_type FROM room")}
@@ -390,6 +424,7 @@ def solve_repair(
         for r in conn.execute("SELECT class_name_id, room_type FROM class_room_type_constraint WHERE review_status = 'APPROVED'")
     }
     students_by_class = _students_by_class(conn)
+    pool_room_ids_by_class = _pool_room_ids_by_class(conn)
     all_slots = _all_lesson_slots(conn)
 
     current_movable: dict[int, dict] = {eid: entries_by_id[eid] for eid in movable_ids}
@@ -420,7 +455,8 @@ def solve_repair(
         remaining_budget = max(1.0, time_budget_seconds - (time.monotonic() - started))
         chosen = _solve_cp_model(
             list(current_movable.values()), all_slots, rooms, teacher_busy, room_busy, student_busy,
-            students_by_class, required_room_type_by_class, enrolled_by_class, remaining_budget,
+            students_by_class, required_room_type_by_class, pool_room_ids_by_class, enrolled_by_class,
+            remaining_budget,
         )
         if chosen is None:
             # No feasible joint assignment exists for the whole current
@@ -445,7 +481,8 @@ def solve_repair(
         after_clash = {f.dedupe_key(): f for f in run_clash_findings(conn, after_entries, composites)}
         after_capacity = {f.dedupe_key(): f for f in room_capacity_exceeded(conn, after_entries)}
         after_feature = {f.dedupe_key(): f for f in room_feature_mismatch(conn, after_entries)}
-        after_all = {**after_clash, **after_capacity, **after_feature}
+        after_pool = {f.dedupe_key(): f for f in room_pool_violation(conn, after_entries)}
+        after_all = {**after_clash, **after_capacity, **after_feature, **after_pool}
 
         introduced = [f for k, f in after_all.items() if k not in before_all]
         if not introduced:

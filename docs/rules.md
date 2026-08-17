@@ -131,6 +131,31 @@ constraint produces a `room_feature_mismatch` finding when a lesson lands
 in a room of the wrong type. A `PENDING` or `REJECTED` constraint never
 does - same suppression discipline as `composite_group.review_status`.
 
+### `room_pool_violation` (warning) - added 2026-08-17
+
+`room_pool`/`room_pool_room`/`room_pool_class_name` have been parsed
+from the .tfx's RURs (Room Utilisation Requirements) since Phase A of
+`docs/full-timetabler-plan.md`, but no rule read them until now -
+`docs/roadmap-v2.md` 3.3b. Unlike `room_feature_mismatch`, this needs no
+human review step first: a RUR is a constraint Timetabling Solutions
+itself already asserts ("these classes must use one of these rooms"),
+not something GridPilot infers from usage patterns. Any lesson for a
+pooled class scheduled outside that pool is a genuine violation.
+Verified against the real database: RUR 1 restricts 28 science classes
+to 5 rooms (RIE01/02/05/06/07); two real lessons sit outside it
+(`12PHY1` in `ANG7`, `11BIO1` in `SPO05`).
+
+Also wired into the repair solver (`app/analysis/repair_solver.py`) as
+a **native constraint**, not just a rule: a pooled class's candidate
+rooms are restricted to its pool for every repair, regardless of which
+finding triggered the repair - the same treatment
+`class_room_type_constraint` already gets. Without this, the solver
+could "resolve" some other clash by parking a pooled class in a room
+outside its pool, which the re-validation loop would then have to catch
+and undo rather than never proposing in the first place. Confirmed
+against the real data: `solve_repair()` resolves both real violations
+by moving each class into an actual pool room (`RIE05`, `RIE07`).
+
 ## Composite classes: reviewable, not silently trusted
 
 `backend/app/analysis/composite.py` heuristically detects candidates:

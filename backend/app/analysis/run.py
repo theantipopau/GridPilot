@@ -16,6 +16,7 @@ from app.analysis.consistency_rules import run_consistency_rules
 from app.analysis.load_rules import run_load_rules
 from app.analysis.models import Finding
 from app.analysis.room_feature_rules import run_room_feature_rules
+from app.analysis.room_pool_rules import run_room_pool_rules
 from app.analysis.room_type_review import sync_room_type_candidates
 from app.audit import log_event
 from app.config import DB_PATH
@@ -72,7 +73,7 @@ def run_analysis(db_path=None) -> dict:
         room_type_sync = sync_room_type_candidates(conn)
         findings = [
             *run_clash_rules(conn), *run_load_rules(conn), *run_consistency_rules(conn),
-            *run_room_feature_rules(conn),
+            *run_room_feature_rules(conn), *run_room_pool_rules(conn),
         ]
         persist_result = _persist(conn, findings)
 
