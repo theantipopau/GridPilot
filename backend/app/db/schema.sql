@@ -564,3 +564,72 @@ CREATE TABLE IF NOT EXISTS teacher_role_assignment (
     assigned_at TEXT NOT NULL,
     assigned_by TEXT NOT NULL
 );
+
+-- Industrial agreement data (docs/roadmap-v2.md 0 and 2.1) - the EA read
+-- as a machine-readable spec rather than prose. Standalone: no FK into
+-- any source-derived table, so - like staff_role above - none of this
+-- needs resync.py snapshot/restore handling; it simply survives a
+-- re-ingest untouched, same as every other purely app-owned table with
+-- no source reference.
+--
+-- Deliberately never seeded with real figures by GridPilot itself.
+-- Every clause docs/roadmap-v2.md 0 cites was read from a *proposed-
+-- agreement access-period* PDF - confirmed_by/confirmed_at staying NULL
+-- is the whole point: this is reviewable data entered and confirmed by
+-- the school's own HR/IEU representative, never a constant baked into
+-- the app.
+CREATE TABLE IF NOT EXISTS industrial_agreement (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,             -- e.g. "Diocesan Schools of Queensland 2023-2026"
+    source_reference TEXT,          -- URL or document reference
+    effective_from TEXT NOT NULL,
+    effective_to TEXT,
+    confirmed_by TEXT,              -- NULL = not yet confirmed by the school
+    confirmed_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- EA Schedule 3-shaped: the contact-time envelope, one row per teacher
+-- sector.
+CREATE TABLE IF NOT EXISTS agreement_load_rule (
+    id INTEGER PRIMARY KEY,
+    agreement_id INTEGER NOT NULL REFERENCES industrial_agreement(id),
+    sector TEXT NOT NULL CHECK (sector IN ('SECONDARY', 'PRIMARY')),
+    ordinary_hours_per_week REAL NOT NULL,
+    max_contact_hours_per_week REAL NOT NULL,
+    prep_correction_pct REAL,
+    max_cover_periods_per_year INTEGER,
+    clause_reference TEXT,
+    UNIQUE (agreement_id, sector)
+);
+
+-- EA Schedule 2 Table 1/3-shaped: the middle/senior leadership release
+-- pool, keyed by enrolment band. The per-teacher allocation
+-- (staff_role.release_minutes_per_cycle) stays a separate, human
+-- distribution decision against this pool - see docs/roadmap-v2.md 2.3.
+CREATE TABLE IF NOT EXISTS agreement_leadership_band (
+    id INTEGER PRIMARY KEY,
+    agreement_id INTEGER NOT NULL REFERENCES industrial_agreement(id),
+    tier TEXT NOT NULL CHECK (tier IN ('MIDDLE', 'SENIOR')),
+    enrolment_min INTEGER NOT NULL,
+    enrolment_max INTEGER NOT NULL,
+    units INTEGER,           -- MIDDLE
+    hours_per_year REAL,     -- MIDDLE
+    release_fte REAL,        -- SENIOR
+    clause_reference TEXT
+);
+
+-- The school's own enrolment figure for EA banding purposes -
+-- deliberately NOT derived from COUNT(*) on the student table (see
+-- docs/roadmap-v2.md 0.4): a census-date/official figure is a policy
+-- fact the school declares, not something GridPilot infers from
+-- whichever students happen to be in the current timetable export.
+CREATE TABLE IF NOT EXISTS school_enrolment_declaration (
+    id INTEGER PRIMARY KEY,
+    planning_year TEXT NOT NULL UNIQUE,
+    official_enrolment INTEGER NOT NULL,
+    as_at_date TEXT,
+    entered_by TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL
+);

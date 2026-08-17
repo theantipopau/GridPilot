@@ -33,6 +33,7 @@ import DashboardPage from "./pages/DashboardPage";
 import FindingsPage from "./pages/FindingsPage";
 import RoomConstraintsPage from "./pages/RoomConstraintsPage";
 import RoomsPage from "./pages/RoomsPage";
+import StaffingPolicyPage from "./pages/StaffingPolicyPage";
 import TeachersPage from "./pages/TeachersPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
@@ -43,7 +44,13 @@ import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewTyp
 const SIDEBAR_GROUPS: SidebarGroup[] = [
   { title: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> }] },
   { title: "Structure", items: [{ id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> }] },
-  { title: "People", items: [{ id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> }] },
+  {
+    title: "People",
+    items: [
+      { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
+      { id: "staffing-policy", label: "Staffing Policy", icon: (c) => <IconClipboardList className={c} /> },
+    ],
+  },
   { title: "Places", items: [{ id: "rooms", label: "Rooms", icon: (c) => <IconBuilding className={c} /> }] },
   { title: "Timetable", items: [{ id: "timetable", label: "Master grid", icon: (c) => <IconCalendar className={c} /> }] },
   {
@@ -244,6 +251,7 @@ export default function App() {
         )}
         {tab === "blocking" && <BlockingPage />}
         {tab === "teachers" && <TeachersPage />}
+        {tab === "staffing-policy" && <StaffingPolicyPage />}
         {tab === "rooms" && <RoomsPage />}
         {tab === "findings" && (
           <FindingsPage

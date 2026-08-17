@@ -212,11 +212,24 @@ tractable. It builds on `docs/staff-capability-model.md` (already
 written, not built) and supersedes its "open questions" §2 with real
 answers where the EA provides them.
 
-### 2.1 Schema
+### 2.1 Schema — **built 2026-08-17**
 
 Extends the proposal in `docs/staff-capability-model.md` rather than
 replacing it. New here: the EA-derived tables and the ECT/registration
 fields.
+
+Built exactly as designed below (`industrial_agreement`,
+`agreement_load_rule`, `agreement_leadership_band`,
+`school_enrolment_declaration`), plus `app/api/staffing_policy.py` and a
+new **Staffing Policy** page. **No real EA figures are seeded anywhere**
+— every table starts empty; the school enters and confirms its own
+figures through the page. Verified end-to-end against the real database
+(via the actual UI, not just tests): created an agreement, added a
+leadership band, confirmed it, declared an enrolment figure, watched
+the reconciliation panel resolve the correct band — then deleted all of
+it afterward, same live-verify-then-cleanup discipline as everywhere
+else in this project. The ECT/registration `teacher` columns from this
+section are **not yet built** — see §2.4.
 
 ```sql
 -- The agreement itself, as reviewable data. Never constants in Python.
@@ -318,10 +331,20 @@ review* — the same detect→confirm pattern that worked for room types —
 and the school confirms or corrects. That is the only honest starting
 point without an HR feed.
 
-### 2.3 Release time, auto-calculated
+### 2.3 Release time, auto-calculated — **built 2026-08-17**
 
 The feature as asked for, decomposed into the part that's arithmetic and
-the part that isn't:
+the part that isn't. `app/analysis/release.py` is built close to the
+sketch below, with one real change made while building it: it does
+**not** convert the pool into the same unit as what's allocated.
+`agreement_leadership_band` states the middle-leadership pool in
+hours/year; `staff_role.release_minutes_per_cycle` records what's
+allocated in minutes/cycle. Converting one to the other needs "how many
+cycles run in a school year," which isn't stored anywhere and would be
+exactly the kind of guessed policy value this project has refused
+throughout (`docs/rules.md`, `docs/full-timetabler-plan.md`'s dropped-
+rule notes). The Staffing Policy page reports both numbers side by side
+in their native units instead, and lets a human compare them.
 
 ```python
 # app/analysis/release.py  (new)
@@ -639,7 +662,7 @@ back, this is the section to work on meanwhile.
 | 3 | ✅ `room_pool` rule + solver constraint (§3.3b) | — | S |
 | 4 | ✅ Rooms page (§3.3) | — | M |
 | 5 | ✅ Blocking analytics, read-only (§3.4.1) — partial, see §3.4 | — | M |
-| 6 | EA tables + release reconciliation (§2.1, §2.3) | **school confirms the agreement figures** | M |
+| 6 | ✅ EA tables + release reconciliation (§2.1, §2.3) — mechanism built, **no real figures seeded** | school still needs to enter/confirm its own figures via the new Staffing Policy page | M |
 | 7 | Contact-time definition change (§0.2) | **school confirms `REGISTRATION` = pastoral care** | S |
 | 8 | `teacher_capability` + bootstrap-for-review (§2.2) | nothing to start; HR feed to finish | L |
 | 9 | `class_teacher_inconsistency` suggestions | #8 | M |

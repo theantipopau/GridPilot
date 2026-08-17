@@ -8,6 +8,7 @@ export type Tab =
   | "timetable"
   | "blocking"
   | "teachers"
+  | "staffing-policy"
   | "rooms"
   | "findings"
   | "composites"

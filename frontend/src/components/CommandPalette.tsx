@@ -23,6 +23,7 @@ const PAGES: { label: string; tab: Tab }[] = [
   { label: "Timetable", tab: "timetable" },
   { label: "Blocking", tab: "blocking" },
   { label: "Teachers", tab: "teachers" },
+  { label: "Staffing Policy", tab: "staffing-policy" },
   { label: "Rooms", tab: "rooms" },
   { label: "Findings", tab: "findings" },
   { label: "Composite Review", tab: "composites" },

@@ -381,6 +381,76 @@ export interface RepairResult {
   not_eligible: RepairNotEligible[];
 }
 
+export type AgreementSector = "SECONDARY" | "PRIMARY";
+export type LeadershipTier = "MIDDLE" | "SENIOR";
+
+export interface AgreementLoadRule {
+  id: number;
+  sector: AgreementSector;
+  ordinary_hours_per_week: number;
+  max_contact_hours_per_week: number;
+  prep_correction_pct: number | null;
+  max_cover_periods_per_year: number | null;
+  clause_reference: string | null;
+}
+
+export interface AgreementLeadershipBand {
+  id: number;
+  tier: LeadershipTier;
+  enrolment_min: number;
+  enrolment_max: number;
+  units: number | null;
+  hours_per_year: number | null;
+  release_fte: number | null;
+  clause_reference: string | null;
+}
+
+export interface IndustrialAgreement {
+  id: number;
+  name: string;
+  source_reference: string | null;
+  effective_from: string;
+  effective_to: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  load_rules: AgreementLoadRule[];
+  leadership_bands: AgreementLeadershipBand[];
+}
+
+export interface EnrolmentDeclaration {
+  id: number;
+  planning_year: string;
+  official_enrolment: number;
+  as_at_date: string | null;
+  entered_by: string;
+  note: string | null;
+}
+
+export interface LeadershipPool {
+  agreement_name: string | null;
+  enrolment: number | null;
+  tier: LeadershipTier;
+  units: number | null;
+  hours_per_year: number | null;
+  release_fte: number | null;
+  band_min: number | null;
+  band_max: number | null;
+}
+
+export interface AllocatedRelease {
+  teacher_code: string;
+  role_name: string;
+  release_minutes_per_cycle: number;
+}
+
+export interface ReleaseReconciliation {
+  planning_year: string | null;
+  middle_pool: LeadershipPool;
+  senior_pool: LeadershipPool;
+  allocated: AllocatedRelease[];
+  total_allocated_minutes_per_cycle: number;
+}
+
 export interface RoomPoolMembership {
   pool_code: string;
   room_codes: string[];

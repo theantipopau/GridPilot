@@ -1,15 +1,20 @@
 import type {
+  AgreementSector,
   AuditEvent,
   BlockingLinesResponse,
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
   DashboardData,
+  EnrolmentDeclaration,
   ExportPreview,
   FindingsResponse,
+  IndustrialAgreement,
   IngestStatus,
   IngestUploadResult,
+  LeadershipTier,
   ReferenceData,
+  ReleaseReconciliation,
   RepairResult,
   ReviewStatus,
   RoomSummary,
@@ -232,6 +237,72 @@ export function assignTeacherRole(
 
 export function fetchRooms(): Promise<{ rooms: RoomSummary[] }> {
   return getJson(`${BASE}/rooms`);
+}
+
+export function fetchAgreements(): Promise<{ agreements: IndustrialAgreement[] }> {
+  return getJson(`${BASE}/agreements`);
+}
+
+export function createAgreement(params: {
+  name: string;
+  source_reference?: string;
+  effective_from: string;
+  effective_to?: string;
+  created_by: string;
+}): Promise<{ id: number }> {
+  return postJson(`${BASE}/agreements`, params);
+}
+
+export function confirmAgreement(agreementId: number, confirmedBy: string): Promise<{ id: number }> {
+  return postJson(`${BASE}/agreements/${agreementId}/confirm`, { confirmed_by: confirmedBy });
+}
+
+export function addLoadRule(
+  agreementId: number,
+  params: {
+    sector: AgreementSector;
+    ordinary_hours_per_week: number;
+    max_contact_hours_per_week: number;
+    prep_correction_pct?: number;
+    max_cover_periods_per_year?: number;
+    clause_reference?: string;
+  },
+): Promise<{ id: number }> {
+  return postJson(`${BASE}/agreements/${agreementId}/load-rules`, params);
+}
+
+export function addLeadershipBand(
+  agreementId: number,
+  params: {
+    tier: LeadershipTier;
+    enrolment_min: number;
+    enrolment_max: number;
+    units?: number;
+    hours_per_year?: number;
+    release_fte?: number;
+    clause_reference?: string;
+  },
+): Promise<{ id: number }> {
+  return postJson(`${BASE}/agreements/${agreementId}/leadership-bands`, params);
+}
+
+export function fetchEnrolmentDeclarations(): Promise<{ declarations: EnrolmentDeclaration[] }> {
+  return getJson(`${BASE}/enrolment-declarations`);
+}
+
+export function declareEnrolment(params: {
+  planning_year: string;
+  official_enrolment: number;
+  as_at_date?: string;
+  entered_by: string;
+  note?: string;
+}): Promise<{ id: number }> {
+  return postJson(`${BASE}/enrolment-declarations`, params);
+}
+
+export function fetchReleaseReconciliation(planningYear?: string): Promise<ReleaseReconciliation> {
+  const qs = planningYear ? `?planning_year=${encodeURIComponent(planningYear)}` : "";
+  return getJson(`${BASE}/staffing-policy/reconciliation${qs}`);
 }
 
 export function fetchBlockingLines(): Promise<BlockingLinesResponse> {
