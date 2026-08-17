@@ -13,6 +13,7 @@ from app.api import (
     ingest,
     reference,
     room_constraints,
+    rooms,
     solver,
     teachers,
     timetable,
@@ -41,6 +42,7 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(teachers.router, prefix="/api")
 app.include_router(blocking.router, prefix="/api")
 app.include_router(room_constraints.router, prefix="/api")
+app.include_router(rooms.router, prefix="/api")
 app.include_router(solver.router, prefix="/api")
 
 

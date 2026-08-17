@@ -378,3 +378,21 @@ export interface RepairResult {
   findings_unresolved: RepairFindingRef[];
   not_eligible: RepairNotEligible[];
 }
+
+export interface RoomPoolMembership {
+  pool_code: string;
+  room_codes: string[];
+}
+
+export interface RoomSummary {
+  code: string;
+  name: string;
+  seats: number | null;
+  room_type: string | null;
+  used_slots: number;
+  total_lesson_slots: number;
+  utilisation_pct: number | null;
+  pool: RoomPoolMembership | null;
+  expected_class_codes: string[];
+  open_finding_count: number;
+}

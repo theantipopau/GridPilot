@@ -448,10 +448,18 @@ A. Now:
   data: `solve_repair()` resolves both real violations by moving each
   class into an actual pool room.
 
-Also unbuilt and cheap: a **Rooms page**. There is no room-centric view
-anywhere in the app despite `room` being the default axis of the master
-grid — utilisation, type, capacity, pool membership, and the class
-room-type constraints attached to it, in one place.
+**Rooms page — done 2026-08-17.** `GET /api/rooms` +
+`frontend/src/pages/RoomsPage.tsx`: utilisation (used lesson slots /
+total lesson slots, the same calculation `room_underutilization`
+already uses), type, capacity, pool membership (with the pool's other
+rooms in a tooltip), which classes an *approved*
+`class_room_type_constraint` expects in a room of that type, and an
+open-finding count per room. Read-only, matching (a) above — sidebar
+gets a new **Places** group per the target IA in
+`docs/full-timetabler-plan.md` §7.1. Verified against the real data:
+RUR 1's five rooms show their pool correctly, `RIE05`/`RIE06`/`RIE07`
+show non-zero open-finding counts consistent with the real
+`room_pool_violation` findings from (b).
 
 ### 3.4 More blocking patterns
 
@@ -609,7 +617,7 @@ back, this is the section to work on meanwhile.
 | 1 | ✅ Tokens + tabular numerals + sticky-column contrast (§4.1, §4.2) | — | S |
 | 2 | ✅ Full-height grid, toolbar consolidation (§4.3) | — | S |
 | 3 | ✅ `room_pool` rule + solver constraint (§3.3b) | — | S |
-| 4 | Rooms page (§3.3) | nothing | M |
+| 4 | ✅ Rooms page (§3.3) | — | M |
 | 5 | Blocking analytics, read-only (§3.4.1) | nothing | M |
 | 6 | EA tables + release reconciliation (§2.1, §2.3) | **school confirms the agreement figures** | M |
 | 7 | Contact-time definition change (§0.2) | **school confirms `REGISTRATION` = pastoral care** | S |

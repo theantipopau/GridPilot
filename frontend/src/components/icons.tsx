@@ -152,6 +152,16 @@ export function IconBeaker({ className = base }: IconProps) {
   );
 }
 
+export function IconBuilding({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <rect x="4" y="2.5" width="9" height="15" rx="1" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 8.5h2.5a1 1 0 0 1 1 1v7.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 5.5h1M9.5 5.5h1M6.5 8.5h1M9.5 8.5h1M6.5 11.5h1M9.5 11.5h1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconSpinner({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={`${className} animate-spin`}>

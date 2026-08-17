@@ -12,6 +12,7 @@ import type {
   ReferenceData,
   RepairResult,
   ReviewStatus,
+  RoomSummary,
   RoomTypeConstraintCandidate,
   StaffRole,
   SuggestionsResponse,
@@ -227,6 +228,10 @@ export function assignTeacherRole(
     staff_role_id: staffRoleId,
     assigned_by: assignedBy,
   });
+}
+
+export function fetchRooms(): Promise<{ rooms: RoomSummary[] }> {
+  return getJson(`${BASE}/rooms`);
 }
 
 export function fetchBlockingLines(): Promise<BlockingLinesResponse> {
