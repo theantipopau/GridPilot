@@ -60,30 +60,37 @@ export default function MasterTimetableGrid({ axis, reference, entries, pendingE
     entriesByRowKey.set(key, list);
   }
 
+  // A single scrolling region for both weeks, not one independent max-h
+  // box per table - a shared ancestor is what lets each table's own
+  // `sticky top-0` header hand off to the next as you scroll from Week A
+  // into Week B, instead of the whole page scrolling AND each table
+  // scrolling internally at the same time (docs/roadmap-v2.md 4.3).
   return (
-    <div className="flex flex-col gap-8 p-6">
-      <MasterWeekTable
-        label="Week A"
-        weekDays={weekA}
-        periods={canonicalPeriods}
-        rows={rows}
-        axis={axis}
-        entriesByRowKey={entriesByRowKey}
-        pendingEntryIds={pendingEntryIds}
-        findingHighlights={findingHighlights}
-        onSelectLesson={onSelectLesson}
-      />
-      <MasterWeekTable
-        label="Week B"
-        weekDays={weekB}
-        periods={canonicalPeriods}
-        rows={rows}
-        axis={axis}
-        entriesByRowKey={entriesByRowKey}
-        pendingEntryIds={pendingEntryIds}
-        findingHighlights={findingHighlights}
-        onSelectLesson={onSelectLesson}
-      />
+    <div className="h-full overflow-auto p-6">
+      <div className="flex flex-col gap-8">
+        <MasterWeekTable
+          label="Week A"
+          weekDays={weekA}
+          periods={canonicalPeriods}
+          rows={rows}
+          axis={axis}
+          entriesByRowKey={entriesByRowKey}
+          pendingEntryIds={pendingEntryIds}
+          findingHighlights={findingHighlights}
+          onSelectLesson={onSelectLesson}
+        />
+        <MasterWeekTable
+          label="Week B"
+          weekDays={weekB}
+          periods={canonicalPeriods}
+          rows={rows}
+          axis={axis}
+          entriesByRowKey={entriesByRowKey}
+          pendingEntryIds={pendingEntryIds}
+          findingHighlights={findingHighlights}
+          onSelectLesson={onSelectLesson}
+        />
+      </div>
     </div>
   );
 }
@@ -114,7 +121,7 @@ function MasterWeekTable({
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
-      <div className="max-h-[75vh] overflow-auto rounded-lg border border-slate-300 shadow-sm">
+      <div className="rounded-lg border border-slate-300 shadow-sm">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr>

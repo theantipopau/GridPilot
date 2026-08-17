@@ -37,28 +37,33 @@ export default function TimetableGrid({ view, days, periods, entries, pendingEnt
     entriesByKey.set(key, list);
   }
 
+  // See MasterTimetableGrid's equivalent comment - one shared scroll
+  // region for both weeks, owned by the page (TimetablePage), not the
+  // page itself scrolling underneath it.
   return (
-    <div className="flex flex-col gap-8 p-6">
-      <WeekTable
-        label="Week A"
-        weekDays={weekA}
-        periods={canonicalPeriods}
-        entriesByKey={entriesByKey}
-        view={view}
-        pendingEntryIds={pendingEntryIds}
-        findingHighlights={findingHighlights}
-        onSelectLesson={onSelectLesson}
-      />
-      <WeekTable
-        label="Week B"
-        weekDays={weekB}
-        periods={canonicalPeriods}
-        entriesByKey={entriesByKey}
-        view={view}
-        pendingEntryIds={pendingEntryIds}
-        findingHighlights={findingHighlights}
-        onSelectLesson={onSelectLesson}
-      />
+    <div className="h-full overflow-auto p-6">
+      <div className="flex flex-col gap-8">
+        <WeekTable
+          label="Week A"
+          weekDays={weekA}
+          periods={canonicalPeriods}
+          entriesByKey={entriesByKey}
+          view={view}
+          pendingEntryIds={pendingEntryIds}
+          findingHighlights={findingHighlights}
+          onSelectLesson={onSelectLesson}
+        />
+        <WeekTable
+          label="Week B"
+          weekDays={weekB}
+          periods={canonicalPeriods}
+          entriesByKey={entriesByKey}
+          view={view}
+          pendingEntryIds={pendingEntryIds}
+          findingHighlights={findingHighlights}
+          onSelectLesson={onSelectLesson}
+        />
+      </div>
     </div>
   );
 }
@@ -85,7 +90,7 @@ function WeekTable({
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="rounded-lg border border-slate-200">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>

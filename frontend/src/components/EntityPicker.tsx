@@ -13,7 +13,13 @@ const VIEW_OPTIONS: { value: ViewType; label: string }[] = [
   { value: "roll_class", label: "Roll class" },
 ];
 
-export default function FilterBar({ reference, view, code, onChange }: Props) {
+/** The "view by X, pick a Y" controls for single-entity mode - bare
+ * controls, no wrapping bar. Deliberately not its own bordered toolbar
+ * row (that was `FilterBar`, since folded in here): stacking a second
+ * full-width bordered bar under the mode-toggle toolbar was exactly the
+ * "three separate bordered blocks" docs/roadmap-v2.md 4.3 flagged.
+ * TimetablePage renders this inline in the one toolbar row instead. */
+export default function EntityPicker({ reference, view, code, onChange }: Props) {
   const handleViewChange = (nextView: ViewType) => {
     const firstCode = codeOptionsFor(reference, nextView)[0]?.value ?? "";
     onChange(nextView, firstCode);
@@ -22,11 +28,9 @@ export default function FilterBar({ reference, view, code, onChange }: Props) {
   const options = codeOptionsFor(reference, view);
 
   return (
-    <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
+    <>
       <div>
-        <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-          View by
-        </label>
+        <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">View by</label>
         <select
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
           value={view}
@@ -55,7 +59,7 @@ export default function FilterBar({ reference, view, code, onChange }: Props) {
           ))}
         </select>
       </div>
-    </div>
+    </>
   );
 }
 

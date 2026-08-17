@@ -9,8 +9,8 @@ import {
   fetchTimetable,
   validateChangeSet,
 } from "../api";
+import EntityPicker from "../components/EntityPicker";
 import FacultyLegend from "../components/FacultyLegend";
-import FilterBar from "../components/FilterBar";
 import LessonInspector, { type MoveParams } from "../components/LessonInspector";
 import LoadingState from "../components/LoadingState";
 import MasterTimetableGrid from "../components/MasterTimetableGrid";
@@ -150,28 +150,45 @@ export default function TimetablePage({
     return <div className="p-6 text-red-600">Failed to load timetable: {error}</div>;
   }
 
+  // One toolbar row, not a stack of separately-bordered bars - the mode
+  // toggle and whichever controls the current mode needs (axis+scenario,
+  // or the entity picker) live together, docs/roadmap-v2.md 4.3.
   return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
-        <div className="flex gap-1 rounded-md bg-slate-100 p-1">
-          <button
-            type="button"
-            onClick={() => setMode("master")}
-            className={`rounded px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              mode === "master" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Master grid
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("single")}
-            className={`rounded px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              mode === "single" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Single entity
-          </button>
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex items-end gap-4">
+          <div className="flex gap-1 rounded-md bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setMode("master")}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                mode === "master" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Master grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("single")}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                mode === "single" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Single entity
+            </button>
+          </div>
+
+          {mode === "single" && (
+            <EntityPicker
+              reference={reference}
+              view={view}
+              code={code}
+              onChange={(v, c) => {
+                setView(v);
+                setCode(c);
+              }}
+            />
+          )}
         </div>
 
         {mode === "master" && (
@@ -213,45 +230,44 @@ export default function TimetablePage({
         )}
       </div>
 
-      {mode === "single" && (
-        <FilterBar
-          reference={reference}
-          view={view}
-          code={code}
-          onChange={(v, c) => {
-            setView(v);
-            setCode(c);
-          }}
-        />
-      )}
+      <div className="shrink-0">
+        <FacultyLegend />
+      </div>
 
-      <FacultyLegend />
+      {/* The one scroll region for the whole page - the grid used to sit
+          inside a page that also scrolled (main's overflow-y-auto) AND
+          each week table had its own independent max-h box, so getting
+          anywhere meant tracking two or three separate scrollbars at
+          once. min-h-0 is required here: without it a flex child refuses
+          to shrink below its content size and this box would just grow
+          past the viewport instead of clipping and scrolling. */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {mode === "master" &&
+          (masterEntries ? (
+            <MasterTimetableGrid
+              axis={axis}
+              reference={reference}
+              entries={applyPendingMoves(masterEntries, pendingMoves, reference)}
+              pendingEntryIds={pendingEntryIds}
+              findingHighlights={findingHighlights}
+              onSelectLesson={setSelectedEntry}
+            />
+          ) : (
+            <LoadingState label="Loading the master timetable…" />
+          ))}
 
-      {mode === "master" &&
-        (masterEntries ? (
-          <MasterTimetableGrid
-            axis={axis}
-            reference={reference}
-            entries={applyPendingMoves(masterEntries, pendingMoves, reference)}
+        {mode === "single" && timetable && (
+          <TimetableGrid
+            view={view}
+            days={reference.days}
+            periods={reference.periods}
+            entries={applyPendingMoves(timetable.entries, pendingMoves, reference)}
             pendingEntryIds={pendingEntryIds}
             findingHighlights={findingHighlights}
             onSelectLesson={setSelectedEntry}
           />
-        ) : (
-          <LoadingState label="Loading the master timetable…" />
-        ))}
-
-      {mode === "single" && timetable && (
-        <TimetableGrid
-          view={view}
-          days={reference.days}
-          periods={reference.periods}
-          entries={applyPendingMoves(timetable.entries, pendingMoves, reference)}
-          pendingEntryIds={pendingEntryIds}
-          findingHighlights={findingHighlights}
-          onSelectLesson={setSelectedEntry}
-        />
-      )}
+        )}
+      </div>
 
       {selectedEntry && (
         <LessonInspector

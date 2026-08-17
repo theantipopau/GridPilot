@@ -190,7 +190,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50">
       <Sidebar
         groups={SIDEBAR_GROUPS}
         activeTab={tab}
@@ -211,7 +211,15 @@ export default function App() {
           }}
         />
       )}
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      {/* min-h-0 is not optional here: a flex item's default min-height is
+          `auto` (its content size), which silently overrides flex-1 and
+          h-screen on the row above it - main would grow to fit its
+          tallest page instead of clipping to the viewport and scrolling
+          internally, which is exactly the bug this replaced (verified in
+          the browser: without it, a long Findings page grew main to
+          12905px and the whole body scrolled underneath a "fixed"
+          sidebar that was never actually fixed). */}
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {showImportModal && (
           <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
         )}
