@@ -214,15 +214,17 @@ export interface ChangeSetDetail extends ChangeSetSummary {
 export interface SuggestionCandidate {
   entry_id: number;
   class_code: string | null;
-  before: { day_code: string; period_code: string; room_code: string | null };
-  after: { day_code: string; period_code: string; room_code: string | null };
+  before: { day_code: string; period_code: string; room_code: string | null; teacher_code: string | null };
+  after: { day_code: string; period_code: string; room_code: string | null; teacher_code: string | null };
   movement_cost: number;
   resolves_finding_count: number;
   why: {
     no_new_clash: boolean;
     room_capacity: { confirmed: false } | { confirmed: true; seats: number; enrolled: number };
+    capability_status: "ELIGIBLE" | "NOT_ELIGIBLE" | "REVIEW_REQUIRED" | null;
   };
   class_room_familiarity: { same_room_elsewhere_count: number; total_other_lessons: number } | null;
+  class_teacher_familiarity: { same_teacher_elsewhere_count: number; total_other_lessons: number } | null;
 }
 
 export interface SuggestionsResponse {

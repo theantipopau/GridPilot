@@ -23,32 +23,37 @@ explain *these* candidates in plain language - never to invent its own.
 **Supported**: `teacher_double_booking`, `room_double_booking` - the two
 rule types where there's an obvious "thing to move" (one of the
 conflicting lessons) and an obvious search space (alternate rooms/times) -
-and `class_room_instability` (added 2026-08-13), where the "thing to move"
+`class_room_instability` (added 2026-08-13), where the "thing to move"
 is instead every lesson of the class sitting in a room other than the one
 it already mostly uses, and the search space is exactly one room: the
-class's own majority room, at each minority lesson's existing slot. See
-"Room consolidation" below.
+class's own majority room, at each minority lesson's existing slot (see
+"Room consolidation" below); and, since 2026-08-17,
+`class_teacher_inconsistency`, its teacher-facing sibling - see "Teacher
+consolidation" below.
 
 **Not supported, and says so rather than silently returning nothing
 useful**: every other rule type, most notably `student_double_booking`
 (there's no single lesson whose room/time you'd move - the fix usually
-means restructuring an option line, out of scope here), the
-capacity/utilisation rules (not really "move this lesson" problems), and
-`class_teacher_inconsistency` - `class_room_instability`'s sibling rule,
-deliberately *not* given the same treatment. Moving a lesson to the
-class's other room is a safe, algorithmic search; moving it to the
-class's other *teacher* would be exactly the kind of invented
-suggestion this module refuses to make (see "Never suggested" below) -
-there's no way to tell which of the class's teachers the move should
-prefer without subject-qualification data this project doesn't have.
+means restructuring an option line, out of scope here) and the
+capacity/utilisation rules (not really "move this lesson" problems).
 `GET /api/findings/{id}/suggestions` on an unsupported finding returns
 `supported: false` with an explanatory `note`, never an empty result that
 could be mistaken for "no fix exists."
 
-**Never suggested**: moving a lesson to a *different teacher*. There's no
-authoritative subject-qualification data yet (`docs/staff-capability-
-model.md` covers what that would take) - guessing would be exactly the
-"invented suggestion" the roadmap warns against.
+**Never suggested without confirmed data behind it**: moving a lesson to
+a *different teacher* used to be entirely out of scope - there was no
+authoritative subject-qualification data, and guessing would have been
+exactly the "invented suggestion" the roadmap warns against.
+`teacher_capability` (`docs/roadmap-v2.md` 2.2) removed that blocker, but
+the same discipline still applies at the per-candidate level: a
+teacher-consolidation candidate is only ever offered when
+`CapabilityService.resolve()` (`app/analysis/capability.py`) confirms the
+target teacher isn't `NOT_ELIGIBLE` for the class's subject - the same
+check `teacher_not_qualified_for_class` uses to raise a finding, applied
+here as a hard constraint *before* a move is proposed. A class with no
+`teacher_capability` data at all for its majority teacher still gets zero
+candidates, exactly like before - "no suggestion" remains the answer
+whenever there's nothing to confirm the move against.
 
 ## How a candidate is generated and validated
 
@@ -126,6 +131,50 @@ lesson (Fri A P4) was correctly skipped because a different class already
 holds `LEO2` at that exact slot, which is the "no valid fix, so don't
 show one" case rather than a bug.
 
+## Teacher consolidation for class_teacher_inconsistency (2026-08-17)
+
+`class_teacher_inconsistency`'s sibling treatment to room consolidation
+above, unblocked by `teacher_capability` (`docs/roadmap-v2.md` 2.2, item
+9) - see "Never suggested without confirmed data behind it" above for why
+this was out of scope until that table existed. The search mirrors room
+consolidation almost exactly, with one addition:
+
+1. Find the class's **majority teacher** - whichever teacher already
+   covers the most of its lessons (ties break on teacher code).
+2. Resolve the class's subject (and faculty) once, then call
+   `CapabilityService.resolve()` for the majority teacher against that
+   subject. If the result is `NOT_ELIGIBLE`, the search stops there - no
+   candidates at all, for any of the class's minority-teacher lessons.
+   This check runs *before* the per-lesson search, not per-candidate,
+   since the answer is the same teacher for every lesson being
+   consolidated.
+3. For each of the class's lessons taught by a different teacher (capped
+   at `MAX_ENTRIES_CONSIDERED`), offer exactly one candidate: that
+   lesson, reassigned to the majority teacher, **at its existing slot and
+   room**. Like room consolidation, no alternate times are searched.
+4. The candidate still goes through the same no-new-clash check as every
+   other candidate (via `run_clash_findings`) - if the majority teacher
+   is already teaching something else at that particular slot, no
+   candidate is offered for that lesson, the same "no valid fix, so don't
+   show one" behaviour as the room-busy case above.
+
+Unlike room consolidation, room capacity is irrelevant here (the room
+never changes), so `why.room_capacity` is always `{confirmed: false}` for
+these candidates and `why.capability_status` carries the real signal
+instead - `"ELIGIBLE"` or `"REVIEW_REQUIRED"` (both allowed; the same
+distinction `teacher_not_qualified_for_class` draws). Ranking falls to
+`class_teacher_familiarity`, the teacher-facing counterpart to
+`class_room_familiarity` below.
+
+A class whose majority teacher has no `teacher_capability` row at all -
+the common case for a school that hasn't reviewed the bootstrap queue yet
+- still gets zero candidates, exactly like before this shipped. This is
+deliberate, not a gap: `resolve()`'s no-match fallback is `NOT_ELIGIBLE`
+(detect-never-assert, `app/analysis/capability.py`), so an unreviewed
+school gets no algorithmic teacher-reassignment suggestions until it
+reviews its capability queue - the same trade `teacher_not_qualified_for_
+class` makes for findings.
+
 ## Why it works, and what else it affects (2026-08-12)
 
 Real feedback after shipping the first version: *"propose fixes needs to
@@ -135,16 +184,25 @@ what capacity-checking and clash-checking were already doing:
 
 - **`why`**: `no_new_clash` (always `true` for a returned candidate - the
   hard constraint check above already guarantees it, this just makes it
-  visible) and `room_capacity` (`{confirmed: false}` if the target room
+  visible), `room_capacity` (`{confirmed: false}` if the target room
   has no confirmed seat count, or `{confirmed: true, seats, enrolled}` if
-  it does - the same numbers the capacity check itself used).
+  it does - the same numbers the capacity check itself used), and (since
+  2026-08-17) `capability_status` - `null` for room/slot candidates (the
+  teacher never changes), or the resolved `CapabilityStatus` (`"ELIGIBLE"`
+  or `"REVIEW_REQUIRED"` - never `"NOT_ELIGIBLE"`, since that's a hard
+  constraint the candidate wouldn't have survived) for a teacher-
+  consolidation candidate.
 - **`class_room_familiarity`**: `{same_room_elsewhere_count,
   total_other_lessons}` - how many of the class's *other* lessons already
   run in the candidate's target room. Directly reuses the same signal
   `class_room_instability` (`docs/rules.md`) computes, surfaced here as a
   forward-looking "does this move make the class more or less
   consistent" rather than only a backward-looking finding. `null` when
-  the candidate has no room (nothing to compare).
+  the candidate has no room, or is a teacher-consolidation candidate
+  (room never changes there - see `class_teacher_familiarity` instead).
+- **`class_teacher_familiarity`** (since 2026-08-17): the teacher-facing
+  counterpart - `{same_teacher_elsewhere_count, total_other_lessons}`,
+  `null` for every candidate type except teacher consolidation.
 
 `MAX_CANDIDATES_RETURNED` raised from 8 to 15 - the extra candidates were
 already being computed and discarded, so returning more doesn't add
@@ -185,11 +243,13 @@ Two entry points, sharing one presentation component
   2026-08-12, real feedback: *"maybe extra tabs"*). This finds every
   *open* finding relevant to the clicked lesson: for
   `teacher_double_booking`/`room_double_booking`, matched by slot +
-  teacher/room code; for `class_room_instability` (added 2026-08-13),
-  matched by class code instead, since that finding has no `slot_refs` -
-  it's about the whole class, not one lesson. Either way it fetches
-  suggestions for each match and keeps only the candidates that would
-  move *this specific* lesson - deduplicated by target slot.
+  teacher/room code; for `class_room_instability` (added 2026-08-13) and
+  `class_teacher_inconsistency` (added 2026-08-17), matched by class code
+  instead, since neither finding has `slot_refs` - they're about the
+  whole class, not one lesson. Either way it fetches suggestions for each
+  match and keeps only the candidates that would move *this specific*
+  lesson - deduplicated by target slot *and* teacher, since a teacher-
+  consolidation candidate leaves the slot untouched.
   "Use this" here reuses the grid's own in-progress change set
   (`onPropose`, the same path "Move manually" uses) rather than creating
   a separate one, since the panel is already scoped to one change set.

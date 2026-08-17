@@ -20,7 +20,10 @@ interface Props {
   onOpenChangeSet: () => void;
 }
 
-const SUGGESTABLE_RULES = new Set(["teacher_double_booking", "room_double_booking", "class_room_instability"]);
+const SUGGESTABLE_RULES = new Set([
+  "teacher_double_booking", "room_double_booking", "class_room_instability", "class_teacher_inconsistency",
+]);
+const WHOLE_CLASS_RULES = new Set(["class_room_instability", "class_teacher_inconsistency"]);
 
 type SuggestionsState =
   | { status: "idle" }
@@ -70,10 +73,11 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
       const { findings } = await fetchFindings();
       const matches = findings.filter((f) => {
         if (!SUGGESTABLE_RULES.has(f.rule_id)) return false;
-        // class_room_instability findings cover the whole class, not one
-        // slot - they carry no slot_refs at all, so match by class code
-        // instead of the slot+teacher/room match the double-booking rules use.
-        if (f.rule_id === "class_room_instability") {
+        // class_room_instability / class_teacher_inconsistency findings cover
+        // the whole class, not one slot - they carry no slot_refs at all, so
+        // match by class code instead of the slot+teacher/room match the
+        // double-booking rules use.
+        if (WHOLE_CLASS_RULES.has(f.rule_id)) {
           return f.entity_refs.some((e) => e.type === "class" && e.code === entry.class_code);
         }
         return (
@@ -93,7 +97,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
       for (const r of results) {
         for (const c of r.candidates) {
           if (c.entry_id !== entry.entry_id) continue; // only suggestions that move *this* lesson
-          const key = `${c.after.day_code}|${c.after.period_code}|${c.after.room_code}`;
+          const key = `${c.after.day_code}|${c.after.period_code}|${c.after.room_code}|${c.after.teacher_code}`;
           if (seen.has(key)) continue;
           seen.add(key);
           candidates.push(c);
@@ -148,6 +152,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
         after_day_code: c.after.day_code,
         after_period_code: c.after.period_code,
         after_room_code: c.after.room_code ?? undefined,
+        after_teacher_code: c.after.teacher_code !== c.before.teacher_code ? c.after.teacher_code ?? undefined : undefined,
         reason: "Applied from a suggested fix",
       });
       setResult(validation);

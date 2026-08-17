@@ -346,14 +346,23 @@ Two rules the addendum said this would unlock:
   produce a genuine conflict, so there's nothing for this rule to
   detect yet - building it now would be untested, unreachable code.
 
-**And it unblocks `class_teacher_inconsistency` suggestions (B4)** — the
-boundary hit earlier in this project's life, where the suggestion engine
-correctly refused to guess a replacement teacher. With
-`teacher_capability` populated, "who else could take this class" becomes
-a *search over a known-legal set* rather than a guess, and the
-`suggest_fixes()` scope restriction in `docs/suggestions.md` can finally
-be relaxed for that rule — with the same "rank by disruption, explain
-why each candidate works" treatment every other suggestion type gets.
+**And it unblocks `class_teacher_inconsistency` suggestions (B4) — built
+2026-08-17.** The boundary hit earlier in this project's life, where the
+suggestion engine correctly refused to guess a replacement teacher, is
+now a *search over a known-legal set* rather than a guess:
+`_teacher_consolidation_candidates()` (`app/analysis/suggestions.py`)
+finds the class's majority teacher, calls `CapabilityService.resolve()`
+once for that teacher against the class's subject, and only proceeds if
+the result isn't `NOT_ELIGIBLE` — the same check `teacher_not_qualified_
+for_class` uses to raise a finding, now applied as a hard constraint
+*before* a move is ever offered. Each minority-teacher lesson gets one
+candidate (reassign to the majority teacher, same slot and room), scored
+with the same "rank by disruption, explain why each candidate works"
+treatment every other suggestion type gets — see docs/suggestions.md's
+"Teacher consolidation" section for the full design and real-fixture
+verification (14 suggestion tests passing, including one proving a class
+with no `teacher_capability` data for its majority teacher still gets
+zero candidates rather than a guess).
 
 **The unresolved input problem stays unresolved, exactly as flagged.**
 `docs/staff-capability-model.md` §"Open questions" #2 asks where
@@ -698,7 +707,7 @@ back, this is the section to work on meanwhile.
 | 6 | ✅ EA tables + release reconciliation (§2.1, §2.3) — mechanism built, **no real figures seeded** | school still needs to enter/confirm its own figures via the new Staffing Policy page | M |
 | 7 | ✅ Contact-time definition change (§0.2) — mechanism built, off by default | school still needs to confirm `REGISTRATION` = pastoral care before switching it on | S |
 | 8 | ✅ `teacher_capability` + bootstrap-for-review (§2.2) | — for the review queue itself; a real HR feed would still improve on the bootstrap | L |
-| 9 | `class_teacher_inconsistency` suggestions | #8 | M |
+| 9 | ✅ `class_teacher_inconsistency` suggestions (teacher consolidation) | — | M |
 | 10 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
 | 11 | Editable blocking (§3.4.2) | #10 + #5 | L |
 | 12 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |

@@ -111,7 +111,7 @@ export default function FindingsList({
 
   const applySuggestion = async (finding: Finding, candidate: SuggestionCandidate) => {
     if (!onApplySuggestion) return;
-    const key = `${finding.id}:${candidate.entry_id}:${candidate.after.day_code}:${candidate.after.period_code}:${candidate.after.room_code}`;
+    const key = `${finding.id}:${candidate.entry_id}:${candidate.after.day_code}:${candidate.after.period_code}:${candidate.after.room_code}:${candidate.after.teacher_code}`;
     setApplyingKey(key);
     try {
       await onApplySuggestion(finding, candidate);

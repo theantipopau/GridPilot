@@ -259,13 +259,27 @@ def test_class_room_instability_skips_lesson_when_majority_room_already_busy():
     assert result["candidates"] == []
 
 
-def test_class_teacher_inconsistency_has_no_suggestion_support():
-    """Deliberate scope boundary (docs/suggestions.md) - reassigning a
-    lesson to a different teacher would be an invented suggestion with no
-    subject-qualification data behind it, unlike a same-class room swap."""
+def _insert_capability(conn, *, teacher_code: str, subject_code: str, status: str) -> None:
+    conn.execute(
+        "INSERT INTO teacher_capability (teacher_code, subject_code, capability_status, source_type, "
+        "effective_from, created_at, created_by, updated_at) "
+        "VALUES (?, ?, ?, 'SCHOOL_CONFIRMED', '2026-01-01', '2026-01-01T00:00:00', 'test', '2026-01-01T00:00:00')",
+        (teacher_code, subject_code, status),
+    )
+    conn.commit()
+
+
+def test_class_teacher_inconsistency_offers_move_to_majority_teacher_when_eligible():
+    """Unblocked by teacher_capability (roadmap 2.2 item 9) - a
+    consolidation candidate is only offered once a human-confirmed (or
+    ELIGIBLE) capability row backs the move, unlike class_room_instability
+    which needs no such gate."""
     conn = build_richer_synthetic_db()
+    # CLASSA (subject SUBA) runs twice with T1 (majority) and once with T2.
     add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
-    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=2, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=2, room_id=1)
+    _insert_capability(conn, teacher_code="T1", subject_code="SUBA", status="ELIGIBLE")
     _persist_consistency_findings(conn)
 
     finding_id = conn.execute(
@@ -273,5 +287,57 @@ def test_class_teacher_inconsistency_has_no_suggestion_support():
     ).fetchone()["id"]
     result = suggest_fixes(conn, finding_id)
 
-    assert result["supported"] is False
+    assert result["supported"] is True
+    assert len(result["candidates"]) == 1
+    c = result["candidates"][0]
+    assert c["before"]["teacher_code"] == "T2"
+    assert c["after"]["teacher_code"] == "T1"
+    assert c["before"]["day_code"] == c["after"]["day_code"]
+    assert c["before"]["period_code"] == c["after"]["period_code"]
+    assert c["before"]["room_code"] == c["after"]["room_code"]
+    assert c["movement_cost"] == 0
+    assert c["why"]["capability_status"] == "ELIGIBLE"
+    assert c["class_teacher_familiarity"]["same_teacher_elsewhere_count"] == 2
+    assert c["class_teacher_familiarity"]["total_other_lessons"] == 2
+
+
+def test_class_teacher_inconsistency_never_proposes_an_unconfirmed_teacher():
+    """No teacher_capability row for T1/SUBA at all -
+    CapabilityService.resolve() falls back to NOT_ELIGIBLE (detect-never-
+    assert, app/analysis/capability.py) - so the move must not be offered,
+    exactly the guess docs/suggestions.md says this module refuses to
+    make without real data behind it."""
+    conn = build_richer_synthetic_db()
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=2, room_id=1)
+    _persist_consistency_findings(conn)
+
+    finding_id = conn.execute(
+        "SELECT id FROM finding WHERE rule_id = 'class_teacher_inconsistency'"
+    ).fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    assert result["supported"] is True
+    assert result["candidates"] == []
+
+
+def test_class_teacher_inconsistency_skips_lesson_when_majority_teacher_already_busy():
+    conn = build_richer_synthetic_db()
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=1, class_name_id=1, teacher_id=2, room_id=1)
+    # T1 (the majority teacher) is already teaching a different class at
+    # the minority lesson's exact slot - no valid "just swap the teacher"
+    # fix exists for that lesson.
+    add_lesson(conn, day_id=1, period_id=4, roll_class_id=2, class_name_id=2, teacher_id=1, room_id=2)
+    _insert_capability(conn, teacher_code="T1", subject_code="SUBA", status="ELIGIBLE")
+    _persist_consistency_findings(conn)
+
+    finding_id = conn.execute(
+        "SELECT id FROM finding WHERE rule_id = 'class_teacher_inconsistency'"
+    ).fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    assert result["supported"] is True
     assert result["candidates"] == []

@@ -166,6 +166,8 @@ export default function App() {
       after_day_code: candidate.after.day_code,
       after_period_code: candidate.after.period_code,
       after_room_code: candidate.after.room_code ?? undefined,
+      after_teacher_code:
+        candidate.after.teacher_code !== candidate.before.teacher_code ? candidate.after.teacher_code ?? undefined : undefined,
       reason: "Applied from a suggested fix",
       finding_ids: [finding.id],
     });

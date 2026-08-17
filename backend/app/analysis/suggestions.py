@@ -11,30 +11,37 @@ This is deliberately algorithmic, not AI - nothing here calls a model.
 The (not yet built) AI advisor layer's job is to explain *these* ranked,
 pre-validated candidates in plain language, never to invent its own.
 
-Scope: teacher_double_booking, room_double_booking, and
-class_room_instability. Room-feature matching and student_double_booking
-suggestions are out of scope - see docs/suggestions.md for why. Teacher
-reassignment (moving a lesson to a *different teacher*) is deliberately
-never suggested - there's no authoritative subject-qualification data yet
-(see docs/staff-capability-model.md), and guessing would be exactly the
-kind of invented suggestion the roadmap warns against. That's also why
-class_teacher_inconsistency has no suggestion support here even though
-its sibling rule class_room_instability does - "move this lesson to the
-class's other room" is a safe search; "move this lesson to the class's
-other teacher" is exactly the guess this module refuses to make."""
+Scope: teacher_double_booking, room_double_booking, class_room_instability,
+and (since 2026-08-17, roadmap 2.2 item 9) class_teacher_inconsistency.
+Room-feature matching and student_double_booking suggestions are out of
+scope - see docs/suggestions.md for why.
+
+Teacher reassignment (moving a lesson to a *different teacher*) was
+deliberately never suggested until now - there was no authoritative
+subject-qualification data, and guessing would have been exactly the
+kind of invented suggestion the roadmap warns against. teacher_capability
+(app/analysis/capability.py) removed that blocker: a teacher-consolidation
+candidate is only ever offered when CapabilityService.resolve() confirms
+the target teacher is not NOT_ELIGIBLE for the class's subject - the same
+check teacher_not_qualified_for_class (app/analysis/capability_rules.py)
+uses to raise a finding, applied here as a hard constraint before a move
+is ever proposed instead of after."""
 
 import json
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 
+from app.analysis.capability import resolve as resolve_capability
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 MAX_ENTRIES_CONSIDERED = 3  # cap on how many conflicting/minority-room entries per finding get candidates generated
 MAX_CANDIDATES_RETURNED = 15
-SUPPORTED_RULES = {"teacher_double_booking", "room_double_booking", "class_room_instability"}
+SUPPORTED_RULES = {
+    "teacher_double_booking", "room_double_booking", "class_room_instability", "class_teacher_inconsistency",
+}
 
 
 @dataclass(frozen=True)
@@ -117,15 +124,54 @@ def _majority_room(entries: list[dict]) -> int | None:
     return min(counts, key=lambda room_id: (-counts[room_id], codes[room_id]))
 
 
+def _majority_teacher(entries: list[dict]) -> int | None:
+    """teacher_id equivalent of _majority_room - the teacher most of a
+    class's lessons already use, for class_teacher_inconsistency's
+    consolidation candidate. Same tie-break discipline (teacher_code
+    alphabetically) for stable, re-run-independent results."""
+    counts: dict[int, int] = defaultdict(int)
+    codes: dict[int, str] = {}
+    for e in entries:
+        if e["teacher_id"] is None:
+            continue
+        counts[e["teacher_id"]] += 1
+        codes[e["teacher_id"]] = e["teacher_code"]
+    if not counts:
+        return None
+    return min(counts, key=lambda teacher_id: (-counts[teacher_id], codes[teacher_id]))
+
+
+def _class_teacher_familiarity(entries_by_class: dict[int, list[dict]], entry: dict, after_teacher_id: int | None) -> dict | None:
+    """teacher_id equivalent of _class_room_familiarity - how many of the
+    class's *other* lessons already run with the candidate's target
+    teacher."""
+    if after_teacher_id is None:
+        return None
+    others = [e for e in entries_by_class.get(entry["class_name_id"], []) if e["entry_id"] != entry["entry_id"]]
+    if not others:
+        return None
+    same_teacher_elsewhere = sum(1 for e in others if e["teacher_id"] == after_teacher_id)
+    return {"same_teacher_elsewhere_count": same_teacher_elsewhere, "total_other_lessons": len(others)}
+
+
+def _familiarity_count(c: dict) -> int:
+    fam = c.get("class_room_familiarity")
+    if fam:
+        return fam["same_room_elsewhere_count"]
+    fam = c.get("class_teacher_familiarity")
+    if fam:
+        return fam["same_teacher_elsewhere_count"]
+    return 0
+
+
 def _candidate_sort_key(c: dict) -> tuple:
     # Least disruptive first, then most findings resolved, then prefer a
-    # room the class already uses elsewhere (ties back to
-    # class_room_instability - a suggestion that happens to make the class
+    # room/teacher the class already uses elsewhere (ties back to the
+    # class_room_instability / class_teacher_inconsistency findings these
+    # candidates address - a suggestion that happens to make the class
     # *more* consistent, not just conflict-free, ranks ahead of one that
     # doesn't).
-    fam = c["class_room_familiarity"]
-    familiarity_tiebreak = -fam["same_room_elsewhere_count"] if fam else 0
-    return (c["movement_cost"], -c["resolves_finding_count"], familiarity_tiebreak)
+    return (c["movement_cost"], -c["resolves_finding_count"], -_familiarity_count(c))
 
 
 def _try_candidate(
@@ -166,16 +212,21 @@ def _try_candidate(
     return {
         "entry_id": entry["entry_id"],
         "class_code": entry["class_code"],
-        "before": {"day_code": entry["day_code"], "period_code": entry["period_code"], "room_code": entry["room_code"]},
+        "before": {
+            "day_code": entry["day_code"], "period_code": entry["period_code"],
+            "room_code": entry["room_code"], "teacher_code": entry["teacher_code"],
+        },
         "after": {
             "day_code": code_lookups["day"][after_day_id],
             "period_code": code_lookups["period"][after_period_id],
             "room_code": code_lookups["room"].get(after_room_id),
+            "teacher_code": entry["teacher_code"],  # unchanged - room/slot candidates never reassign teacher
         },
         "movement_cost": _movement_cost(entry, after_day_id, after_period_id, after_room_id),
         "resolves_finding_count": sum(1 for k in before_findings if k not in after_findings),
-        "why": {"no_new_clash": True, "room_capacity": room_capacity},
+        "why": {"no_new_clash": True, "room_capacity": room_capacity, "capability_status": None},
         "class_room_familiarity": _class_room_familiarity(entries_by_class, entry, after_room_id),
+        "class_teacher_familiarity": None,
     }
 
 
@@ -288,6 +339,113 @@ def _room_instability_candidates(
     return all_candidates
 
 
+def _class_subject(conn: sqlite3.Connection, class_name_id: int) -> tuple[str, str | None] | None:
+    row = conn.execute(
+        "SELECT s.source_code AS subject_code, f.code AS faculty_code "
+        "FROM class_name cn JOIN subject s ON s.id = cn.subject_id LEFT JOIN faculty f ON f.id = s.faculty_id "
+        "WHERE cn.id = ?",
+        (class_name_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["subject_code"], row["faculty_code"]
+
+
+def _try_teacher_candidate(
+    conn: sqlite3.Connection,
+    before_entries: list[dict],
+    before_findings: dict,
+    composites,
+    code_lookups: dict,
+    entry: dict,
+    after_teacher_id: int,
+    subject_code: str,
+    faculty_code: str | None,
+    entries_by_class: dict[int, list[dict]],
+) -> dict | None:
+    after_teacher_code = code_lookups["teacher"].get(after_teacher_id)
+    capability_status = resolve_capability(conn, after_teacher_code, subject_code, faculty_code)
+    if capability_status == "NOT_ELIGIBLE":
+        return None  # hard constraint: would create a teacher_not_qualified_for_class finding
+
+    overrides = {entry["entry_id"]: {"after_teacher_id": after_teacher_id}}
+    after_entries = apply_overrides(before_entries, overrides, code_lookups)
+    after_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, after_entries, composites)}
+
+    introduced = [f for k, f in after_findings.items() if k not in before_findings]
+    if introduced:
+        return None  # hard constraint: would create a new clash (e.g. the target teacher is already double-booked)
+
+    return {
+        "entry_id": entry["entry_id"],
+        "class_code": entry["class_code"],
+        "before": {
+            "day_code": entry["day_code"], "period_code": entry["period_code"],
+            "room_code": entry["room_code"], "teacher_code": entry["teacher_code"],
+        },
+        "after": {
+            "day_code": entry["day_code"], "period_code": entry["period_code"],
+            "room_code": entry["room_code"], "teacher_code": after_teacher_code,
+        },
+        "movement_cost": 0,  # slot and room never change - only the teacher does
+        "resolves_finding_count": sum(1 for k in before_findings if k not in after_findings),
+        "why": {"no_new_clash": True, "room_capacity": {"confirmed": False}, "capability_status": capability_status},
+        "class_room_familiarity": None,
+        "class_teacher_familiarity": _class_teacher_familiarity(entries_by_class, entry, after_teacher_id),
+    }
+
+
+def _teacher_consolidation_candidates(
+    conn: sqlite3.Connection,
+    finding_row,
+    before_entries: list[dict],
+    before_findings: dict,
+    composites,
+    code_lookups: dict,
+    teacher_busy: dict,
+    entries_by_class: dict[int, list[dict]],
+) -> list[dict] | None:
+    """class_teacher_inconsistency's counterpart to _room_instability_
+    candidates: consolidate the class's lessons onto whichever teacher
+    already covers most of them. Unblocked by teacher_capability
+    (docs/roadmap-v2.md 2.2, item 9) - the majority teacher is only ever
+    offered as a candidate when CapabilityService.resolve() confirms
+    they're not NOT_ELIGIBLE for the class's subject, so this never
+    proposes the "invented suggestion" docs/suggestions.md used to warn
+    against. Returns None if the finding's class, or its subject, can't be
+    resolved (predates entity_refs tracking, or the class's subject_id is
+    unset)."""
+    entity_refs = json.loads(finding_row["entity_refs_json"])
+    class_code = next((r["code"] for r in entity_refs if r["type"] == "class"), None)
+    if class_code is None:
+        return None
+
+    class_entries = [e for e in before_entries if e["class_code"] == class_code]
+    target_teacher_id = _majority_teacher(class_entries)
+    if target_teacher_id is None:
+        return None
+
+    class_name_id = next((e["class_name_id"] for e in class_entries if e["class_name_id"] is not None), None)
+    subject_faculty = _class_subject(conn, class_name_id) if class_name_id is not None else None
+    if subject_faculty is None:
+        return None
+    subject_code, faculty_code = subject_faculty
+
+    minority_entries = [e for e in class_entries if e["teacher_id"] != target_teacher_id][:MAX_ENTRIES_CONSIDERED]
+
+    all_candidates = []
+    for entry in minority_entries:
+        if (entry["day_id"], entry["period_id"]) in teacher_busy.get(target_teacher_id, set()):
+            continue  # the class's own majority teacher is already teaching elsewhere at this lesson's slot
+        candidate = _try_teacher_candidate(
+            conn, before_entries, before_findings, composites, code_lookups,
+            entry, target_teacher_id, subject_code, faculty_code, entries_by_class,
+        )
+        if candidate:
+            all_candidates.append(candidate)
+    return all_candidates
+
+
 def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     finding_row = conn.execute(
         "SELECT rule_id, evidence_json, entity_refs_json FROM finding WHERE id = ?", (finding_id,)
@@ -321,6 +479,12 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
             room_busy, entries_by_class,
         )
         not_found_note = "This class's lessons couldn't be matched to the current timetable - re-run the rules engine."
+    elif finding_row["rule_id"] == "class_teacher_inconsistency":
+        candidates = _teacher_consolidation_candidates(
+            conn, finding_row, before_entries, before_findings, composites, code_lookups,
+            teacher_busy, entries_by_class,
+        )
+        not_found_note = "This class's lessons or subject couldn't be matched to the current timetable - re-run the rules engine."
     else:
         candidates = _clash_candidates(
             conn, finding_row, before_entries, entries_by_id, before_findings, composites, code_lookups,
