@@ -574,6 +574,32 @@ CREATE TABLE IF NOT EXISTS teacher_role_assignment (
     assigned_by TEXT NOT NULL
 );
 
+-- Registration / career-stage profile (docs/roadmap-v2.md 2.4). App-owned,
+-- same reasoning as staff_role/teacher_role_assignment above: none of
+-- registration_status, career_stage, commenced_teaching_date, or fte
+-- exists in the .tfx/.sfx export, and none is inferable from a light
+-- timetable (same argument docs/solver.md 4.2 makes for unavailability).
+--
+-- docs/roadmap-v2.md 2.1's own SQL sketch proposed ALTER TABLE teacher
+-- ADD COLUMN for these fields directly on `teacher` - the same mistake
+-- teacher_capability's original sketch made (docs/roadmap-v2.md 2.2):
+-- `teacher` is in app/db/resync.py's SOURCE_TABLES_IN_DELETE_ORDER,
+-- rebuilt from scratch on every re-ingest, so any column added directly
+-- to it would silently lose every human-entered value on the next
+-- import. Caught before it shipped; keyed by teacher_code instead, one
+-- row per teacher, never wiped by resync.py, matching teacher_role_
+-- assignment exactly.
+CREATE TABLE IF NOT EXISTS teacher_profile (
+    id INTEGER PRIMARY KEY,
+    teacher_code TEXT NOT NULL UNIQUE,
+    registration_status TEXT CHECK (registration_status IN ('PROVISIONAL', 'FULL', 'UNKNOWN')),
+    career_stage TEXT CHECK (career_stage IN ('GRADUATE', 'EARLY_CAREER', 'EXPERIENCED', 'UNKNOWN')),
+    commenced_teaching_date TEXT,
+    fte REAL,                           -- 1.0, 0.6 etc - drives a pro-rata contact cap (not yet applied, see docs/rules.md)
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL
+);
+
 -- Industrial agreement data (docs/roadmap-v2.md 0 and 2.1) - the EA read
 -- as a machine-readable spec rather than prose. Standalone: no FK into
 -- any source-derived table, so - like staff_role above - none of this

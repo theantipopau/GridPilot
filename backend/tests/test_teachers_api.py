@@ -120,3 +120,74 @@ def test_role_assignment_survives_a_teacher_table_rebuild(client, db_path):
 
     detail = client.get("/api/teachers/T1").json()
     assert detail["role"]["name"] == "Head of Department"
+
+
+def test_teacher_has_no_profile_by_default(client):
+    detail = client.get("/api/teachers/T1").json()
+    assert detail["profile"] is None
+    teachers = {t["code"]: t for t in client.get("/api/teachers").json()["teachers"]}
+    assert teachers["T1"]["profile"] is None
+
+
+def test_update_profile_and_read_it_back(client):
+    resp = client.post(
+        "/api/teachers/T1/profile",
+        json={
+            "registration_status": "PROVISIONAL", "career_stage": "EARLY_CAREER",
+            "commenced_teaching_date": "2025-01-27", "fte": 0.8, "updated_by": "tester",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    detail = client.get("/api/teachers/T1").json()
+    assert detail["profile"] == {
+        "registration_status": "PROVISIONAL", "career_stage": "EARLY_CAREER",
+        "commenced_teaching_date": "2025-01-27", "fte": 0.8,
+    }
+    teachers = {t["code"]: t for t in client.get("/api/teachers").json()["teachers"]}
+    assert teachers["T1"]["profile"]["career_stage"] == "EARLY_CAREER"
+
+
+def test_updating_a_profile_twice_upserts_rather_than_duplicating(client):
+    client.post("/api/teachers/T1/profile", json={"career_stage": "GRADUATE", "updated_by": "tester"})
+    client.post("/api/teachers/T1/profile", json={"career_stage": "EXPERIENCED", "updated_by": "tester"})
+
+    detail = client.get("/api/teachers/T1").json()
+    assert detail["profile"]["career_stage"] == "EXPERIENCED"
+
+
+def test_profile_rejects_invalid_career_stage(client):
+    resp = client.post("/api/teachers/T1/profile", json={"career_stage": "WIZARD", "updated_by": "tester"})
+    assert resp.status_code == 422
+
+
+def test_profile_rejects_fte_outside_zero_to_one(client):
+    resp = client.post("/api/teachers/T1/profile", json={"fte": 1.4, "updated_by": "tester"})
+    assert resp.status_code == 400
+
+
+def test_profile_update_for_unknown_teacher_is_404(client):
+    resp = client.post("/api/teachers/NOPE/profile", json={"career_stage": "GRADUATE", "updated_by": "tester"})
+    assert resp.status_code == 404
+
+
+def test_profile_survives_a_teacher_table_rebuild(client, db_path):
+    """Same point as test_role_assignment_survives_a_teacher_table_rebuild
+    - teacher_profile is keyed by teacher_code, not teacher.id, so it must
+    keep resolving correctly after a re-ingest rebuilds the teacher table
+    with new surrogate ids."""
+    client.post("/api/teachers/T1/profile", json={"career_stage": "EARLY_CAREER", "updated_by": "tester"})
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM timetable_entry")
+    old_t1_id = conn.execute("SELECT id FROM teacher WHERE code = 'T1'").fetchone()[0]
+    conn.execute("DELETE FROM teacher")
+    conn.execute("INSERT INTO teacher (code, first_name, last_name) VALUES ('T0', 'Decoy', 'Teacher')")
+    conn.execute("INSERT INTO teacher (code, first_name, last_name) VALUES ('T1', 'Test', 'One')")
+    new_t1_id = conn.execute("SELECT id FROM teacher WHERE code = 'T1'").fetchone()[0]
+    conn.commit()
+    conn.close()
+    assert new_t1_id != old_t1_id
+
+    detail = client.get("/api/teachers/T1").json()
+    assert detail["profile"]["career_stage"] == "EARLY_CAREER"

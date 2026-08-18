@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { assignTeacherRole, createRole, fetchRoles, fetchTeachers } from "../api";
+import { assignTeacherRole, createRole, fetchRoles, fetchTeachers, updateTeacherProfile } from "../api";
 import LoadingState from "../components/LoadingState";
 import PageHeader from "../components/PageHeader";
 import { IconUsers } from "../components/icons";
-import type { StaffRole, TeacherSummary } from "../types";
+import type { CareerStage, RegistrationStatus, StaffRole, TeacherSummary } from "../types";
 
 function formatMinutes(minutes: number | null): string {
   if (minutes == null) return "—";
   return `${Math.round(minutes)} min`;
 }
+
+const CAREER_STAGE_OPTIONS: CareerStage[] = ["GRADUATE", "EARLY_CAREER", "EXPERIENCED", "UNKNOWN"];
+const REGISTRATION_STATUS_OPTIONS: RegistrationStatus[] = ["PROVISIONAL", "FULL", "UNKNOWN"];
 
 export default function TeachersPage() {
   const [teachers, setTeachers] = useState<TeacherSummary[] | null>(null);
@@ -21,6 +24,7 @@ export default function TeachersPage() {
   const [newRoleRelease, setNewRoleRelease] = useState("");
   const [savingRole, setSavingRole] = useState(false);
   const [assigningCode, setAssigningCode] = useState<string | null>(null);
+  const [savingProfileCode, setSavingProfileCode] = useState<string | null>(null);
 
   const load = () => {
     fetchTeachers().then((r) => setTeachers(r.teachers)).catch((e) => setError(String(e)));
@@ -66,6 +70,37 @@ export default function TeachersPage() {
     }
   };
 
+  const handleProfileChange = async (
+    teacher: TeacherSummary,
+    changes: Partial<{
+      registration_status: RegistrationStatus | null;
+      career_stage: CareerStage | null;
+      commenced_teaching_date: string | null;
+      fte: number | null;
+    }>,
+  ) => {
+    if (!reviewerName.trim()) {
+      setError("Enter your name (top right) before editing a teacher's profile.");
+      return;
+    }
+    setSavingProfileCode(teacher.code);
+    try {
+      await updateTeacherProfile(teacher.code, {
+        registration_status: teacher.profile?.registration_status ?? null,
+        career_stage: teacher.profile?.career_stage ?? null,
+        commenced_teaching_date: teacher.profile?.commenced_teaching_date ?? null,
+        fte: teacher.profile?.fte ?? null,
+        ...changes,
+        updated_by: reviewerName.trim(),
+      });
+      load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingProfileCode(null);
+    }
+  };
+
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!teachers || !roles) return <LoadingState label="Loading teachers…" />;
 
@@ -75,8 +110,9 @@ export default function TeachersPage() {
         icon={<IconUsers className="h-5 w-5" />}
         title="Teachers"
         description="Read-only from the imported .tfx (name, code, faculty, contracted load, scheduled load). Role/tier
-          assignment is the one thing entered here in GridPilot - it has no source in any Timetabling Solutions
-          export, and survives a re-ingest because it's keyed by teacher code, not an internal id."
+          and career-stage profile are the only things entered here in GridPilot - neither has a source in any
+          Timetabling Solutions export, and both survive a re-ingest because they're keyed by teacher code, not an
+          internal id."
         action={
           <input
             value={reviewerName}
@@ -164,6 +200,9 @@ export default function TeachersPage() {
               <th className="p-2.5">Contracted load</th>
               <th className="p-2.5">Scheduled load</th>
               <th className="p-2.5">Role</th>
+              <th className="p-2.5">Career stage</th>
+              <th className="p-2.5">Registration</th>
+              <th className="p-2.5">FTE</th>
             </tr>
           </thead>
           <tbody>
@@ -172,6 +211,7 @@ export default function TeachersPage() {
                 t.contracted_load_minutes != null &&
                 t.scheduled_load_minutes != null &&
                 t.scheduled_load_minutes > t.contracted_load_minutes;
+              const savingProfile = savingProfileCode === t.code;
               return (
                 <tr key={t.code} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="p-2.5 font-medium text-slate-800">
@@ -199,6 +239,56 @@ export default function TeachersPage() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="p-2.5">
+                    <select
+                      value={t.profile?.career_stage ?? ""}
+                      disabled={savingProfile}
+                      onChange={(e) => handleProfileChange(t, { career_stage: (e.target.value || null) as never })}
+                      className={`rounded border px-1.5 py-1 text-xs disabled:opacity-50 ${
+                        t.profile?.career_stage === "EARLY_CAREER"
+                          ? "border-amber-300 bg-amber-50 text-amber-800"
+                          : "border-slate-300 text-slate-700"
+                      }`}
+                    >
+                      <option value="">— not set —</option>
+                      {CAREER_STAGE_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-2.5">
+                    <select
+                      value={t.profile?.registration_status ?? ""}
+                      disabled={savingProfile}
+                      onChange={(e) => handleProfileChange(t, { registration_status: (e.target.value || null) as never })}
+                      className="rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-700 disabled:opacity-50"
+                    >
+                      <option value="">— not set —</option>
+                      {REGISTRATION_STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-2.5">
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={1}
+                      step={0.1}
+                      defaultValue={t.profile?.fte ?? ""}
+                      disabled={savingProfile}
+                      placeholder="1.0"
+                      onBlur={(e) => {
+                        const value = e.target.value ? Number(e.target.value) : null;
+                        if (value !== (t.profile?.fte ?? null)) handleProfileChange(t, { fte: value });
+                      }}
+                      className="w-16 rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-700 disabled:opacity-50"
+                    />
                   </td>
                 </tr>
               );

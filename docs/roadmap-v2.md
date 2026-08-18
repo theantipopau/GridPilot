@@ -429,20 +429,51 @@ Until FTE is entered, the load rule must keep using the full-time cap and
 **say so in the finding's evidence**, rather than silently comparing a
 part-timer against a full-time number.
 
-### 2.4 Early-career teachers
+### 2.4 Early-career teachers — **built 2026-08-18**
 
 The EA's graduate-teacher provisions (clause 4.21 — induction, mentoring,
 support for full registration) are largely *process* obligations rather
-than timetable arithmetic, so the honest scope here is narrow:
+than timetable arithmetic, so the scope built here is narrow, as planned:
 
-- Store `career_stage` / `registration_status` / `commenced_teaching_date`
-  (§2.1) and surface them on the Teachers page.
-- Rule `early_career_teacher_overloaded` — an ECT at or near the contact
-  cap, or carrying an unusual number of distinct subject preparations
-  (a real workload driver the raw minute count misses entirely).
-- **Flag, don't enforce.** Any specific ECT release entitlement must come
-  from the confirmed agreement plus school policy. Do not encode a
-  number here on the strength of this document.
+- `career_stage` / `registration_status` / `commenced_teaching_date` /
+  `fte` — stored and surfaced on the Teachers page, editable inline
+  (career-stage/registration selects, an FTE number input). **Deviated
+  from this section's own original SQL sketch**, which proposed `ALTER
+  TABLE teacher ADD COLUMN ...` directly on `teacher` — the same mistake
+  §2.2's original `teacher_capability` sketch made. `teacher` is a
+  source-derived table, fully rebuilt with new surrogate ids on every
+  re-ingest (`app/db/resync.py`'s `SOURCE_TABLES_IN_DELETE_ORDER`), so a
+  column added directly to it would silently lose every human-entered
+  value on the next import. Caught before it shipped; built instead as a
+  new `teacher_profile` table keyed by `teacher_code`, matching
+  `teacher_role_assignment` exactly — never touched by the re-ingest
+  delete pass, with a test proving a profile survives a simulated teacher-
+  table rebuild.
+- Rule `early_career_teacher_overloaded` (`docs/rules.md`) — an ECT at or
+  near the contact cap, or carrying an unusual number of distinct subject
+  preparations (a real workload driver the raw minute count misses
+  entirely). Both thresholds are documented default heuristics, not
+  confirmed school policy — the subject-preparation cutoff (`> 7`) was
+  picked after checking the real distribution (1–11 distinct subjects per
+  teacher, median 5), not invented outright.
+- **Flag, don't enforce**, exactly as scoped. No specific ECT release
+  entitlement is encoded — that needs the confirmed agreement plus school
+  policy, neither of which exists yet.
+
+Verified against real data: no teacher currently has a `career_stage`
+recorded (correctly zero findings pre-review, same "nothing reviewed is
+not nothing wrong" discipline as `teacher_capability`), so verification
+used temporary `teacher_profile` rows on two real teachers, deleted
+immediately after. `HENE04` (11 distinct subjects, the real maximum in
+the dataset) correctly triggered the subject-preparation signal only;
+`MCGK13` (3000/2580 min/cycle — the same over-cap teacher `teacher_over_
+contracted_load` already flags, §0.2) correctly triggered the load signal
+only, confirming the two signals fire independently. Also exercised the
+full write path live: `POST /teachers/{code}/profile`, confirmed via
+`GET`, then edited from the browser UI itself (career-stage select),
+confirmed the network call succeeded, then deleted the row directly —
+`teacher_profile` had 0 rows in the real database both before this
+session and after.
 
 Worth being explicit: the mentoring/induction/portfolio provisions in
 4.21 are HR workflow, not timetabling, and GridPilot should not grow into
@@ -708,13 +739,14 @@ back, this is the section to work on meanwhile.
 | 7 | ✅ Contact-time definition change (§0.2) — mechanism built, off by default | school still needs to confirm `REGISTRATION` = pastoral care before switching it on | S |
 | 8 | ✅ `teacher_capability` + bootstrap-for-review (§2.2) | — for the review queue itself; a real HR feed would still improve on the bootstrap | L |
 | 9 | ✅ `class_teacher_inconsistency` suggestions (teacher consolidation) | — | M |
-| 10 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
-| 11 | Editable blocking (§3.4.2) | #10 + #5 | L |
-| 12 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
+| 10 | ✅ Early-career teacher profile + `early_career_teacher_overloaded` (§2.4) | — | S |
+| 11 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
+| 12 | Editable blocking (§3.4.2) | #11 + #5 | L |
+| 13 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
 
 Items 1–5 need no answers from anyone and are worth roughly a session
 each. Items 6–7 are small once two short questions come back. Everything
-from 10 down is gated on the GUID experiment that has been open since
+from 11 down is gated on the GUID experiment that has been open since
 2026-08-04.
 
 ## 6. Questions for the school, consolidated

@@ -23,6 +23,17 @@ from app.analysis.models import EntityRef, Finding, SlotRef
 # Sophia College policy value - see docs/rules.md.
 LOW_UTILISATION_THRESHOLD = 0.20
 
+# early_career_teacher_overloaded (docs/roadmap-v2.md 2.4) - both default
+# heuristics, not confirmed school policy, same caveat as
+# LOW_UTILISATION_THRESHOLD above. EARLY_CAREER_LOAD_THRESHOLD_PCT mirrors
+# the 90-100%-of-cap band already used in docs/roadmap-v2.md 0.2's
+# real-data investigation. EARLY_CAREER_SUBJECT_PREP_THRESHOLD was picked
+# after checking the real distribution of distinct-subject counts per
+# teacher (1-11, median 5, see docs/rules.md) - anything above it sits in
+# the top tail, not a made-up round number.
+EARLY_CAREER_LOAD_THRESHOLD_PCT = 0.90
+EARLY_CAREER_SUBJECT_PREP_THRESHOLD = 7
+
 
 def room_capacity_exceeded(conn: sqlite3.Connection, entries: list[dict]) -> list[Finding]:
     """entries: LESSON rows shaped like app.analysis.clash_rules.lesson_
@@ -173,9 +184,91 @@ def room_underutilization(conn: sqlite3.Connection) -> list[Finding]:
     return findings
 
 
+def early_career_teacher_overloaded(conn: sqlite3.Connection) -> list[Finding]:
+    """docs/roadmap-v2.md 2.4: 'flag, don't enforce' - no specific ECT
+    release entitlement is encoded here (that needs the confirmed
+    agreement plus school policy, see app/analysis/release.py's
+    leadership pool for the pattern this would follow once one exists).
+    Two independent signals, either sufficient to flag: at/near the
+    contact cap (the same cap teacher_over_contracted_load checks), or
+    an unusual number of distinct subject preparations - a real workload
+    driver the raw minute count misses (a teacher covering 8 different
+    subjects at 80% load is a different risk than one covering 2)."""
+    ects = conn.execute(
+        "SELECT t.id, t.code, t.contracted_load_minutes FROM teacher t "
+        "JOIN teacher_profile tp ON tp.teacher_code = t.code WHERE tp.career_stage = 'EARLY_CAREER'"
+    ).fetchall()
+    if not ects:
+        return []
+
+    contact_entry_types = resolve_contact_entry_types(conn)
+    placeholders = ",".join("?" for _ in contact_entry_types)
+    load_rows = conn.execute(
+        f"""
+        SELECT te.teacher_id, te.period_id, p.load_minutes
+        FROM timetable_entry te JOIN period p ON p.id = te.period_id
+        WHERE te.entry_type IN ({placeholders}) AND te.teacher_id IS NOT NULL
+        """,
+        contact_entry_types,
+    ).fetchall()
+    slots_by_teacher: dict[int, dict[int, float]] = defaultdict(dict)
+    for r in load_rows:
+        slots_by_teacher[r["teacher_id"]][r["period_id"]] = r["load_minutes"]
+
+    subject_rows = conn.execute(
+        """
+        SELECT te.teacher_id, COUNT(DISTINCT cn.subject_id) AS distinct_subjects
+        FROM timetable_entry te JOIN class_name cn ON cn.id = te.class_name_id
+        WHERE te.entry_type = 'LESSON' AND te.teacher_id IS NOT NULL
+        GROUP BY te.teacher_id
+        """
+    ).fetchall()
+    distinct_subjects_by_teacher = {r["teacher_id"]: r["distinct_subjects"] for r in subject_rows}
+
+    findings = []
+    for t in ects:
+        scheduled_minutes = sum(slots_by_teacher.get(t["id"], {}).values())
+        distinct_subjects = distinct_subjects_by_teacher.get(t["id"], 0)
+
+        near_cap = (
+            t["contracted_load_minutes"] is not None
+            and scheduled_minutes >= EARLY_CAREER_LOAD_THRESHOLD_PCT * t["contracted_load_minutes"]
+        )
+        many_preparations = distinct_subjects > EARLY_CAREER_SUBJECT_PREP_THRESHOLD
+        if not near_cap and not many_preparations:
+            continue
+
+        reasons = []
+        if near_cap:
+            reasons.append(f"scheduled {scheduled_minutes:.0f}/{t['contracted_load_minutes']:.0f} min/cycle")
+        if many_preparations:
+            reasons.append(f"{distinct_subjects} distinct subject preparations")
+
+        findings.append(Finding(
+            rule_id="early_career_teacher_overloaded",
+            severity="warning",
+            title=f"Early-career teacher {t['code']} - {'; '.join(reasons)}",
+            entity_refs=(EntityRef("teacher", t["code"]),),
+            slot_refs=(),
+            evidence={
+                "scheduled_minutes": scheduled_minutes,
+                "contracted_load_minutes": t["contracted_load_minutes"],
+                "distinct_subjects": distinct_subjects,
+                "near_cap": near_cap,
+                "many_preparations": many_preparations,
+                "load_threshold_pct": EARLY_CAREER_LOAD_THRESHOLD_PCT,
+                "subject_prep_threshold": EARLY_CAREER_SUBJECT_PREP_THRESHOLD,
+                "contact_entry_types": list(contact_entry_types),
+                "threshold_note": "Default heuristics for surfacing candidates - not confirmed school policy values.",
+            },
+        ))
+    return findings
+
+
 def run_load_rules(conn: sqlite3.Connection) -> list[Finding]:
     return [
         *room_capacity_exceeded(conn, lesson_entries(conn)),
         *teacher_over_contracted_load(conn),
         *room_underutilization(conn),
+        *early_career_teacher_overloaded(conn),
     ]

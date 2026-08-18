@@ -156,6 +156,53 @@ and undo rather than never proposing in the first place. Confirmed
 against the real data: `solve_repair()` resolves both real violations
 by moving each class into an actual pool room (`RIE05`, `RIE07`).
 
+### `early_career_teacher_overloaded` (warning) - added 2026-08-18
+
+Unblocked by `teacher_profile` (docs/roadmap-v2.md 2.4) - registration
+status, career stage, commencement date, and FTE, none of which exists
+in the `.tfx`/`.sfx` export or is inferable from a light timetable (same
+argument docs/solver.md 4.2 makes for teacher unavailability). Entered
+entirely within GridPilot, on the Teachers page, keyed by `teacher_code`
+- `teacher` is a source-derived table rebuilt with new surrogate ids on
+every re-ingest, so `teacher_profile` follows the same discipline as
+`teacher_role_assignment`/`teacher_capability` rather than the ALTER
+TABLE-on-`teacher` sketch docs/roadmap-v2.md 2.1 originally proposed (a
+correctness catch made before it shipped - see schema.sql's
+`teacher_profile` comment).
+
+Only considers teachers with `career_stage = 'EARLY_CAREER'` explicitly
+set - no career stage recorded means no finding, never an assumed one.
+Two independent signals, either sufficient to flag:
+
+- **Near or over the contact cap** - `scheduled_minutes >=
+  EARLY_CAREER_LOAD_THRESHOLD_PCT × contracted_load_minutes`
+  (`app/analysis/load_rules.py`, default `0.90`, mirroring the 90-100%
+  band docs/roadmap-v2.md 0.2 already used). Same contact-time
+  definition as `teacher_over_contracted_load` (`resolve_contact_entry_
+  types`).
+- **Many distinct subject preparations** - more than `EARLY_CAREER_
+  SUBJECT_PREP_THRESHOLD` (default `7`) distinct subjects taught across
+  the cycle. A workload driver the raw minute count misses entirely: an
+  early-career teacher juggling 8+ subjects at a light load is a
+  different, and arguably worse, risk than one teaching 2 subjects near
+  the cap. The default was picked after checking the real distribution
+  of distinct-subject counts per teacher (1-11, median 5) rather than
+  invented outright - `> 7` sits in the top tail of that real
+  distribution, not a round number.
+
+Both thresholds carry the same "default heuristic, not confirmed school
+policy" caveat as `LOW_UTILISATION_THRESHOLD`, surfaced in the finding's
+`evidence.threshold_note`. Deliberately **flag, don't enforce** - no
+specific ECT release entitlement is encoded (docs/roadmap-v2.md 2.4);
+that needs the confirmed agreement plus school policy, neither of which
+exists yet. Verified against real data (read-only investigation, then a
+temporary `teacher_profile` row per teacher, deleted immediately after):
+`HENE04` (11 distinct subjects, the real maximum) correctly triggered the
+subject-preparation signal only; `MCGK13` (3000/2580 min/cycle, the same
+teacher `teacher_over_contracted_load` already flags - docs/roadmap-v2.md
+0.2) correctly triggered the load signal only - confirming the two
+signals fire independently rather than one masking the other.
+
 ### `teacher_not_qualified_for_class` (critical) - added 2026-08-17
 
 Unblocked by `teacher_capability` (docs/roadmap-v2.md 2.2) - "permission

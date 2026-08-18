@@ -286,6 +286,16 @@ export interface StaffRole {
   notes?: string | null;
 }
 
+export type RegistrationStatus = "PROVISIONAL" | "FULL" | "UNKNOWN";
+export type CareerStage = "GRADUATE" | "EARLY_CAREER" | "EXPERIENCED" | "UNKNOWN";
+
+export interface TeacherProfile {
+  registration_status: RegistrationStatus | null;
+  career_stage: CareerStage | null;
+  commenced_teaching_date: string | null;
+  fte: number | null;
+}
+
 export interface TeacherSummary {
   code: string;
   first_name: string | null;
@@ -295,6 +305,7 @@ export interface TeacherSummary {
   contracted_load_minutes: number | null;
   scheduled_load_minutes: number | null;
   role: StaffRole | null;
+  profile: TeacherProfile | null;
 }
 
 export interface DashboardData {

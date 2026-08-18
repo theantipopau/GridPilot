@@ -3,6 +3,7 @@ import type {
   AuditEvent,
   BlockingLinesResponse,
   CapabilityStatus,
+  CareerStage,
   ChangeSetDetail,
   ChangeSetSummary,
   CompositeCandidate,
@@ -14,6 +15,7 @@ import type {
   IngestStatus,
   IngestUploadResult,
   LeadershipTier,
+  RegistrationStatus,
   ReferenceData,
   ReleaseReconciliation,
   RepairResult,
@@ -23,6 +25,7 @@ import type {
   StaffRole,
   SuggestionsResponse,
   TeacherCapabilityCandidate,
+  TeacherProfile,
   TeacherSummary,
   TimetableEntry,
   TimetableEntryLookup,
@@ -235,6 +238,19 @@ export function assignTeacherRole(
     staff_role_id: staffRoleId,
     assigned_by: assignedBy,
   });
+}
+
+export function updateTeacherProfile(
+  code: string,
+  params: {
+    registration_status?: RegistrationStatus | null;
+    career_stage?: CareerStage | null;
+    commenced_teaching_date?: string | null;
+    fte?: number | null;
+    updated_by: string;
+  },
+): Promise<{ teacher_code: string } & TeacherProfile> {
+  return postJson(`${BASE}/teachers/${encodeURIComponent(code)}/profile`, params);
 }
 
 export function fetchRooms(): Promise<{ rooms: RoomSummary[] }> {

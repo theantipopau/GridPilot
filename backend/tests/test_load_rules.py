@@ -3,11 +3,30 @@ real school data - see tests/synthetic.py."""
 
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.load_rules import (
+    early_career_teacher_overloaded,
     room_capacity_exceeded,
     room_underutilization,
     teacher_over_contracted_load,
 )
 from tests.synthetic import add_enrolment, add_lesson, build_synthetic_db
+
+
+def _set_career_stage(conn, teacher_code: str, career_stage: str) -> None:
+    conn.execute(
+        "INSERT INTO teacher_profile (teacher_code, career_stage, updated_at, updated_by) VALUES (?, ?, ?, ?)",
+        (teacher_code, career_stage, "2026-01-01T00:00:00", "tester"),
+    )
+
+
+def _add_lesson_slot(conn, *, day_id: int, period_id: int) -> None:
+    """A fresh LESSON_SLOT period on its own new day, ids chosen well
+    outside the shared fixture's range so this never collides with it."""
+    conn.execute("INSERT INTO day (id, code, day_no, week_label) VALUES (?, ?, ?, 'A')", (day_id, f"Day {day_id} X", day_id))
+    conn.execute(
+        "INSERT INTO period (id, code, name, day_id, period_no, load_minutes, entry_kind) "
+        "VALUES (?, 'P1', 'Period 1', ?, 1, 60, 'LESSON_SLOT')",
+        (period_id, day_id),
+    )
 
 
 def test_room_capacity_not_exceeded_when_under_seats():
@@ -155,3 +174,68 @@ def test_room_underutilization_flags_unused_room():
     assert "R2" in flagged_rooms
     assert "R1" not in flagged_rooms
     assert all(f.severity == "info" for f in findings)
+
+
+def test_early_career_rule_ignores_teachers_without_a_profile():
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 60 WHERE id = 1")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+
+    assert early_career_teacher_overloaded(conn) == []
+
+
+def test_early_career_rule_ignores_non_early_career_teachers():
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 60 WHERE id = 1")
+    _set_career_stage(conn, "T1", "EXPERIENCED")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+
+    assert early_career_teacher_overloaded(conn) == []
+
+
+def test_early_career_rule_flags_near_contact_cap():
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 60 WHERE id = 1")
+    _set_career_stage(conn, "T1", "EARLY_CAREER")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)  # 60/60 min
+
+    findings = early_career_teacher_overloaded(conn)
+    assert len(findings) == 1
+    assert findings[0].severity == "warning"
+    assert findings[0].evidence["near_cap"] is True
+    assert findings[0].evidence["many_preparations"] is False
+
+
+def test_early_career_rule_does_not_flag_a_light_load():
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 1000 WHERE id = 1")
+    _set_career_stage(conn, "T1", "EARLY_CAREER")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)  # 60/1000 min
+
+    assert early_career_teacher_overloaded(conn) == []
+
+
+def test_early_career_rule_flags_many_subject_preparations():
+    """The load-based signal alone would miss this: a light 8-lesson load
+    against a generous cap, but spread across 8 different subjects -
+    exactly the workload driver docs/roadmap-v2.md 2.4 says the raw
+    minute count misses."""
+    conn = build_synthetic_db()
+    conn.execute("UPDATE teacher SET contracted_load_minutes = 100000 WHERE id = 1")
+    _set_career_stage(conn, "T1", "EARLY_CAREER")
+
+    for i in range(8):
+        day_id, period_id, subject_id, class_name_id = 100 + i, 1000 + i, 100 + i, 100 + i
+        _add_lesson_slot(conn, day_id=day_id, period_id=period_id)
+        conn.execute("INSERT INTO subject (id, source_code, name) VALUES (?, ?, ?)", (subject_id, f"SUB{i}", f"Subject {i}"))
+        conn.execute(
+            "INSERT INTO class_name (id, code, name, subject_id) VALUES (?, ?, ?, ?)",
+            (class_name_id, f"CLS{i}", f"Class {i}", subject_id),
+        )
+        add_lesson(conn, day_id=day_id, period_id=period_id, roll_class_id=1, class_name_id=class_name_id, teacher_id=1, room_id=1)
+
+    findings = early_career_teacher_overloaded(conn)
+    assert len(findings) == 1
+    assert findings[0].evidence["distinct_subjects"] == 8
+    assert findings[0].evidence["many_preparations"] is True
+    assert findings[0].evidence["near_cap"] is False
