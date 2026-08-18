@@ -113,7 +113,7 @@ export default function AddChangeForm({ reference, prefill, onSubmit }: Props) {
       {matches && (
         <div className="mt-3">
           {matches.length === 0 ? (
-            <p className="text-xs text-slate-400">No matching lessons.</p>
+            <p className="text-xs text-ink-muted">No matching lessons.</p>
           ) : (
             <div className="flex flex-col gap-1">
               {matches.map((m) => (

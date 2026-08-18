@@ -77,7 +77,7 @@ export default function ChangeSetDetail({
       <div className="rounded-lg border border-slate-200 bg-white p-3">
         <h3 className="mb-2 text-sm font-semibold text-slate-700">Proposed changes ({changeSet.changes.length})</h3>
         {changeSet.changes.length === 0 ? (
-          <p className="text-xs text-slate-400">No changes yet - add one below.</p>
+          <p className="text-xs text-ink-muted">No changes yet - add one below.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {changeSet.changes.map((c) => (
@@ -86,13 +86,13 @@ export default function ChangeSetDetail({
                   <span className="font-medium">
                     {c.before.day_code} {c.before.period_code} / {c.before.room_code ?? "-"} / {c.before.teacher_code ?? "-"}
                   </span>
-                  <span className="mx-2 text-slate-400">to</span>
+                  <span className="mx-2 text-ink-muted">to</span>
                   <span className="font-medium text-sky-700">
                     {c.after.day_code} {c.after.period_code} / {c.after.room_code ?? "-"} / {c.after.teacher_code ?? "-"}
                   </span>
                   {c.reason && <div className="mt-1 text-slate-500">{c.reason}</div>}
                   {c.finding_ids.length > 0 && (
-                    <div className="mt-1 text-slate-400">addresses finding(s): {c.finding_ids.join(", ")}</div>
+                    <div className="mt-1 text-ink-muted">addresses finding(s): {c.finding_ids.join(", ")}</div>
                   )}
                 </div>
                 {changeSet.approval_status === "DRAFT" && (

@@ -87,12 +87,12 @@ export default function RoomConstraintQueue({ candidates, reviewStatus, onReview
                   <span className="font-medium text-slate-900">
                     {c.class_code} <span className="mx-1 opacity-50">→</span> {c.room_type}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-ink-muted">
                     {c.matching_lesson_count}/{c.total_lesson_count} lessons ({ratio.toLocaleString(undefined, { style: "percent" })})
                   </span>
                 </div>
                 {c.reviewed_by && (
-                  <div className="mt-1 text-xs text-slate-400">
+                  <div className="mt-1 text-xs text-ink-muted">
                     Reviewed by {c.reviewed_by}{c.review_note ? ` - "${c.review_note}"` : ""}
                   </div>
                 )}

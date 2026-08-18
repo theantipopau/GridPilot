@@ -121,13 +121,13 @@ export default function DashboardPage({ onNavigate, onImportClick }: Props) {
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">Recent activity</h3>
           {recentEvents.length === 0 ? (
-            <p className="text-xs text-slate-400">No audit events yet.</p>
+            <p className="text-xs text-ink-muted">No audit events yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {recentEvents.map((e) => (
                 <div key={e.id} className="text-xs">
                   <span className="font-medium text-slate-700">{EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}</span>
-                  <span className="ml-2 text-slate-400">{e.occurred_at}</span>
+                  <span className="ml-2 text-ink-muted">{e.occurred_at}</span>
                   <p className="text-slate-500">{e.summary}</p>
                 </div>
               ))}
@@ -185,7 +185,7 @@ function ScoreCard({
 function StatTile({ icon, label, value }: { icon: ReactNode; label: string; value: number }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="mb-1 text-slate-400">{icon}</div>
+      <div className="mb-1 text-ink-muted">{icon}</div>
       <div className="text-lg font-semibold text-slate-900">{value}</div>
       <div className="text-xs text-slate-500">{label}</div>
     </div>

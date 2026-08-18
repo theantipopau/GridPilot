@@ -108,7 +108,7 @@ export default function CommandPalette({ reference, onClose, onNavigateTab, onJu
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <IconSearch className="h-4 w-4 shrink-0 text-slate-400" />
+          <IconSearch className="h-4 w-4 shrink-0 text-ink-muted" />
           <input
             ref={inputRef}
             value={query}
@@ -132,7 +132,7 @@ export default function CommandPalette({ reference, onClose, onNavigateTab, onJu
         </div>
         <div className="max-h-80 overflow-y-auto py-1">
           {results.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-slate-400">No matches</p>
+            <p className="px-4 py-6 text-center text-sm text-ink-muted">No matches</p>
           )}
           {results.map((r, i) => (
             <button
@@ -146,9 +146,9 @@ export default function CommandPalette({ reference, onClose, onNavigateTab, onJu
             >
               <span className="flex items-baseline gap-2 truncate">
                 <span className="truncate font-medium">{r.label}</span>
-                {r.sublabel && <span className="shrink-0 text-xs text-slate-400">{r.sublabel}</span>}
+                {r.sublabel && <span className="shrink-0 text-xs text-ink-muted">{r.sublabel}</span>}
               </span>
-              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                 {r.kind}
               </span>
             </button>

@@ -134,7 +134,7 @@ function AgreementCard({
       <div className="mb-2 flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-800">{agreement.name}</h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-muted">
             Effective {agreement.effective_from}
             {agreement.effective_to ? ` – ${agreement.effective_to}` : ""}
             {agreement.source_reference && (
@@ -178,15 +178,15 @@ function AgreementCard({
             </button>
           </div>
           {agreement.load_rules.length === 0 && !showLoadForm && (
-            <p className="text-xs text-slate-400">None entered yet.</p>
+            <p className="text-xs text-ink-muted">None entered yet.</p>
           )}
           <ul className="mb-2 flex flex-col gap-1">
             {agreement.load_rules.map((r) => (
               <li key={r.id} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
                 <span className="font-medium text-slate-800">{r.sector}</span> — max{" "}
                 {r.max_contact_hours_per_week}h contact of {r.ordinary_hours_per_week}h ordinary/week
-                {r.clause_reference && <span className="text-slate-400"> ({r.clause_reference})</span>}
-                <div className="mt-0.5 text-slate-400">
+                {r.clause_reference && <span className="text-ink-muted"> ({r.clause_reference})</span>}
+                <div className="mt-0.5 text-ink-muted">
                   Counts as contact:{" "}
                   {r.contact_entry_types ? r.contact_entry_types.join(", ") : "LESSON only (app default)"}
                 </div>
@@ -218,7 +218,7 @@ function AgreementCard({
                 className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
               <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
                   Counts as contact time
                 </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
@@ -260,7 +260,7 @@ function AgreementCard({
             </button>
           </div>
           {agreement.leadership_bands.length === 0 && !showBandForm && (
-            <p className="text-xs text-slate-400">None entered yet.</p>
+            <p className="text-xs text-ink-muted">None entered yet.</p>
           )}
           <ul className="mb-2 flex flex-col gap-1">
             {agreement.leadership_bands.map((b) => (
@@ -357,11 +357,11 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
         <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label} pool</h4>
           {pool.agreement_name == null ? (
-            <p className="text-xs text-slate-400">No confirmed agreement.</p>
+            <p className="text-xs text-ink-muted">No confirmed agreement.</p>
           ) : pool.enrolment == null ? (
-            <p className="text-xs text-slate-400">No enrolment declared for this year.</p>
+            <p className="text-xs text-ink-muted">No enrolment declared for this year.</p>
           ) : pool.units == null && pool.hours_per_year == null && pool.release_fte == null ? (
-            <p className="text-xs text-slate-400">No band covers {pool.enrolment} students.</p>
+            <p className="text-xs text-ink-muted">No band covers {pool.enrolment} students.</p>
           ) : (
             <div className="text-sm text-slate-700">
               {pool.hours_per_year != null && (
@@ -370,7 +370,7 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
               {pool.release_fte != null && (
                 <div className="text-2xl font-semibold text-slate-900">{pool.release_fte} FTE</div>
               )}
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-ink-muted">
                 {pool.units != null && `${pool.units} units · `}band {pool.band_min}–{pool.band_max} · enrolment{" "}
                 {pool.enrolment}
               </p>
@@ -381,7 +381,7 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Allocated (GridPilot roles)</h4>
         <div className="text-2xl font-semibold text-slate-900">{data.total_allocated_minutes_per_cycle} min/cycle</div>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-ink-muted">
           {data.allocated.length} role assignment{data.allocated.length === 1 ? "" : "s"} carry release time. Not
           converted to hours/year - see the Teachers page for who holds what.
         </p>
@@ -538,7 +538,7 @@ export default function StaffingPolicyPage() {
         )}
 
         {agreements.length === 0 && !showNewAgreement && (
-          <p className="text-sm text-slate-400">No agreement entered yet.</p>
+          <p className="text-sm text-ink-muted">No agreement entered yet.</p>
         )}
         {agreements.map((a) => (
           <AgreementCard key={a.id} agreement={a} onChanged={load} reviewerName={reviewerName} />
@@ -556,7 +556,7 @@ export default function StaffingPolicyPage() {
             {showNewDeclaration ? "Cancel" : "+ Declare"}
           </button>
         </div>
-        <p className="mb-2 text-xs text-slate-400">
+        <p className="mb-2 text-xs text-ink-muted">
           Not derived from the student roll count in the current timetable - a census-date or official figure the
           school declares (docs/roadmap-v2.md 0.4).
         </p>
@@ -586,7 +586,7 @@ export default function StaffingPolicyPage() {
           </div>
         )}
         {declarations.length === 0 ? (
-          <p className="text-sm text-slate-400">None declared yet.</p>
+          <p className="text-sm text-ink-muted">None declared yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
             <table className="w-full border-collapse text-sm">

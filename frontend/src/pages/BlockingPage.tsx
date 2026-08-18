@@ -19,7 +19,7 @@ function Cell({ line, rollClassCode }: { line: BlockingLine; rollClassCode: stri
     return <td className="border-b border-l border-slate-100 p-2 text-center text-slate-200">·</td>;
   }
   if (cg.courses.length === 0) {
-    return <td className="border-b border-l border-slate-100 p-2 text-xs text-slate-400">(no course)</td>;
+    return <td className="border-b border-l border-slate-100 p-2 text-xs text-ink-muted">(no course)</td>;
   }
   return (
     <td className="border-b border-l border-slate-100 p-2 align-top text-xs">
@@ -69,7 +69,7 @@ function GroupTable({ group }: { group: BlockingGroup }) {
                       </span>
                     )}
                   </div>
-                  <div className="font-normal normal-case text-slate-400">
+                  <div className="font-normal normal-case text-ink-muted">
                     {line.name ?? line.code ?? "(option line)"}
                   </div>
                 </th>

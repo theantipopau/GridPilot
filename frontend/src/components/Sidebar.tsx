@@ -71,9 +71,9 @@ export default function Sidebar({
           onClick={onSearchClick}
           className="flex w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-500 transition-colors duration-150 hover:border-slate-300 hover:bg-white"
         >
-          <IconSearch className="h-4 w-4 shrink-0 text-slate-400" />
+          <IconSearch className="h-4 w-4 shrink-0 text-ink-muted" />
           <span className="flex-1 text-left">Search…</span>
-          <kbd className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-medium text-slate-400">
+          <kbd className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-medium text-ink-muted">
             {isMac ? "⌘K" : "Ctrl K"}
           </kbd>
         </button>
@@ -82,7 +82,7 @@ export default function Sidebar({
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-3">
         {groups.map((group) => (
           <div key={group.title}>
-            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
               {group.title}
             </p>
             <div className="flex flex-col gap-1">
@@ -98,7 +98,7 @@ export default function Sidebar({
                       active ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-                    {item.icon(active ? "h-4 w-4 shrink-0 text-sky-600" : "h-4 w-4 shrink-0 text-slate-400")}
+                    {item.icon(active ? "h-4 w-4 shrink-0 text-sky-600" : "h-4 w-4 shrink-0 text-ink-muted")}
                     <span className="flex-1 text-left">{item.label}</span>
                     {count > 0 && (
                       <span
@@ -121,7 +121,7 @@ export default function Sidebar({
         <p className="truncate text-xs font-medium text-slate-600" title={fileName ?? undefined}>
           {fileName ?? "No file loaded"}
         </p>
-        <p className="mb-3 text-xs text-slate-400">
+        <p className="mb-3 text-xs text-ink-muted">
           {ingestStatus.last_ingest?.finished_at
             ? `Imported ${new Date(ingestStatus.last_ingest.finished_at).toLocaleString()}`
             : "Sophia College"}

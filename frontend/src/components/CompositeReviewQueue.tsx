@@ -83,13 +83,13 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-slate-900">{c.class_codes.join(" + ")}</span>
-                <span className="text-xs text-slate-400">{c.slot_count} matching slots</span>
+                <span className="text-xs text-ink-muted">{c.slot_count} matching slots</span>
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {c.teacher_code} in {c.room_code}
               </div>
               {c.reviewed_by && (
-                <div className="mt-1 text-xs text-slate-400">
+                <div className="mt-1 text-xs text-ink-muted">
                   Reviewed by {c.reviewed_by}{c.review_note ? ` - "${c.review_note}"` : ""}
                 </div>
               )}

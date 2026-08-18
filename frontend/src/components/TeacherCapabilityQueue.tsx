@@ -90,9 +90,9 @@ export default function TeacherCapabilityQueue({ candidates, capabilityStatus, o
                 <span className="font-medium text-slate-900">
                   {c.teacher_code} <span className="mx-1 opacity-50">→</span> {c.subject_code ?? c.faculty_code}
                 </span>
-                <span className="text-xs text-slate-400">{c.source_type}</span>
+                <span className="text-xs text-ink-muted">{c.source_type}</span>
               </div>
-              {c.notes && <div className="mt-1 text-xs text-slate-400">{c.notes}</div>}
+              {c.notes && <div className="mt-1 text-xs text-ink-muted">{c.notes}</div>}
               {capabilityStatus === "REVIEW_REQUIRED" && (
                 <div className="mt-2 flex gap-2">
                   <button

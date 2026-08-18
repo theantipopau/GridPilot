@@ -165,7 +165,7 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
                   {cs.approval_status}
                 </span>
               </div>
-              <div className="text-slate-400">{cs.change_count} change(s)</div>
+              <div className="text-ink-muted">{cs.change_count} change(s)</div>
             </button>
           ))}
           {list?.length === 0 && (
@@ -199,7 +199,7 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
             }}
           />
         ) : (
-          <p className="text-sm text-slate-400">Select a change set, or create one to propose a fix.</p>
+          <p className="text-sm text-ink-muted">Select a change set, or create one to propose a fix.</p>
         )}
       </div>
       </div>

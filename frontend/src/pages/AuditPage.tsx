@@ -54,7 +54,7 @@ export default function AuditPage() {
                   <span className="font-medium text-slate-800">{EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}</span>
                   <span className="ml-2 text-slate-500">{e.summary}</span>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-slate-400">
+                <div className="flex items-center gap-3 text-xs text-ink-muted">
                   <span>{e.actor}</span>
                   <span>{e.occurred_at}</span>
                   {e.detail && (

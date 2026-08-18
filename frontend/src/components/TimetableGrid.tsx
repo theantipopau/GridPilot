@@ -113,7 +113,7 @@ function WeekTable({
                 <td className="border-b border-r border-slate-200 p-2 align-top text-xs text-slate-500">
                   <div className="font-medium text-slate-700">{p.name}</div>
                   {p.start_time && (
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[11px] text-ink-muted">
                       {p.start_time}&ndash;{p.finish_time}
                     </div>
                   )}

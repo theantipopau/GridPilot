@@ -6,7 +6,7 @@ import { IconBuilding } from "../components/icons";
 import type { RoomSummary } from "../types";
 
 function UtilisationBar({ pct }: { pct: number | null }) {
-  if (pct == null) return <span className="text-slate-400">—</span>;
+  if (pct == null) return <span className="text-ink-muted">—</span>;
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
@@ -62,7 +62,7 @@ export default function RoomsPage() {
               <tr key={r.code} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 <td className="p-2.5">
                   <div className="font-medium text-slate-800">{r.name || r.code}</div>
-                  {r.name && r.name !== r.code && <div className="text-xs text-slate-400">{r.code}</div>}
+                  {r.name && r.name !== r.code && <div className="text-xs text-ink-muted">{r.code}</div>}
                 </td>
                 <td className="p-2.5 text-slate-500">{r.room_type ?? "—"}</td>
                 <td className="p-2.5 tabular-figures text-slate-500">{r.seats ?? "—"}</td>

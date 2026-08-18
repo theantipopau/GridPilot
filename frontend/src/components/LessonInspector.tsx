@@ -172,19 +172,19 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
           </h2>
           <p className="text-xs text-slate-500">{entry.roll_class_code}</p>
         </div>
-        <button type="button" onClick={onClose} className="text-sm text-slate-400 hover:text-slate-700">
+        <button type="button" onClick={onClose} className="text-sm text-ink-muted hover:text-slate-700">
           ✕
         </button>
       </div>
 
       <dl className="mb-5 grid grid-cols-2 gap-y-2 text-xs">
-        <dt className="text-slate-400">Current slot</dt>
+        <dt className="text-ink-muted">Current slot</dt>
         <dd className="text-slate-700">
           {entry.day_code} · {entry.period_code}
         </dd>
-        <dt className="text-slate-400">Room</dt>
+        <dt className="text-ink-muted">Room</dt>
         <dd className="text-slate-700">{entry.room_code ?? "—"}</dd>
-        <dt className="text-slate-400">Teacher</dt>
+        <dt className="text-ink-muted">Teacher</dt>
         <dd className="text-slate-700">{teacherName ?? "—"}</dd>
       </dl>
 
@@ -282,22 +282,22 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
               >
                 {submitting ? "Checking…" : "Propose this move"}
               </button>
-              {!hasChange && <p className="mt-2 text-center text-xs text-slate-400">Change something to propose a move.</p>}
+              {!hasChange && <p className="mt-2 text-center text-xs text-ink-muted">Change something to propose a move.</p>}
             </>
           )}
 
           {tab === "suggestions" && (
             <>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested fixes</h3>
-              {suggestions.status === "loading" && <p className="text-xs text-slate-400">Searching for valid alternatives…</p>}
+              {suggestions.status === "loading" && <p className="text-xs text-ink-muted">Searching for valid alternatives…</p>}
               {suggestions.status === "not_applicable" && (
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ink-muted">
                   This lesson isn't part of an open teacher/room double-booking or room-instability finding - suggestions don't
                   cover other finding types yet.
                 </p>
               )}
               {suggestions.status === "ready" && suggestions.candidates.length === 0 && (
-                <p className="text-xs text-slate-400">No valid alternative found for this lesson that doesn't create a new clash.</p>
+                <p className="text-xs text-ink-muted">No valid alternative found for this lesson that doesn't create a new clash.</p>
               )}
               {suggestions.status === "ready" && suggestions.candidates.length > 0 && (
                 <div className="flex max-h-96 flex-col gap-1.5 overflow-y-auto pr-1">
@@ -372,7 +372,7 @@ function OtherOccurrences({
   occurrences: TimetableEntryLookup[] | null;
 }) {
   if (occurrences === null) {
-    return <p className="mb-4 text-xs text-slate-400">Loading other occurrences of {classCode}…</p>;
+    return <p className="mb-4 text-xs text-ink-muted">Loading other occurrences of {classCode}…</p>;
   }
 
   const others = occurrences.filter((o) => o.entry_id !== currentEntryId);

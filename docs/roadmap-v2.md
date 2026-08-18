@@ -680,28 +680,39 @@ communicates identity; they never borrow from each other.*
 ### 4.2 Readability in the grid
 
 The density fix already landed (capped stacking, day-boundary borders).
-Remaining, in impact order:
+Of the five items originally listed here, four are now built:
 
-1. **`font-variant-numeric: tabular-nums`** on every time and count
-   column. Proportional digits make period times and load minutes ragged
-   and genuinely harder to scan down a column. One CSS line; the single
-   highest readability-per-effort item in this document.
-2. **Sticky row-label contrast.** The frozen first column is
-   `bg-white` over `even:bg-slate-50/60` striped rows, so the stripe
-   disappears behind the label — the eye loses the row on a wide
-   horizontal scroll. Give the sticky column its own surface token and a
-   real right-edge shadow rather than a 1px border.
-3. **A density toggle** (comfortable / compact). Timetablers scanning
-   the whole school want compact; someone reviewing one teacher wants
-   comfortable. Currently one hard-coded density serves both badly.
-4. **Contrast audit.** `text-slate-400` on `bg-slate-50` (used for
-   period sub-headers) is around 3:1 — below WCAG AA for body text. It's
-   used for genuinely secondary information so it's defensible, but it
-   should be a deliberate `--color-ink-muted` decision at a checked
-   ratio, not an accident of utility choice.
-5. **Empty-cell treatment.** The `·` in every empty master-grid cell is
-   visual noise at 51 rows × 50 columns. A near-invisible tint reads
-   better than a glyph repeated ~2,000 times.
+1. ✅ **`font-variant-numeric: tabular-nums`** — `index.css`, applied
+   globally. Proportional digits made period times and load minutes
+   ragged; this was the single highest readability-per-effort item in
+   this document.
+2. ✅ **Sticky row-label contrast** — `.sticky-col-edge` in `index.css`
+   gives the frozen first column a real right-edge shadow
+   (`box-shadow: 2px 0 4px -2px rgb(15 23 42 / 0.18)`) instead of a 1px
+   border, so the eye doesn't lose the row on a wide horizontal scroll.
+3. **A density toggle** (comfortable / compact) — not yet built. See the
+   sequencing table (§5).
+4. ✅ **Contrast audit — built 2026-08-18.** Measured, not eyeballed:
+   `text-slate-400` (`#94a3b8`) against both `white` and `slate-50`
+   computes to 2.45-2.56:1 — below WCAG AA for body text (4.5:1) and
+   even below the large-text/graphical-object floor (3:1). This wasn't
+   isolated to period sub-headers as originally scoped; grepping the
+   whole `frontend/src` tree turned up 59 occurrences across 18 files,
+   nearly all genuinely-informative secondary text (counts, timestamps,
+   empty-state hints, metadata labels) rather than decorative filler -
+   so a global replace with the already-defined `--color-ink-muted`
+   token (`oklch(0.55 0.012 250)`, chosen at the time to sit near
+   `slate-500`'s lightness) was the correct fix, not overreach. One
+   exception kept: `placeholder:text-slate-400` on the command palette's
+   search input - placeholder text has different contrast conventions
+   and isn't the "body text" this audit targeted. Verified in-browser
+   against real rendered elements (not just computed on paper): sampled
+   nodes via `getComputedStyle` + a canvas round-trip to resolve the
+   `oklch()` color to sRGB, computed WCAG relative luminance directly -
+   4.87:1 against `white`, clearing AA, versus the old 2.45-2.56:1.
+5. ✅ **Empty-cell treatment** — `MasterTimetableGrid.tsx`'s empty cells
+   render nothing (`<td className="..." />`) rather than a `·` repeated
+   across ~2,000 free slots.
 
 ### 4.3 Layout
 
@@ -740,13 +751,16 @@ back, this is the section to work on meanwhile.
 | 8 | ✅ `teacher_capability` + bootstrap-for-review (§2.2) | — for the review queue itself; a real HR feed would still improve on the bootstrap | L |
 | 9 | ✅ `class_teacher_inconsistency` suggestions (teacher consolidation) | — | M |
 | 10 | ✅ Early-career teacher profile + `early_career_teacher_overloaded` (§2.4) | — | S |
-| 11 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
-| 12 | Editable blocking (§3.4.2) | #11 + #5 | L |
-| 13 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
+| 11 | ✅ Contrast audit — `text-slate-400` → `--color-ink-muted` app-wide (§4.2.4) | — | S |
+| 12 | Density toggle (comfortable/compact) (§4.2.3) | — | S |
+| 13 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
+| 14 | Editable blocking (§3.4.2) | #13 + #5 | L |
+| 15 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
 
 Items 1–5 need no answers from anyone and are worth roughly a session
-each. Items 6–7 are small once two short questions come back. Everything
-from 11 down is gated on the GUID experiment that has been open since
+each. Items 6–7 are small once two short questions come back. Item 12
+(density toggle) needs no answer from anyone either. Everything from 13
+down is gated on the GUID experiment that has been open since
 2026-08-04.
 
 ## 6. Questions for the school, consolidated

@@ -136,7 +136,7 @@ export default function TeachersPage() {
         </div>
 
         {roles.length === 0 && !showRoleForm && (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-muted">
             No roles defined yet - add one (e.g. "Head of Department", Tier 1, release minutes per cycle) to start
             assigning them to teachers below.
           </p>
@@ -147,9 +147,9 @@ export default function TeachersPage() {
             {roles.map((r) => (
               <span key={r.id} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
                 <span className="font-medium text-slate-800">{r.name}</span>
-                {r.tier && <span className="ml-1 text-slate-400">· {r.tier}</span>}
+                {r.tier && <span className="ml-1 text-ink-muted">· {r.tier}</span>}
                 {r.release_minutes_per_cycle != null && (
-                  <span className="ml-1 text-slate-400">· {formatMinutes(r.release_minutes_per_cycle)} release</span>
+                  <span className="ml-1 text-ink-muted">· {formatMinutes(r.release_minutes_per_cycle)} release</span>
                 )}
               </span>
             ))}
