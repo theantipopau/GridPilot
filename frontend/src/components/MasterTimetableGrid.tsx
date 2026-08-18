@@ -1,6 +1,8 @@
+import type { KeyboardEvent } from "react";
 import { facultyColor } from "../lib/facultyColors";
 import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
 import type { Density } from "../lib/density";
+import { useGridKeyboardNav } from "../lib/gridKeyboardNav";
 import type { Day, Period, ReferenceData, TimetableEntry, ViewType } from "../types";
 
 interface RowSpec {
@@ -124,13 +126,44 @@ function MasterWeekTable({
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
-  if (weekDays.length === 0) return null;
   const compact = density === "compact";
+  const totalCols = weekDays.length * periods.length;
+  // Called unconditionally, before the weekDays.length===0 early return -
+  // React Hooks must run in the same order on every render.
+  const { focus, registerCell, move, focusDefault } = useGridKeyboardNav(rows.length, totalCols);
+
+  if (weekDays.length === 0) return null;
+
+  const colToDayPeriod = (c: number) => ({
+    day: weekDays[Math.floor(c / periods.length)],
+    period: periods[c % periods.length],
+  });
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const current = focus ?? { r: 0, c: 0 };
+      const row = rows[current.r];
+      const { day, period } = colToDayPeriod(current.c);
+      const key = `${row.code}|${day.code}|${period.period_no}`;
+      const lesson = (entriesByRowKey.get(key) ?? []).find((en) => en.entry_type === "LESSON");
+      if (lesson && onSelectLesson) onSelectLesson(lesson);
+      return;
+    }
+    if (move(e.key)) e.preventDefault();
+  };
 
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
-      <div className="rounded-lg border border-slate-300 shadow-sm">
+      <div
+        className="rounded-lg border border-slate-300 shadow-sm"
+        tabIndex={0}
+        role="grid"
+        aria-label={`${label} timetable grid - arrow keys to move, Enter to open a lesson`}
+        onFocus={focusDefault}
+        onKeyDown={handleKeyDown}
+      >
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr>
@@ -170,7 +203,7 @@ function MasterWeekTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, rowIdx) => (
               <tr key={row.code} className="group even:bg-slate-50/60">
                 {/* The frozen label column needs its own opaque surface (it
                     scrolls over content) but a plain bg-white erases the row
@@ -184,10 +217,11 @@ function MasterWeekTable({
                 >
                   {row.label}
                 </td>
-                {weekDays.map((d) =>
+                {weekDays.map((d, dIdx) =>
                   periods.map((p, pIdx) => {
                     const key = `${row.code}|${d.code}|${p.period_no}`;
                     const cellEntries = entriesByRowKey.get(key) ?? [];
+                    const colIdx = dIdx * periods.length + pIdx;
                     return (
                       <MasterCell
                         key={`${d.code}-${p.period_no}`}
@@ -195,6 +229,8 @@ function MasterWeekTable({
                         entries={cellEntries}
                         firstOfDay={pIdx === 0}
                         compact={compact}
+                        focused={focus?.r === rowIdx && focus?.c === colIdx}
+                        registerCell={(el) => registerCell(rowIdx, colIdx, el)}
                         pendingEntryIds={pendingEntryIds}
                         findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
@@ -227,6 +263,8 @@ function MasterCell({
   entries,
   firstOfDay,
   compact,
+  focused,
+  registerCell,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
@@ -235,24 +273,37 @@ function MasterCell({
   entries: TimetableEntry[];
   firstOfDay: boolean;
   compact: boolean;
+  focused: boolean;
+  registerCell: (el: HTMLTableCellElement | null) => void;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   const borderClass = firstOfDay ? "border-l-2 border-l-slate-200" : "border-l border-l-slate-100";
+  // Keyboard focus ring - distinct from the amber pending ring and the
+  // severity rings applied to individual lesson buttons inside the cell,
+  // since this marks the whole cell as the current keyboard position, not
+  // a lesson's state. tabIndex=-1 keeps every cell out of normal Tab
+  // order - only reachable via the grid wrapper's arrow-key handler
+  // (lib/gridKeyboardNav.ts), which imperatively focuses it.
+  const focusRingClass = focused ? "ring-2 ring-inset ring-sky-500" : "";
 
   // An empty cell is left genuinely empty. A "·" repeated across ~2,000
   // free slots (51 rows x 50 columns) is noise competing with the lessons
   // that actually matter - absence reads better than a glyph for absence.
   if (entries.length === 0) {
-    return <td className={`border-b p-1 ${borderClass}`} />;
+    return <td ref={registerCell} tabIndex={-1} className={`border-b p-1 ${borderClass} ${focusRingClass}`} />;
   }
 
   const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);
   const overflow = entries.slice(MAX_VISIBLE_PER_CELL);
 
   return (
-    <td className={`border-b align-top ${borderClass} ${compact ? "p-px" : "p-[3px]"}`}>
+    <td
+      ref={registerCell}
+      tabIndex={-1}
+      className={`border-b align-top ${borderClass} ${compact ? "p-px" : "p-[3px]"} ${focusRingClass}`}
+    >
       <div className={`flex flex-col ${compact ? "gap-px" : "gap-[3px]"}`}>
         {visible.map((e, i) => {
           const primary = cellPrimary(e);

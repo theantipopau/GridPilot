@@ -726,18 +726,31 @@ Of the five items originally listed here, four are now built:
 
 ### 4.3 Layout
 
-- **Full-height grid with internal scroll.** The master grid currently
+- ✅ **Full-height grid with internal scroll.** The master grid currently
   sits in a `max-h-[75vh]` box inside a page that also scrolls — two
   nested scroll contexts, which is the single most-felt awkwardness in
   daily use. The grid should own the viewport below the toolbar and
   scroll internally, once.
-- **Toolbar consolidation.** Mode / axis / scenario controls are three
+- ✅ **Toolbar consolidation.** Mode / axis / scenario controls are three
   separate bordered blocks; they're one control group and should read
   as one.
-- **Keyboard navigation.** `Ctrl+K` exists. Arrow-key cell movement and
-  `Enter` to open the inspector would make the grid usable without a
-  mouse — the thing that most distinguishes a professional data tool
-  from a web page, and the thing TTS's desktop UI actually does well.
+- ✅ **Keyboard navigation — built 2026-08-18.** `Ctrl+K` existed already;
+  now arrow-key cell movement and `Enter` to open the inspector work in
+  both grid modes, via a shared `useGridKeyboardNav()` hook
+  (`lib/gridKeyboardNav.ts`) - a roving-focus pattern (`tabIndex={-1}` on
+  every cell, one `tabIndex={0}` wrapper per week table) that imperatively
+  `.focus()`s the target cell's real DOM node, so native focus/scroll-
+  into-view do the work rather than a re-implemented substitute. Scoped
+  per week table (Week A and Week B are independent grids, same as `Tab`
+  already treated them) - arrows don't cross between them. `Enter` opens
+  the inspector for the focused cell's first `LESSON` entry, if any.
+  Verified in-browser against real data in both grid modes: focused the
+  master grid, sent 39 `ArrowRight` presses, landed exactly on a real
+  9-lesson cell (`08SPO1`/`08SPO2`/...) confirmed via the cell's own
+  ring-highlight class; `Enter` opened the inspector showing `08SPO1`
+  correctly (`Fri A · P5`, room `AC1`, teacher Parker, Claire). Repeated
+  in the single-entity grid: `ArrowDown` once then `Enter` opened `07MUS5`
+  correctly (`Mon A · P1`, room `GRE3`). No console errors either way.
 
 ### 4.4 Sequencing note
 
@@ -752,7 +765,7 @@ back, this is the section to work on meanwhile.
 | # | Item | Blocked on | Size |
 |---|---|---|---|
 | 1 | ✅ Tokens + tabular numerals + sticky-column contrast (§4.1, §4.2) | — | S |
-| 2 | ✅ Full-height grid, toolbar consolidation (§4.3) | — | S |
+| 2 | ✅ Full-height grid, toolbar consolidation, keyboard navigation (§4.3) | — | S |
 | 3 | ✅ `room_pool` rule + solver constraint (§3.3b) | — | S |
 | 4 | ✅ Rooms page (§3.3) | — | M |
 | 5 | ✅ Blocking analytics, read-only (§3.4.1) — partial, see §3.4 | — | M |

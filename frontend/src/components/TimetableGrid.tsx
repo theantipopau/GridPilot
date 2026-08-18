@@ -1,6 +1,8 @@
+import type { KeyboardEvent } from "react";
 import { facultyColor } from "../lib/facultyColors";
 import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
 import type { Density } from "../lib/density";
+import { useGridKeyboardNav } from "../lib/gridKeyboardNav";
 import type { Day, Period, TimetableEntry, ViewType } from "../types";
 
 interface Props {
@@ -96,10 +98,33 @@ function WeekTable({
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   const compact = density === "compact";
+  const { focus, registerCell, move, focusDefault } = useGridKeyboardNav(periods.length, weekDays.length);
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const current = focus ?? { r: 0, c: 0 };
+      const p = periods[current.r];
+      const d = weekDays[current.c];
+      const key = `${d.code}|${p.period_no}`;
+      const lesson = (entriesByKey.get(key) ?? []).find((en) => en.entry_type === "LESSON");
+      if (lesson && onSelectLesson) onSelectLesson(lesson);
+      return;
+    }
+    if (move(e.key)) e.preventDefault();
+  };
+
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
-      <div className="rounded-lg border border-slate-200">
+      <div
+        className="rounded-lg border border-slate-200"
+        tabIndex={0}
+        role="grid"
+        aria-label={`${label} timetable grid - arrow keys to move, Enter to open a lesson`}
+        onFocus={focusDefault}
+        onKeyDown={handleKeyDown}
+      >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -119,7 +144,7 @@ function WeekTable({
             </tr>
           </thead>
           <tbody>
-            {periods.map((p) => (
+            {periods.map((p, rowIdx) => (
               <tr key={p.period_no}>
                 <td className={`border-b border-r border-slate-200 align-top text-xs text-slate-500 ${compact ? "p-1" : "p-2"}`}>
                   <div className="font-medium text-slate-700">{p.name}</div>
@@ -129,11 +154,19 @@ function WeekTable({
                     </div>
                   )}
                 </td>
-                {weekDays.map((d) => {
+                {weekDays.map((d, colIdx) => {
                   const key = `${d.code}|${p.period_no}`;
                   const cellEntries = entriesByKey.get(key) ?? [];
+                  const focused = focus?.r === rowIdx && focus?.c === colIdx;
                   return (
-                    <td key={d.code} className={`border-b border-slate-200 align-top ${compact ? "p-0.5" : "p-1"}`}>
+                    <td
+                      key={d.code}
+                      ref={(el) => registerCell(rowIdx, colIdx, el)}
+                      tabIndex={-1}
+                      className={`border-b border-slate-200 align-top ${compact ? "p-0.5" : "p-1"} ${
+                        focused ? "ring-2 ring-inset ring-sky-500" : ""
+                      }`}
+                    >
                       <Cell
                         view={view}
                         entries={cellEntries}
