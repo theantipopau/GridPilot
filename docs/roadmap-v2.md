@@ -690,8 +690,18 @@ Of the five items originally listed here, four are now built:
    gives the frozen first column a real right-edge shadow
    (`box-shadow: 2px 0 4px -2px rgb(15 23 42 / 0.18)`) instead of a 1px
    border, so the eye doesn't lose the row on a wide horizontal scroll.
-3. **A density toggle** (comfortable / compact) — not yet built. See the
-   sequencing table (§5).
+3. ✅ **A density toggle** (comfortable / compact) — **built 2026-08-18**.
+   `lib/density.ts`'s `useDensity()` persists the choice per-browser
+   (`localStorage`, not per-account - there's no user model). A segmented
+   control in the timetable toolbar (`TimetablePage.tsx`) applies to both
+   grid modes. Compact mode drops the secondary detail line (room/
+   teacher/roll-class) entirely and shrinks padding - the point is
+   maximum rows-in-view, and the full detail is still one click away via
+   the tooltip/inspector. Verified in-browser against real data: a
+   comfortable-mode lesson cell measured 36.75px (master grid) / 51.8px
+   (single-entity grid) tall with 2-4 detail lines; the same cell in
+   compact measured 17px / 24.3px with one line only. Confirmed the
+   choice survives a full page reload (`localStorage` read on mount).
 4. ✅ **Contrast audit — built 2026-08-18.** Measured, not eyeballed:
    `text-slate-400` (`#94a3b8`) against both `white` and `slate-50`
    computes to 2.45-2.56:1 — below WCAG AA for body text (4.5:1) and
@@ -752,15 +762,14 @@ back, this is the section to work on meanwhile.
 | 9 | ✅ `class_teacher_inconsistency` suggestions (teacher consolidation) | — | M |
 | 10 | ✅ Early-career teacher profile + `early_career_teacher_overloaded` (§2.4) | — | S |
 | 11 | ✅ Contrast audit — `text-slate-400` → `--color-ink-muted` app-wide (§4.2.4) | — | S |
-| 12 | Density toggle (comfortable/compact) (§4.2.3) | — | S |
+| 12 | ✅ Density toggle (comfortable/compact) (§4.2.3) | — | S |
 | 13 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
 | 14 | Editable blocking (§3.4.2) | #13 + #5 | L |
 | 15 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
 
 Items 1–5 need no answers from anyone and are worth roughly a session
-each. Items 6–7 are small once two short questions come back. Item 12
-(density toggle) needs no answer from anyone either. Everything from 13
-down is gated on the GUID experiment that has been open since
+each. Items 6–7 are small once two short questions come back. Everything
+from 13 down is gated on the GUID experiment that has been open since
 2026-08-04.
 
 ## 6. Questions for the school, consolidated

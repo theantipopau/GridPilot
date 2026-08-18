@@ -15,6 +15,7 @@ import LessonInspector, { type MoveParams } from "../components/LessonInspector"
 import LoadingState from "../components/LoadingState";
 import MasterTimetableGrid from "../components/MasterTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
+import { useDensity } from "../lib/density";
 import { buildFindingHighlightIndex } from "../lib/findingHighlights";
 import { applyPendingMoves, buildPendingMoveMap } from "../lib/pendingMoves";
 import type {
@@ -55,6 +56,7 @@ export default function TimetablePage({
 }: Props) {
   const [mode, setMode] = useState<Mode>("master");
   const [axis, setAxis] = useState<ViewType>("room");
+  const [density, setDensity] = useDensity();
   const [masterEntries, setMasterEntries] = useState<TimetableEntry[] | null>(null);
 
   const [view, setView] = useState<ViewType>("teacher");
@@ -178,6 +180,33 @@ export default function TimetablePage({
             </button>
           </div>
 
+          {/* Applies to both modes - a timetabler scanning the whole
+              school wants compact, someone reviewing one teacher wants
+              comfortable (docs/roadmap-v2.md 4.2.3). Persisted per-browser
+              via useDensity, not reset on mode/axis changes. */}
+          <div className="flex gap-1 rounded-md bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setDensity("comfortable")}
+              title="Comfortable density - full detail per lesson"
+              className={`rounded px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                density === "comfortable" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Comfortable
+            </button>
+            <button
+              type="button"
+              onClick={() => setDensity("compact")}
+              title="Compact density - more rows in view, class code only"
+              className={`rounded px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                density === "compact" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Compact
+            </button>
+          </div>
+
           {mode === "single" && (
             <EntityPicker
               reference={reference}
@@ -248,6 +277,7 @@ export default function TimetablePage({
               axis={axis}
               reference={reference}
               entries={applyPendingMoves(masterEntries, pendingMoves, reference)}
+              density={density}
               pendingEntryIds={pendingEntryIds}
               findingHighlights={findingHighlights}
               onSelectLesson={setSelectedEntry}
@@ -262,6 +292,7 @@ export default function TimetablePage({
             days={reference.days}
             periods={reference.periods}
             entries={applyPendingMoves(timetable.entries, pendingMoves, reference)}
+            density={density}
             pendingEntryIds={pendingEntryIds}
             findingHighlights={findingHighlights}
             onSelectLesson={setSelectedEntry}

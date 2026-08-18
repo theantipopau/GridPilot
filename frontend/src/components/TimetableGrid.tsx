@@ -1,5 +1,6 @@
 import { facultyColor } from "../lib/facultyColors";
 import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
+import type { Density } from "../lib/density";
 import type { Day, Period, TimetableEntry, ViewType } from "../types";
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
   days: Day[];
   periods: Period[];
   entries: TimetableEntry[];
+  density?: Density;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
@@ -23,7 +25,9 @@ const ENTRY_STYLES: Record<string, string> = {
   OTHER: "bg-slate-50 border-slate-200 text-slate-600",
 };
 
-export default function TimetableGrid({ view, days, periods, entries, pendingEntryIds, findingHighlights, onSelectLesson }: Props) {
+export default function TimetableGrid({
+  view, days, periods, entries, density = "comfortable", pendingEntryIds, findingHighlights, onSelectLesson,
+}: Props) {
   const weekA = days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
   const weekB = days.filter((d) => d.week_label === "B").sort((a, b) => a.day_no - b.day_no);
 
@@ -49,6 +53,7 @@ export default function TimetableGrid({ view, days, periods, entries, pendingEnt
           periods={canonicalPeriods}
           entriesByKey={entriesByKey}
           view={view}
+          density={density}
           pendingEntryIds={pendingEntryIds}
           findingHighlights={findingHighlights}
           onSelectLesson={onSelectLesson}
@@ -59,6 +64,7 @@ export default function TimetableGrid({ view, days, periods, entries, pendingEnt
           periods={canonicalPeriods}
           entriesByKey={entriesByKey}
           view={view}
+          density={density}
           pendingEntryIds={pendingEntryIds}
           findingHighlights={findingHighlights}
           onSelectLesson={onSelectLesson}
@@ -74,6 +80,7 @@ function WeekTable({
   periods,
   entriesByKey,
   view,
+  density,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
@@ -83,10 +90,12 @@ function WeekTable({
   periods: Period[];
   entriesByKey: Map<string, TimetableEntry[]>;
   view: ViewType;
+  density: Density;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
+  const compact = density === "compact";
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
@@ -94,13 +103,15 @@ function WeekTable({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-28 border-b border-r border-slate-200 bg-slate-50 p-2 text-left text-xs font-medium text-slate-500">
+              <th
+                className={`w-28 border-b border-r border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500 ${compact ? "p-1" : "p-2"}`}
+              >
                 Period
               </th>
               {weekDays.map((d) => (
                 <th
                   key={d.code}
-                  className="border-b border-slate-200 bg-slate-50 p-2 text-left text-xs font-medium text-slate-500"
+                  className={`border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500 ${compact ? "p-1" : "p-2"}`}
                 >
                   {d.code.replace(/ [AB]$/, "")}
                 </th>
@@ -110,9 +121,9 @@ function WeekTable({
           <tbody>
             {periods.map((p) => (
               <tr key={p.period_no}>
-                <td className="border-b border-r border-slate-200 p-2 align-top text-xs text-slate-500">
+                <td className={`border-b border-r border-slate-200 align-top text-xs text-slate-500 ${compact ? "p-1" : "p-2"}`}>
                   <div className="font-medium text-slate-700">{p.name}</div>
-                  {p.start_time && (
+                  {p.start_time && !compact && (
                     <div className="text-[11px] text-ink-muted">
                       {p.start_time}&ndash;{p.finish_time}
                     </div>
@@ -122,10 +133,11 @@ function WeekTable({
                   const key = `${d.code}|${p.period_no}`;
                   const cellEntries = entriesByKey.get(key) ?? [];
                   return (
-                    <td key={d.code} className="border-b border-slate-200 p-1 align-top">
+                    <td key={d.code} className={`border-b border-slate-200 align-top ${compact ? "p-0.5" : "p-1"}`}>
                       <Cell
                         view={view}
                         entries={cellEntries}
+                        compact={compact}
                         pendingEntryIds={pendingEntryIds}
                         findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
@@ -151,17 +163,20 @@ const MAX_VISIBLE_PER_CELL = 4;
 function Cell({
   view,
   entries,
+  compact,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
 }: {
   view: ViewType;
   entries: TimetableEntry[];
+  compact: boolean;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (entries.length === 0) {
+    if (compact) return <div className="rounded border border-dashed border-slate-100" />;
     return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-slate-300">Free</div>;
   }
 
@@ -169,7 +184,7 @@ function Cell({
   const overflow = entries.slice(MAX_VISIBLE_PER_CELL);
 
   return (
-    <div className={entries.length > 1 ? "flex flex-col gap-1" : undefined}>
+    <div className={entries.length > 1 ? `flex flex-col ${compact ? "gap-0.5" : "gap-1"}` : undefined}>
       {visible.map((e, i) => {
         const editable = e.entry_type === "LESSON" && !!onSelectLesson;
         const pending = pendingEntryIds?.has(e.entry_id);
@@ -180,7 +195,7 @@ function Cell({
         // working this lesson, so that's the more relevant signal in the
         // moment, but the finding is still named in the title either way.
         const ringClass = pending ? "ring-2 ring-amber-400" : highlight ? HIGHLIGHT_RING[highlight.severity] : "";
-        const className = `relative w-full rounded border p-1.5 text-left text-xs leading-tight transition-all duration-150 ${
+        const className = `relative w-full rounded border text-left text-xs leading-tight transition-all duration-150 ${compact ? "p-1" : "p-1.5"} ${
           isLesson ? "border-transparent text-slate-900" : (ENTRY_STYLES[e.entry_type] ?? ENTRY_STYLES.OTHER)
         } ${editable ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-400" : ""} ${ringClass}`;
         const style = color ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` } : undefined;
@@ -191,7 +206,7 @@ function Cell({
             {pending && (
               <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" title="Pending edit" />
             )}
-            <EntryContent view={view} entry={e} />
+            <EntryContent view={view} entry={e} compact={compact} />
           </>
         );
 
@@ -217,12 +232,12 @@ function Cell({
   );
 }
 
-function EntryContent({ view, entry }: { view: ViewType; entry: TimetableEntry }) {
+function EntryContent({ view, entry, compact }: { view: ViewType; entry: TimetableEntry; compact: boolean }) {
   if (entry.entry_type !== "LESSON") {
     return (
       <div>
-        <div className="font-medium">{entryTypeLabel(entry.entry_type)}</div>
-        {view !== "roll_class" && <div className="text-[11px] opacity-75">{entry.roll_class_code}</div>}
+        <div className="truncate font-medium">{entryTypeLabel(entry.entry_type)}</div>
+        {!compact && view !== "roll_class" && <div className="truncate text-[11px] opacity-75">{entry.roll_class_code}</div>}
       </div>
     );
   }
@@ -231,12 +246,18 @@ function EntryContent({ view, entry }: { view: ViewType; entry: TimetableEntry }
   const teacherName =
     entry.teacher_last_name ? `${entry.teacher_last_name}, ${entry.teacher_first_name ?? ""}`.trim() : null;
 
+  // Compact mode shows only the primary line - maximum rows-in-view is
+  // the point of the toggle, and the full detail is still one click away.
+  if (compact) {
+    return <div className="truncate font-medium">{primary}</div>;
+  }
+
   return (
     <div>
-      <div className="font-medium">{primary}</div>
-      {view !== "roll_class" && <div className="text-[11px] opacity-75">{entry.roll_class_code}</div>}
-      {view !== "room" && entry.room_code && <div className="text-[11px] opacity-75">{entry.room_code}</div>}
-      {view !== "teacher" && teacherName && <div className="text-[11px] opacity-75">{teacherName}</div>}
+      <div className="truncate font-medium">{primary}</div>
+      {view !== "roll_class" && <div className="truncate text-[11px] opacity-75">{entry.roll_class_code}</div>}
+      {view !== "room" && entry.room_code && <div className="truncate text-[11px] opacity-75">{entry.room_code}</div>}
+      {view !== "teacher" && teacherName && <div className="truncate text-[11px] opacity-75">{teacherName}</div>}
     </div>
   );
 }

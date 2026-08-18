@@ -1,5 +1,6 @@
 import { facultyColor } from "../lib/facultyColors";
 import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
+import type { Density } from "../lib/density";
 import type { Day, Period, ReferenceData, TimetableEntry, ViewType } from "../types";
 
 interface RowSpec {
@@ -11,6 +12,7 @@ interface Props {
   axis: ViewType;
   reference: ReferenceData;
   entries: TimetableEntry[];
+  density?: Density;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
@@ -43,7 +45,9 @@ function dedupePeriodsByNumber(periods: Period[]): Period[] {
   return [...byNumber.values()].sort((a, b) => a.period_no - b.period_no);
 }
 
-export default function MasterTimetableGrid({ axis, reference, entries, pendingEntryIds, findingHighlights, onSelectLesson }: Props) {
+export default function MasterTimetableGrid({
+  axis, reference, entries, density = "comfortable", pendingEntryIds, findingHighlights, onSelectLesson,
+}: Props) {
   const rows = rowsForAxis(reference, axis);
   const canonicalPeriods = dedupePeriodsByNumber(reference.periods);
   const weekA = reference.days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
@@ -74,6 +78,7 @@ export default function MasterTimetableGrid({ axis, reference, entries, pendingE
           periods={canonicalPeriods}
           rows={rows}
           axis={axis}
+          density={density}
           entriesByRowKey={entriesByRowKey}
           pendingEntryIds={pendingEntryIds}
           findingHighlights={findingHighlights}
@@ -85,6 +90,7 @@ export default function MasterTimetableGrid({ axis, reference, entries, pendingE
           periods={canonicalPeriods}
           rows={rows}
           axis={axis}
+          density={density}
           entriesByRowKey={entriesByRowKey}
           pendingEntryIds={pendingEntryIds}
           findingHighlights={findingHighlights}
@@ -101,6 +107,7 @@ function MasterWeekTable({
   periods,
   rows,
   axis,
+  density,
   entriesByRowKey,
   pendingEntryIds,
   findingHighlights,
@@ -111,12 +118,14 @@ function MasterWeekTable({
   periods: Period[];
   rows: RowSpec[];
   axis: ViewType;
+  density: Density;
   entriesByRowKey: Map<string, TimetableEntry[]>;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
 }) {
   if (weekDays.length === 0) return null;
+  const compact = density === "compact";
 
   return (
     <div>
@@ -125,14 +134,16 @@ function MasterWeekTable({
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr>
-              <th className="sticky left-0 z-20 w-44 border-b-2 border-r border-slate-300 bg-slate-100 p-2 text-left font-semibold text-slate-600">
+              <th
+                className={`sticky left-0 z-20 w-44 border-b-2 border-r border-slate-300 bg-slate-100 text-left font-semibold text-slate-600 ${compact ? "p-1" : "p-2"}`}
+              >
                 {axis === "teacher" ? "Teacher" : axis === "room" ? "Room" : "Roll class"}
               </th>
               {weekDays.map((d) => (
                 <th
                   key={d.code}
                   colSpan={periods.length}
-                  className="border-b-2 border-l border-slate-300 bg-slate-100 p-1.5 text-center font-semibold text-slate-600"
+                  className={`border-b-2 border-l border-slate-300 bg-slate-100 text-center font-semibold text-slate-600 ${compact ? "p-1" : "p-1.5"}`}
                 >
                   {d.code.replace(/ [AB]$/, "")}
                 </th>
@@ -168,7 +179,7 @@ function MasterWeekTable({
                     use a real shadow rather than a 1px border so the frozen
                     edge reads as a layer, not a cell divider. */}
                 <td
-                  className="sticky-col-edge sticky left-0 z-10 max-w-[11rem] truncate border-b border-slate-200 bg-white p-2 font-medium text-slate-700 group-even:bg-slate-50"
+                  className={`sticky-col-edge sticky left-0 z-10 max-w-[11rem] truncate border-b border-slate-200 bg-white font-medium text-slate-700 group-even:bg-slate-50 ${compact ? "p-1" : "p-2"}`}
                   title={row.label}
                 >
                   {row.label}
@@ -183,6 +194,7 @@ function MasterWeekTable({
                         axis={axis}
                         entries={cellEntries}
                         firstOfDay={pIdx === 0}
+                        compact={compact}
                         pendingEntryIds={pendingEntryIds}
                         findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
@@ -214,6 +226,7 @@ function MasterCell({
   axis,
   entries,
   firstOfDay,
+  compact,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
@@ -221,6 +234,7 @@ function MasterCell({
   axis: ViewType;
   entries: TimetableEntry[];
   firstOfDay: boolean;
+  compact: boolean;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
@@ -238,11 +252,14 @@ function MasterCell({
   const overflow = entries.slice(MAX_VISIBLE_PER_CELL);
 
   return (
-    <td className={`border-b p-[3px] align-top ${borderClass}`}>
-      <div className="flex flex-col gap-[3px]">
+    <td className={`border-b align-top ${borderClass} ${compact ? "p-px" : "p-[3px]"}`}>
+      <div className={`flex flex-col ${compact ? "gap-px" : "gap-[3px]"}`}>
         {visible.map((e, i) => {
           const primary = cellPrimary(e);
-          const secondary = cellSecondary(axis, e);
+          // Compact mode drops the secondary line entirely - the point of
+          // the toggle is maximum rows-in-view, and the full detail is
+          // still one click away via the tooltip/inspector.
+          const secondary = compact ? null : cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
           const pending = pendingEntryIds?.has(e.entry_id);
           const highlight = findingHighlights ? highlightForEntry(findingHighlights, e) : null;
@@ -251,7 +268,8 @@ function MasterCell({
           // working this lesson, so that's the more relevant signal in the
           // moment, but the finding is still named in the tooltip either way.
           const ringClass = pending ? "ring-2 ring-amber-400" : highlight ? HIGHLIGHT_RING[highlight.severity] : "";
-          const className = `relative w-full truncate rounded-sm py-1 pl-1.5 pr-1 text-left leading-tight ${
+          const paddingClass = compact ? "py-px pl-1 pr-0.5" : "py-1 pl-1.5 pr-1";
+          const className = `relative w-full truncate rounded-sm text-left leading-tight ${paddingClass} ${
             e.entry_type === "LESSON" ? "text-slate-900" : "bg-slate-100 text-slate-500"
           } ${editable ? "cursor-pointer hover:brightness-95" : ""} ${ringClass}`;
           const style = color
