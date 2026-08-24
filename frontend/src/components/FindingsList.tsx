@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding } from "../api";
 import EmptyState from "./EmptyState";
+import SearchBox from "./SearchBox";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
 import { IconCheckCircle } from "./icons";
+import { matchesQuery } from "../lib/search";
 import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
 
 interface Props {
@@ -40,6 +42,10 @@ export default function FindingsList({
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [explanationsByFinding, setExplanationsByFinding] = useState<Record<number, ExplanationState>>({});
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const filteredFindings = findings.filter((f) =>
+    matchesQuery(query, [f.title, f.rule_id, ...f.entity_refs.map((r) => r.code)]),
+  );
 
   const toggleSuggestions = async (finding: Finding) => {
     const current = suggestionsByFinding[finding.id];
@@ -135,15 +141,27 @@ export default function FindingsList({
 
   return (
     <div className="px-6 pb-6">
-      <div className="mb-4 flex gap-3 text-sm">
-        {(["critical", "warning", "info"] as Severity[]).map((sev) => (
-          <span key={sev} className={`rounded-full px-3 py-1 font-medium ${SEVERITY_BADGE[sev]}`}>
-            {countsBySeverity[sev]} {sev}
-          </span>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-3 text-sm">
+          {(["critical", "warning", "info"] as Severity[]).map((sev) => (
+            <span key={sev} className={`rounded-full px-3 py-1 font-medium ${SEVERITY_BADGE[sev]}`}>
+              {countsBySeverity[sev]} {sev}
+            </span>
+          ))}
+        </div>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder="Search title, rule, or entity code…"
+          resultCount={filteredFindings.length}
+          totalCount={findings.length}
+        />
       </div>
+      {filteredFindings.length === 0 ? (
+        <EmptyState icon={<IconCheckCircle className="h-8 w-8" />} title="No findings match your search" />
+      ) : (
       <div className="flex flex-col gap-2">
-        {findings.map((f) => {
+        {filteredFindings.map((f) => {
           const suggestions = suggestionsByFinding[f.id];
           return (
             <div
@@ -257,6 +275,7 @@ export default function FindingsList({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

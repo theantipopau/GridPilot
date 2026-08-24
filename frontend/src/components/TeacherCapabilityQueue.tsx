@@ -1,7 +1,9 @@
 import { useState } from "react";
 import EmptyState from "./EmptyState";
 import PageHeader from "./PageHeader";
+import SearchBox from "./SearchBox";
 import { IconCheckCircle, IconInbox } from "./icons";
+import { matchesQuery } from "../lib/search";
 import type { CapabilityStatus, TeacherCapabilityCandidate } from "../types";
 
 interface Props {
@@ -20,6 +22,8 @@ const TABS: { value: CapabilityStatus; label: string }[] = [
 export default function TeacherCapabilityQueue({ candidates, capabilityStatus, onStatusChange, onReview }: Props) {
   const [reviewedBy, setReviewedBy] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const filtered = candidates.filter((c) => matchesQuery(query, [c.teacher_code, c.subject_code, c.faculty_code, c.notes]));
 
   const handleReview = async (id: number, decision: "approve" | "reject") => {
     if (!reviewedBy.trim()) {
@@ -46,14 +50,23 @@ export default function TeacherCapabilityQueue({ candidates, capabilityStatus, o
           class_teacher_inconsistency."
       />
 
-      <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm text-slate-600">Reviewing as</label>
-        <input
-          type="text"
-          value={reviewedBy}
-          onChange={(e) => setReviewedBy(e.target.value)}
-          placeholder="Your name"
-          className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-slate-600">Reviewing as</label>
+          <input
+            type="text"
+            value={reviewedBy}
+            onChange={(e) => setReviewedBy(e.target.value)}
+            placeholder="Your name"
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          />
+        </div>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder="Search teacher, subject, or faculty…"
+          resultCount={filtered.length}
+          totalCount={candidates.length}
         />
       </div>
 
@@ -79,9 +92,11 @@ export default function TeacherCapabilityQueue({ candidates, capabilityStatus, o
           icon={<IconInbox className="h-8 w-8" />}
           title={`No candidates ${TABS.find((t) => t.value === capabilityStatus)?.label.toLowerCase()}`}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={<IconInbox className="h-8 w-8" />} title="No candidates match your search" />
       ) : (
         <div className="flex flex-col gap-2">
-          {candidates.map((c) => (
+          {filtered.map((c) => (
             <div
               key={c.id}
               className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md"

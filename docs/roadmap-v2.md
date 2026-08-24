@@ -752,7 +752,44 @@ Of the five items originally listed here, four are now built:
   in the single-entity grid: `ArrowDown` once then `Enter` opened `07MUS5`
   correctly (`Mon A · P1`, room `GRE3`). No console errors either way.
 
-### 4.4 Sequencing note
+### 4.4 Search/filter for review queues — **built 2026-08-19**
+
+Not on the original list, found the same way §2.4 was - by checking real
+data against what the UI actually offered, not assumed from the design
+doc. At real Sophia scale, five lists had grown past the point a status
+tab alone makes usable: 156 open findings, 213 teacher-capability
+candidates, 199 room-constraint candidates, 51 rooms, and however many
+composite candidates a term produces - all with **no way to narrow the
+list beyond a status/severity tab**. Finding "has PARC10's capability
+been reviewed yet" meant scrolling past all 213.
+
+`components/SearchBox.tsx` (a labelled text input, clear button, live
+"N of M" count) and `lib/search.ts` (`matchesQuery()`, a shared case-
+insensitive substring match) are used identically in `FindingsList.tsx`,
+`RoomConstraintQueue.tsx`, `TeacherCapabilityQueue.tsx`,
+`CompositeReviewQueue.tsx`, and `RoomsPage.tsx` - client-side filtering,
+not a new endpoint, since every one of these lists is already fetched in
+full (a server round-trip would only add latency, not capability).
+Matches against the fields a timetabler would actually type: entity
+codes (teacher/room/class), titles, rule ids, subject/faculty codes,
+room type/pool.
+
+Also fixed in passing: two contrast failures the original audit (§4.2.4)
+missed because it only grepped for `text-slate-400` - `text-slate-300`
+(`#cbd5e1`, ~1.5:1 against white, even lower than the slate-400 cases)
+on the Rooms page's "0 open findings" badge and the single-entity grid's
+"Free" cell label - both genuine information (a count, an availability
+state), not decoration, now `text-ink-muted` like everything else §4.2.4
+fixed.
+
+Verified in-browser against real data for all five: typing a teacher
+code on Findings correctly narrowed 156 → 5 (all matching); a class code
+on Room Constraints narrowed 199 → 2; a teacher code on Teacher
+Capabilities narrowed 213 → 11, matching that teacher's real distinct-
+subject count from §2.4's verification. Confirmed the clear button
+resets to the full list. No console errors on any page.
+
+### 4.5 Sequencing note
 
 §4 is deliberately buildable *now* and depends on nothing in §2 or §3.
 If the school's answers to the EA and GUID questions are slow to come
@@ -776,13 +813,14 @@ back, this is the section to work on meanwhile.
 | 10 | ✅ Early-career teacher profile + `early_career_teacher_overloaded` (§2.4) | — | S |
 | 11 | ✅ Contrast audit — `text-slate-400` → `--color-ink-muted` app-wide (§4.2.4) | — | S |
 | 12 | ✅ Density toggle (comfortable/compact) (§4.2.3) | — | S |
-| 13 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
-| 14 | Editable blocking (§3.4.2) | #13 + #5 | L |
-| 15 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
+| 13 | ✅ Search/filter for review queues + 2 more contrast fixes (§4.4) | — | S |
+| 14 | Entity authoring — students, staff, rooms (§3.1–3.3a) | **GUID minting experiment** | L |
+| 15 | Editable blocking (§3.4.2) | #14 + #5 | L |
+| 16 | Mode B / Mode C solver (§3.5) | #8 + **teacher unavailability** | XL |
 
 Items 1–5 need no answers from anyone and are worth roughly a session
 each. Items 6–7 are small once two short questions come back. Everything
-from 13 down is gated on the GUID experiment that has been open since
+from 14 down is gated on the GUID experiment that has been open since
 2026-08-04.
 
 ## 6. Questions for the school, consolidated

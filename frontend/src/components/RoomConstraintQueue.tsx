@@ -1,7 +1,9 @@
 import { useState } from "react";
 import EmptyState from "./EmptyState";
 import PageHeader from "./PageHeader";
+import SearchBox from "./SearchBox";
 import { IconDoor, IconInbox } from "./icons";
+import { matchesQuery } from "../lib/search";
 import type { ReviewStatus, RoomTypeConstraintCandidate } from "../types";
 
 interface Props {
@@ -16,6 +18,8 @@ const TABS: ReviewStatus[] = ["PENDING", "APPROVED", "REJECTED"];
 export default function RoomConstraintQueue({ candidates, reviewStatus, onReviewStatusChange, onReview }: Props) {
   const [reviewedBy, setReviewedBy] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const filtered = candidates.filter((c) => matchesQuery(query, [c.class_code, c.room_type]));
 
   const handleReview = async (id: number, decision: "approve" | "reject") => {
     if (!reviewedBy.trim()) {
@@ -41,14 +45,23 @@ export default function RoomConstraintQueue({ candidates, reviewStatus, onReview
           search a solver would consider - see docs/solver.md."
       />
 
-      <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm text-slate-600">Reviewing as</label>
-        <input
-          type="text"
-          value={reviewedBy}
-          onChange={(e) => setReviewedBy(e.target.value)}
-          placeholder="Your name"
-          className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-slate-600">Reviewing as</label>
+          <input
+            type="text"
+            value={reviewedBy}
+            onChange={(e) => setReviewedBy(e.target.value)}
+            placeholder="Your name"
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          />
+        </div>
+        <SearchBox
+          value={query}
+          onChange={setQuery}
+          placeholder="Search class or room type…"
+          resultCount={filtered.length}
+          totalCount={candidates.length}
         />
       </div>
 
@@ -74,9 +87,11 @@ export default function RoomConstraintQueue({ candidates, reviewStatus, onReview
           icon={<IconInbox className="h-8 w-8" />}
           title={`No ${reviewStatus.toLowerCase()} candidates`}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={<IconInbox className="h-8 w-8" />} title="No candidates match your search" />
       ) : (
         <div className="flex flex-col gap-2">
-          {candidates.map((c) => {
+          {filtered.map((c) => {
             const ratio = c.matching_lesson_count / c.total_lesson_count;
             return (
               <div

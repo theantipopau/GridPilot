@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { fetchRooms } from "../api";
+import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
 import PageHeader from "../components/PageHeader";
+import SearchBox from "../components/SearchBox";
 import { IconBuilding } from "../components/icons";
+import { matchesQuery } from "../lib/search";
 import type { RoomSummary } from "../types";
 
 function UtilisationBar({ pct }: { pct: number | null }) {
@@ -23,6 +26,7 @@ function UtilisationBar({ pct }: { pct: number | null }) {
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<RoomSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     fetchRooms()
@@ -33,6 +37,8 @@ export default function RoomsPage() {
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!rooms) return <LoadingState label="Loading rooms…" />;
 
+  const filtered = rooms.filter((r) => matchesQuery(query, [r.code, r.name, r.room_type, r.pool?.pool_code]));
+
   return (
     <div className="p-6">
       <PageHeader
@@ -42,8 +48,20 @@ export default function RoomsPage() {
           room pools (RURs), and which classes an approved room-type constraint expects here. Authoring a room is a
           bigger step (docs/full-timetabler-plan.md §5) gated on a still-open question about Timetabling Solutions
           import compatibility, so this page only shows what's already known."
+        action={
+          <SearchBox
+            value={query}
+            onChange={setQuery}
+            placeholder="Search room, type, or pool…"
+            resultCount={filtered.length}
+            totalCount={rooms.length}
+          />
+        }
       />
 
+      {filtered.length === 0 ? (
+        <EmptyState icon={<IconBuilding className="h-8 w-8" />} title="No rooms match your search" />
+      ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -58,7 +76,7 @@ export default function RoomsPage() {
             </tr>
           </thead>
           <tbody>
-            {rooms.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.code} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                 <td className="p-2.5">
                   <div className="font-medium text-slate-800">{r.name || r.code}</div>
@@ -87,7 +105,7 @@ export default function RoomsPage() {
                       {r.open_finding_count}
                     </span>
                   ) : (
-                    <span className="text-slate-300">0</span>
+                    <span className="text-ink-muted">0</span>
                   )}
                 </td>
               </tr>
@@ -95,6 +113,7 @@ export default function RoomsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

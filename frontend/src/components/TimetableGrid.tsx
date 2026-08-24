@@ -210,7 +210,7 @@ function Cell({
 }) {
   if (entries.length === 0) {
     if (compact) return <div className="rounded border border-dashed border-slate-100" />;
-    return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-slate-300">Free</div>;
+    return <div className="rounded border border-dashed border-slate-200 p-2 text-xs text-ink-muted">Free</div>;
   }
 
   const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);
