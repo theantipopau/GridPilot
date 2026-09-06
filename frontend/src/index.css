@@ -55,3 +55,18 @@ table,
 .sticky-col-edge {
   box-shadow: 2px 0 4px -2px rgb(15 23 42 / 0.18);
 }
+
+/* Printable timetables - docs/roadmap-v3.md 5. Browser print-to-PDF over
+ * the existing grid components, not a new rendering pipeline: the
+ * single-entity and master grids already show exactly what a printed
+ * timetable needs. App chrome (sidebar, toolbar, the "Print" button
+ * itself) is hidden via Tailwind's print: variant at each call site;
+ * this covers only what a utility class can't - page size/margins, and
+ * the one non-Tailwind-expressible rule (an element mid-way through a
+ * scroll position must not print blank space above/below its content). */
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+}

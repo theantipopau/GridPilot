@@ -72,7 +72,7 @@ export default function MasterTimetableGrid({
   // into Week B, instead of the whole page scrolling AND each table
   // scrolling internally at the same time (docs/roadmap-v2.md 4.3).
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-6 print:h-auto print:overflow-visible print:p-0">
       <div className="flex flex-col gap-8">
         <MasterWeekTable
           label="Week A"

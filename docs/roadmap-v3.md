@@ -489,7 +489,7 @@ are agreed, not before.
 
 ---
 
-## 5. The output layer — a full solution hands something to a human
+## 5. The output layer — a full solution hands something to a human — **printable timetables built 2026-09-07**
 
 Currently: **zero**. No print view, no PDF, no per-person timetable
 export. The only output is a patched `.tfx` for TTS to re-read. A
@@ -511,6 +511,45 @@ Missing, all completely unblocked, none needing new data:
 Size: **M** for the whole set. This is unglamorous and it is the
 difference between "a tool the timetabler uses" and "the system the
 school runs on."
+
+**Built, deliberately scoped to print-CSS over the existing grids, not a
+new rendering pipeline.** The single-entity and master grids already
+render exactly what a printed timetable needs, so this is browser
+print-to-PDF over those same components rather than a server-side PDF
+generator: a "Print" button (`IconPrinter`, `TimetablePage.tsx`) calls
+`window.print()`, and Tailwind `print:` variants hide app chrome
+(sidebar, toolbar, mode/density/axis controls, the Print button itself)
+and let every clipped, viewport-scrolling wrapper — `App.tsx`'s
+`<main>`, `TimetablePage.tsx`'s outer container and grid wrapper,
+`MasterTimetableGrid.tsx`'s and `TimetableGrid.tsx`'s inner scroll
+regions — expand to their natural full height so the grid prints in
+full across as many pages as it needs, instead of the one screen's
+worth that's currently scrolled into view. `index.css` adds one
+non-Tailwind-expressible rule, `@page { size: landscape; margin: 12mm }`,
+since a timetable grid is wide, not tall.
+
+Three items from the original scope were deliberately **not** built in
+this pass, and here's why: **batch export** (all teachers/rooms/roll
+classes at once) needs a print-all-entities flow with its own UI, not
+just CSS, and nothing today needs more than "open this teacher, hit
+print" one at a time. **CSV/JSON exports** and **per-student
+timetables** are unrelated surfaces (tabular data export; a new
+identity-sensitive read-only view) that don't share the print-CSS
+mechanism this pass built, and per-student timetables still carry the
+§7.3 student-identity caveat regardless of export format. All three
+remain open, unblocked, and could each be their own small follow-up.
+
+Verified: `npm run build` and `npm run lint` clean; live in the browser,
+the Print button renders in both master-grid and single-entity modes,
+and the compiled stylesheet was inspected directly (via the page's own
+`document.styleSheets`) to confirm every expected rule compiled
+correctly — `.print\:hidden`, `.print\:block`, `.print\:h-auto`,
+`.print\:overflow-visible`, `.print\:p-0`, and the landscape `@page`
+rule all present under `@media print`. No console errors in either
+mode. This is a display-only change touching no data, so there is no
+live-database cleanup step; the backend's 278 tests pass unaffected.
+Size: **S** for what shipped (print CSS only); the deferred items keep
+the set at roughly **M** overall, as originally estimated.
 
 ---
 
@@ -547,7 +586,7 @@ school runs on."
 | 2 | ✅ `suggest_fixes()` honours room-type/pool | 1.2 | — | S |
 | 3 | 🟡 Bulk review — room-type done (167/199 unblocked), teacher-capability open (no clean signal found) | 1.3 | — | M |
 | 4 | ✅ `solver_run` + run-compare — persistence/history/compare built; discard-until-kept + adjustable weights still open | 4.2 | — | M |
-| 5 | Printable/exportable timetables | 5 | — | M |
+| 5 | ✅ Printable/exportable timetables — print-CSS over existing grids built; batch export, CSV/JSON, per-student deferred | 5 | — | M |
 | 6 | Blocking analysis on revealed demand | 4.1 | — | M |
 | 7 | Infeasibility explanation | 4.3 | — (#4 done) | M |
 | 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |

@@ -15,6 +15,7 @@ import LessonInspector, { type MoveParams } from "../components/LessonInspector"
 import LoadingState from "../components/LoadingState";
 import MasterTimetableGrid from "../components/MasterTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
+import { IconPrinter } from "../components/icons";
 import { useDensity } from "../lib/density";
 import { buildFindingHighlightIndex } from "../lib/findingHighlights";
 import { applyPendingMoves, buildPendingMoveMap } from "../lib/pendingMoves";
@@ -156,8 +157,8 @@ export default function TimetablePage({
   // toggle and whichever controls the current mode needs (axis+scenario,
   // or the entity picker) live together, docs/roadmap-v2.md 4.3.
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
+    <div className="flex h-full flex-col print:block print:h-auto">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4 print:hidden">
         <div className="flex items-end gap-4">
           <div className="flex gap-1 rounded-md bg-slate-100 p-1">
             <button
@@ -220,43 +221,54 @@ export default function TimetablePage({
           )}
         </div>
 
-        {mode === "master" && (
-          <div className="flex items-end gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Rows by</label>
-              <select
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
-                value={axis}
-                onChange={(e) => setAxis(e.target.value as ViewType)}
-              >
-                {AXIS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Viewing</label>
-              <select
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  gridChangeSetId != null
-                    ? "border-violet-300 bg-violet-50 text-violet-800"
-                    : "border-slate-300 text-slate-900"
-                }`}
-                value={gridChangeSetId ?? ""}
-                onChange={(e) => onGridChangeSetCreated(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Live timetable</option>
-                {draftChangeSets.map((cs) => (
-                  <option key={cs.id} value={cs.id}>
-                    Scenario: {cs.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
+        <div className="flex items-end gap-4">
+          {mode === "master" && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Rows by</label>
+                <select
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+                  value={axis}
+                  onChange={(e) => setAxis(e.target.value as ViewType)}
+                >
+                  {AXIS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Viewing</label>
+                <select
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    gridChangeSetId != null
+                      ? "border-violet-300 bg-violet-50 text-violet-800"
+                      : "border-slate-300 text-slate-900"
+                  }`}
+                  value={gridChangeSetId ?? ""}
+                  onChange={(e) => onGridChangeSetCreated(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Live timetable</option>
+                  {draftChangeSets.map((cs) => (
+                    <option key={cs.id} value={cs.id}>
+                      Scenario: {cs.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title="Print this timetable, or save it as a PDF, via your browser's print dialog"
+            className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:bg-slate-50"
+          >
+            <IconPrinter className="h-4 w-4" />
+            Print
+          </button>
+        </div>
       </div>
 
       <div className="shrink-0">
@@ -269,8 +281,12 @@ export default function TimetablePage({
           anywhere meant tracking two or three separate scrollbars at
           once. min-h-0 is required here: without it a flex child refuses
           to shrink below its content size and this box would just grow
-          past the viewport instead of clipping and scrolling. */}
-      <div className="min-h-0 flex-1 overflow-hidden">
+          past the viewport instead of clipping and scrolling. On print,
+          the opposite is wanted - the full timetable, not a viewport-
+          clipped scroll window, so print:h-auto/overflow-visible let it
+          grow to its natural height across as many printed pages as it
+          needs (docs/roadmap-v3.md 5). */}
+      <div className="min-h-0 flex-1 overflow-hidden print:h-auto print:overflow-visible">
         {mode === "master" &&
           (masterEntries ? (
             <MasterTimetableGrid

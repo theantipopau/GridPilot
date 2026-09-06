@@ -47,7 +47,7 @@ export default function TimetableGrid({
   // region for both weeks, owned by the page (TimetablePage), not the
   // page itself scrolling underneath it.
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-6 print:h-auto print:overflow-visible print:p-0">
       <div className="flex flex-col gap-8">
         <WeekTable
           label="Week A"

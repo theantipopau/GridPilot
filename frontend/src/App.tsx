@@ -211,7 +211,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 print:block print:h-auto">
       <Sidebar
         groups={SIDEBAR_GROUPS}
         activeTab={tab}
@@ -240,7 +240,7 @@ export default function App() {
           the browser: without it, a long Findings page grew main to
           12905px and the whole body scrolled underneath a "fixed"
           sidebar that was never actually fixed). */}
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto print:h-auto print:overflow-visible">
         {showImportModal && (
           <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
         )}

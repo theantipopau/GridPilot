@@ -170,3 +170,14 @@ export function IconSpinner({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function IconPrinter({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M6 7V3.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1V7" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="3" y="7" width="14" height="7.5" rx="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 12h8v4.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V12Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 9.75h.01" strokeLinecap="round" />
+    </svg>
+  );
+}

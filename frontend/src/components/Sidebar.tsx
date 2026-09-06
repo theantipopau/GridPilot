@@ -60,7 +60,7 @@ export default function Sidebar({
   const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform ?? "");
 
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-slate-200 bg-white print:hidden">
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-4">
         <img src={gridPilotLogo} alt="GridPilot" className="h-7 w-auto" />
       </div>
