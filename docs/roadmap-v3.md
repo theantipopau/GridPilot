@@ -1,0 +1,493 @@
+# Roadmap v3 — from analysis tool to timetabling system
+
+*Written 2026-09-07, in response to: "what else needs to be added to make
+this a full-fledged timetabling software solution? including all aspects
+of timetabling solutions, but better. utilising AI and pc power to
+improve lines, grids and the timetable itself."*
+
+*Follows `docs/roadmap-v2.md` (staffing, authoring, design system — items
+1–13 of its sequencing table are built) and `docs/solver.md` (the solver
+strategy). Like every plan in this repo: recommendations with the
+evidence attached, not a commitment, and explicitly not permission to
+guess any value marked school-confirmed.*
+
+---
+
+## 0. The one-paragraph version
+
+GridPilot is an excellent **analysis and repair** tool for a timetable
+someone else built. It enters the story after blocking and allocation
+have happened and stops before anything is published. To be a
+*timetabling system* it needs three things it does not have — a
+**demand model** (what the school intends to run), an **availability
+model** (when staff actually can't be scheduled), and an **output layer**
+(something a human can hold) — plus the engines that sit between them.
+Everything else in this document depends on those three. The good news
+from this pass: one of them is **partially recoverable from the source
+file we already hold and currently ignore** (§1.1), and the biggest
+single-day win in the whole document is a review queue with **412 pending
+decisions and zero completed** (§1.3), which is silently holding two
+built rules at zero findings.
+
+---
+
+## 1. Four findings from this pass, in priority order
+
+All four came from querying the real database and the real `.tfx`, not
+from reading the design docs.
+
+### 1.1 🔴 `Meetings` is unparsed — 64 teacher-slot commitments are invisible, and the solver treats them as free
+
+`docs/full-timetabler-plan.md` §3.2 listed `Meetings` (13 records) as
+unparsed because it "carried no load information." That is true, and it
+missed the more important half: **`Meetings` carries `PeriodID` and
+`MeetingTeachers[]`.** That is not load data. That is *availability*
+data — the one thing `docs/solver.md` §4.2 calls the fatal gap and
+`docs/full-timetabler-plan.md` §10.6 calls "the single highest-value
+unanswered question."
+
+Measured against the real file:
+
+| | |
+|---|---:|
+| Meetings in the file | 13 |
+| Meetings whose period resolves to our cycle | 12 |
+| Teacher references, all resolving to a known teacher | 68 |
+| **Distinct (teacher, period) commitments recoverable** | **64** |
+| Distinct teachers affected | 18 |
+| **Of those commitments, how many show as FREE in our model today** | **66 of 68** |
+
+That last row is the finding. `repair_solver.py` and `suggestions.py`
+both determine "is this teacher free at this slot" from
+`timetable_entry` alone. For 18 staff there are slots where the answer
+is currently *yes* and the truth is *no, they are in a standing
+meeting*. **The mass-repair solver can today propose moving a lesson
+into a teacher's meeting slot, and nothing downstream would catch it** —
+`whatif.py` re-runs the rules, and no rule knows meetings exist.
+
+This is a correctness gap, not a feature request, and it is closable
+**with no school input at all** — the data is in the file the school
+already gave us. It does not close the unavailability question (part-time
+fractions and external commitments are still unknown and still
+un-inferable, per §12.5 of the plan doc), but it converts it from "we
+know nothing" to "we know the 64 hard blocks TTS itself records."
+
+**Recommended:** parse `Meetings` into a `teacher_commitment` table
+(source-derived, rebuilt on re-ingest like every other `.tfx` table),
+feed it into `repair_solver._feasible_candidates()` and
+`suggestions.py`'s slot search as a hard constraint, and add a
+`teacher_meeting_clash` rule so an existing violation is visible rather
+than only prevented in future moves. Size: **S**.
+
+### 1.2 🔴 `suggest_fixes()` ignores the room constraints the repair solver enforces
+
+Two engines search the same space with different rules:
+
+| | `class_room_type_constraint` | `room_pool` |
+|---|---|---|
+| `repair_solver.py` (mass repair) | ✅ enforced | ✅ enforced (roadmap-v2 A2) |
+| `suggestions.py` (per-finding "Suggest fixes") | ❌ ignored | ❌ ignored |
+
+`docs/solver.md` §9 flagged this in one line — *"the mapping exists and
+is queryable, `suggest_fixes()` doesn't consult it yet"* — and it is
+still true. The practical effect: the button a human presses most often
+can still propose Drama in a science lab, while the solver they press
+rarely cannot. Same domain model, two implementations, silently
+divergent.
+
+Worth fixing not just for correctness but because §12.6 of the plan doc
+already identified the refactor that fixes it *and* unblocks live-drag
+feedback (§4.4 below): factor the candidate search to accept an
+arbitrary `entry_id` and consult the confirmed constraint tables. Size:
+**S**, and it pays for itself twice.
+
+### 1.3 🔴 412 review decisions pending, 0 completed — two built rules are producing nothing
+
+The detect → human-confirm → rule pattern is this project's best idea
+and is now built three times over. Its throughput to date:
+
+| Queue | Detected | Reviewed | Rule it gates | Findings that rule produces |
+|---|---:|---:|---|---:|
+| Room-type constraints | 199 | **0** | `room_feature_mismatch` | **0** |
+| Teacher capability | 213 | **0** | `teacher_not_qualified_for_class` | **0** |
+| Composite groups | 16 | 16 ✅ | clash suppression | working |
+
+Composite review worked because 16 decisions is an afternoon. 412 is
+not, and no amount of search-box polish (roadmap-v2 §4.4, built) changes
+that arithmetic. **Two rules built and tested against real data are
+returning zero findings, and the solver's most valuable domain reduction
+is switched off, because nobody can face 412 individual clicks.**
+
+This is the highest-value unblocked item in the document and it is not a
+solver problem:
+
+- **Bulk review over a filtered set** — "confirm all 47 candidates at
+  100% consistency", "confirm every capability where the teacher has
+  taught that subject 5+ times this cycle." The confidence signal is
+  already computed and displayed (`matching_lesson_count/total`,
+  `N lesson(s) observed`).
+- **Confidence-ranked ordering** so the ambiguous 20 surface first and
+  the obvious 380 can go in one action.
+- **Provenance stays honest**: a bulk decision records the same
+  `reviewed_by` + the filter that produced the batch, so an audit can
+  reconstruct exactly what was agreed to in one click.
+
+This is the "new category of risk" I flagged last session — mass state
+change from one action. It is worth doing *precisely because* the
+alternative (the status quo) is that the review never happens at all,
+which is strictly worse than a reviewed batch with an audit trail.
+Size: **M**.
+
+### 1.4 🟡 The `.sfx` holds allocations, not unmet demand — this reframes the blocking prize
+
+`docs/solver.md` §8 proposes the blocking optimiser as *"strong
+candidate for the actual highest-value solver work, and it needs no new
+data at all"*, with the motivating question: *"if we move Psychology from
+Line C to Line E, how many students get their full first-preference
+set?"*
+
+Checked against the real data, that specific question is **not currently
+answerable**:
+
+| | |
+|---|---:|
+| `sfx_student_preference` rows | 6,756 |
+| Students with preferences | 560 of 560 |
+| Preferences per student | 8–18 (median 12) |
+| Rows resolving to a class in the current timetable | 4,328 |
+| **Satisfaction rate, every rank 1 through 18** | **100%** |
+
+A 100% satisfaction rate at rank 18 is not a triumph of blocking; it
+means these rows are the *resolved allocation*, not the wish list. The
+2,428 rows that don't resolve are Year 8 rotation electives
+(`08VARTS1`, `08JPN1`, `08DRA1` …) sitting on `T1A`/`T2A`/`T4D` lines
+that don't exist in this term's `.tfx` at all — a different rotation
+structure, not unmet demand either.
+
+**What this rules out:** counterfactual preference-satisfaction scoring.
+Without the raw pre-allocation submissions (which live in TTS
+Preferences Manager, not in the `.sfx` export), we cannot say how many
+students *would have* got their first choice under a different line
+arrangement. Building that on this data would be inventing the input.
+
+**What it does not rule out — and this is still a real prize.** We know
+every one of 560 students' *complete actual subject set*, plus 193
+subjects with `class_size_maximum`, 60 lines, and 16 curriculum
+constraints. That supports a genuinely useful class of question, all
+computable today:
+
+- **Which subject pairs are structurally impossible?** Two subjects on
+  one line can never be taken together — a fact about the structure,
+  invisible in TTS until a student asks for both.
+- **Which lines are over- and under-loaded** against `class_size_maximum`,
+  and where does a line's demand exceed the classes provisioned for it?
+- **Would a different assignment of subjects to lines serve the exact
+  same 560 subject sets with fewer classes, or better-balanced ones?**
+  This is a set-partitioning problem CP-SAT solves well, it uses only
+  data we hold, and it answers "improve the lines" honestly — as
+  *re-optimising against revealed demand*, not as satisfaction
+  counterfactuals we can't evidence.
+
+**Recommended:** rename the ambition rather than drop it. Build
+**blocking analysis on revealed demand** (§4.1), and put "obtain raw
+preference submissions from Preferences Manager" on the school question
+list (§6) as what would unlock true counterfactuals later.
+
+---
+
+## 2. The pipeline gap map
+
+The TTS workflow, from `docs/full-timetabler-plan.md` §1.2, with what
+GridPilot actually does at each stage:
+
+```
+Curriculum  →  Blocking  →  Allocation  →  Timetable  →  Publish  →  Daily Org
+ (what runs)  (what runs    (who teaches   (which slot)  (staff/     (cover,
+               in parallel)  what)                        students)   changes)
+```
+
+| Stage | TTS product | GridPilot today | Gap |
+|---|---|---|---|
+| **Curriculum** | Version 10.1 setup | ❌ nothing — no record of intended offerings | **`teaching_requirement` (§3)** |
+| **Blocking** | Version 10.1 + Preferences Manager | 🟡 read-only view (29 lines, 169 links) + per-line finding counts | Analysis, then optimisation (§4.1) |
+| **Allocation** | Staffing (cloud) | 🟡 capability data (213 rows, unreviewed) + EA load policy | No allocation engine (§3.2) |
+| **Timetable** | Version 10.1 solver | ✅ **stronger than TTS** — rules, repair solver, what-if, suggestions | Mode B/C (§4.2) |
+| **Publish** | Daily Reports, exports | ❌ **nothing** — `.tfx` patch only | Output layer (§5) |
+| **Daily Org** | Daily Organiser | ❌ deliberately refused | Decision point (§6) |
+
+Read that honestly: GridPilot is genuinely ahead of TTS in exactly one
+column, and absent from three. "Full-fledged" means filling the three,
+in dependency order — and the leftmost gap is the one everything else
+rests on.
+
+---
+
+## 3. The missing spine: a demand model
+
+### 3.1 `teaching_requirement` — the single biggest structural hole
+
+Every table in the database describes **what happened**: 2,181 timetable
+entries, 6,726 enrolments, 248 class groups. Nothing describes **what
+the school intended to run** — "Year 9 Science: 6 classes, 5 periods per
+cycle each, max 28 students, must be a Science room, needs a
+Science-qualified teacher."
+
+That record is the input to three separate things GridPilot cannot
+currently do:
+
+1. **Allocation** — you cannot assign teachers to classes that aren't
+   declared.
+2. **Blocking** — lines are arrangements *of* requirements.
+3. **Construction (Mode C)** — `docs/solver.md` §2.3's "build the cycle
+   from demand data" has no demand data to build from.
+
+It is also the missing dependency under three things already designed
+and parked: `docs/staff-capability-model.md`'s full six-step precedence
+(the "requirement lock/preference" steps), `docs/staffing-priority-policy.md`
+(`allocation_priority`, `lock_status` are declared as fields *on*
+`teaching_requirement`), and that doc's `BLOCKING` staffing-health
+finding — which it describes as "one of the first useful things to build
+once the capability tables land." The capability tables landed
+(2026-08-17); the requirement table is what's still missing.
+
+**Bootstrappable, like everything else here.** The current timetable
+already implies most of it: each `class_name` with its period count, its
+enrolment, its observed room type (199 candidates detected), and its
+observed teacher (213 candidates detected). The same detect → confirm →
+use pattern applies, and would produce a real curriculum model from the
+resolved timetable in one pass. Size: **L**, and it unlocks more than
+anything else in this document.
+
+### 3.2 Allocation — the module TTS sells separately
+
+With `teaching_requirement` + `teacher_capability` + EA load caps
+(`agreement_load_rule`, built) + `teacher_profile.fte` (built), "who
+teaches what" becomes a solvable assignment problem with a real
+objective: respect capability, stay under the contact cap, honour FTE,
+balance load across a faculty, minimise the number of teachers per class
+(`class_teacher_inconsistency` is already the metric).
+
+Worth noting what makes this *better* than TTS Staffing rather than a
+clone: TTS allocates, then you inspect. GridPilot already has the
+what-if validator, the finding-diff, and the change-set approval gate —
+an allocation run lands as a reviewable proposal with an English
+explanation, the same shape mass repair already proved. Size: **L**,
+gated on §3.1.
+
+---
+
+## 4. Where AI and compute genuinely change the game
+
+The user's ask, precisely: *improve lines, grids, and the timetable
+itself*. Taking those in order.
+
+### 4.1 Lines — blocking analysis, then blocking optimisation
+
+Per §1.4, honestly scoped. Two phases:
+
+**Phase 1 — analysis (no new data, no solver).** Subject-pair
+impossibility matrix; line load vs `class_size_maximum`; which lines
+carry the tightest demand; which classes are structurally
+over-subscribed. This is the `docs/full-timetabler-plan.md` §12.4 work,
+half-built already (roadmap-v2 item 5 shipped per-line finding counts
+and per-course enrolment, and deliberately stopped short of judgements
+it couldn't evidence).
+
+**Phase 2 — re-optimisation against revealed demand (CP-SAT).** Given
+560 fixed subject sets, 193 caps and 16 curriculum constraints: is there
+an arrangement of subjects into lines that serves the same demand with
+fewer clashes, better-balanced classes, or fewer classes overall? Same
+run-compare workflow as §4.2. **This is the highest-leverage compute in
+the document**, because blocking mistakes are the ones that make a
+timetable impossible three months later, and it is the stage TTS splits
+across two products without ever answering the counterfactual. Size:
+**L**.
+
+### 4.2 The timetable — make a solver run a first-class object
+
+`docs/solver.md` §6 specifies a `solver_run` table (mode, scope,
+weights, status, objective, moves, findings resolved/introduced,
+optional change set) and the run-compare workflow around it. **It was
+never built** — today a mass-repair run either becomes a change set or
+vanishes.
+
+That is the difference between a button and a tool. The real workflow is
+*run → inspect → "too much movement" → adjust → re-run → compare → keep
+one*, and "Run 3 fixed 18 findings with 22 moves; Run 4 fixed 20 with
+61" is not just a nicety — per `docs/solver.md` §3.3 it is **the
+interface for the objective-weight conversation with the school**,
+turning an abstract policy question into a concrete A/B choice. It also
+merges with Phase E scenarios: a kept run and a named scenario are the
+same object. Size: **M**, unblocked.
+
+Mode B (regional rebuild) and Mode C (construction) stay where
+`docs/solver.md` put them — behind teacher unavailability (§1.1 makes a
+dent) and, for C, behind §3.1.
+
+### 4.3 Infeasibility explanation — the actual product gap
+
+The most valuable single item in `docs/solver.md` (§7.2) and still
+unbuilt. When a solver returns INFEASIBLE it has proven something
+enormously useful in a useless form; CP-SAT can produce the minimal
+contradictory subset, and the local model can turn it into *"Year 10
+Science needs 5 periods across 4 lab-capable rooms, but three of those
+are already committed to Year 11 — the structure can't fit, this isn't a
+scheduling problem."*
+
+**TTS tells you the clash. Nothing on the market tells you the structure
+is impossible.** This is where "better than TTS" stops being a slogan.
+It is a genuine language task on top of a genuine computation, it stays
+strictly inside the explain-never-decide boundary
+(`docs/ai-advisor.md`), and it applies to blocking runs (§4.1) as much
+as timetable runs. Size: **M**, gated only on §4.2.
+
+### 4.4 Grids — live constraint feedback instead of run-then-check
+
+`docs/full-timetabler-plan.md` §7.2 item 1, still unbuilt: dragging a
+lesson should shade every legal target slot *before* the drop. We
+already compute exactly this — it is behind a button (`Suggest fixes`)
+instead of under the cursor. Needs the per-entry candidate endpoint from
+§12.6, which is the same refactor §1.2 needs. Size: **S–M** once that
+lands.
+
+Also still open from that list: **explain-on-hover** from a grid cell
+(the advisor is reachable only from the Findings list), and
+**side-by-side scenario diff** (the Viewing selector renders one
+scenario at a time, not two next to each other).
+
+### 4.5 A portfolio advisor, not a per-finding one
+
+`docs/full-timetabler-plan.md` §8: the advisor explains one finding.
+The next job is reading the *set* — "what's structurally wrong with Year
+10?", "which three changes would most improve room consistency?" — which
+needs a summarisation endpoint over a filtered finding set, and a bigger
+local model. The deterministic layer still computes; the model still
+only explains. Size: **M**.
+
+### 4.6 A timetable quality score
+
+Deliberately refused in 2026-08-06 ("inventing scoring logic just to
+fill a tile"), and that refusal was right *then*. It stops being
+invention once the solver's objective exists (§4.2): the score becomes
+"the objective value the school's own confirmed weights produce," which
+is a real number with a defensible derivation. Revisit **after** weights
+are agreed, not before.
+
+---
+
+## 5. The output layer — a full solution hands something to a human
+
+Currently: **zero**. No print view, no PDF, no per-person timetable
+export. The only output is a patched `.tfx` for TTS to re-read. A
+timetabler's actual week involves handing a timetable to 74 staff and
+560 students, and today GridPilot cannot produce one.
+
+Missing, all completely unblocked, none needing new data:
+
+- **Per-teacher / per-room / per-roll-class printable timetables** — the
+  single-entity grid already renders exactly this; it needs a print
+  stylesheet and a batch export.
+- **Wall chart / master grid export** — the master grid, paginated.
+- **Per-student timetables** — the data exists (6,726 enrolments);
+  nothing renders it. Note this is the one output touching student
+  identity, so it stays read-only per §7.3.
+- **CSV/JSON exports** of findings, loads, utilisation for the school's
+  own reporting.
+
+Size: **M** for the whole set. This is unglamorous and it is the
+difference between "a tool the timetabler uses" and "the system the
+school runs on."
+
+---
+
+## 6. Decision points — these are yours, not mine
+
+1. **Daily Organiser.** Deliberately refused in
+   `docs/full-timetabler-plan.md` §9, on the correct grounds that it is a
+   separate product with a hard dependency on a real-calendar mapping
+   this project has refused to guess three times. "All aspects of
+   Timetabling Solutions" includes it. Building it means first building
+   a school-calendar table (cycle day → real date), which is a
+   *conversation*, not an inference. **My recommendation: not yet** —
+   it's the furthest from the current strength and the closest to
+   TTS's.
+2. **Raw preference submissions.** Would unlock true blocking
+   counterfactuals (§1.4). They exist in Preferences Manager; can they be
+   exported?
+3. **Teacher unavailability, still #1.** §1.1 recovers the 64 meeting
+   blocks. Part-time fractions, external commitments and leadership
+   release still cannot be inferred — and now that `teacher_profile.fte`
+   exists (roadmap-v2 §2.4), there is somewhere to put the answer.
+4. **Replace or out-think?** (`§10.5` of the plan doc, still open.)
+   Everything through §4 works alongside TTS. §3.1 + §3.2 + Mode C is
+   where GridPilot starts trying to replace it, and that is a
+   materially different commitment.
+
+---
+
+## 7. Sequencing
+
+| # | Item | § | Blocked on | Size |
+|---|---|---|---|---|
+| 1 | Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
+| 2 | `suggest_fixes()` honours room-type/pool + per-entry endpoint | 1.2, 4.4 | — | S |
+| 3 | Bulk review over filtered sets (unblocks 412 decisions) | 1.3 | — | M |
+| 4 | `solver_run` + run-compare (merges Phase E scenarios) | 4.2 | — | M |
+| 5 | Printable/exportable timetables | 5 | — | M |
+| 6 | Blocking analysis on revealed demand | 4.1 | — | M |
+| 7 | Infeasibility explanation | 4.3 | #4 | M |
+| 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | #2 | S–M |
+| 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
+| 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |
+| 11 | Blocking optimiser (CP-SAT) | 4.1 | #6, #10 | L |
+| 12 | Teacher allocation engine | 3.2 | #10 | L |
+| 13 | Parse `UnscheduledDuties` + `Groups` | 1.4, 2 | school Q3 for load | S |
+| 14 | Mode B regional rebuild | 4.2 | unavailability | L |
+| 15 | Quality score from agreed weights | 4.6 | #4 + school | S |
+| 16 | Mode C construction (roll-over only) | 4.2 | #10, #14, go/no-go | XL |
+| 17 | Daily Organiser | 6 | calendar table + explicit decision | XL |
+
+**Items 1–6 need nothing from anyone** and are worth roughly a session
+each. Item 3 is the one I'd do first regardless of order: it is the only
+item that makes work already done start producing value, rather than
+adding more.
+
+**Item 10 is the fork in the road.** Everything above it improves the
+tool GridPilot already is. Everything below it builds the system TTS
+currently is. They are both defensible; they are not the same project,
+and the second one should be started deliberately rather than drifted
+into.
+
+---
+
+## 8. What does not change
+
+- **Nothing auto-applies.** Every engine here — allocation, blocking,
+  construction — produces a proposal into the existing change-set
+  approval gate. `docs/solver.md` §11 holds for all of them.
+- **The model never decides.** It explains computed facts. A bigger
+  model and a harder explanation task do not move that line.
+- **No guessed policy values, no guessed calendar, no invented
+  thresholds.** Every number in this document was queried, not
+  estimated; every gap that needs a school answer is listed in §6 rather
+  than filled in.
+- **Student identity stays read-only** (`full-timetabler-plan.md` §7.3),
+  including in §5's per-student output.
+
+---
+
+## Sources
+
+- `docs/full-timetabler-plan.md` — pipeline (§1.2), read gap (§3.2),
+  write ceiling (§3.3), refusals (§9), open questions (§10), inference
+  candidates (§12)
+- `docs/solver.md` — three modes, the CP-SAT model, `solver_run` (§6),
+  infeasibility explanation (§7.2), the blocking prize (§8)
+- `docs/roadmap-v2.md` — staffing/EA, capability, authoring, design
+  system; items 1–13 built
+- `docs/staffing-priority-policy.md` — the `BLOCKING` staffing-health
+  finding waiting on `teaching_requirement`
+- `docs/staff-capability-model.md`, `docs/room-constraints.md`,
+  `docs/mass-repair.md`, `docs/ai-advisor.md`
+- Primary evidence: the GridPilot database and the school's real `.tfx`,
+  queried 2026-09-07 — every count in §1 measured directly.
