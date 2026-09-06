@@ -138,7 +138,7 @@ a separate, larger change to the API surface, not required for this
 gap. Size: **S**, as estimated for the correctness fix; the endpoint
 refactor remains open under item 8 of the sequencing table.
 
-### 1.3 🔴 412 review decisions pending, 0 completed — two built rules are producing nothing
+### 1.3 🔴 412 review decisions pending, 0 completed — two built rules are producing nothing — **room-type half built 2026-09-07**
 
 The detect → human-confirm → rule pattern is this project's best idea
 and is now built three times over. Its throughput to date:
@@ -173,7 +173,51 @@ This is the "new category of risk" I flagged last session — mass state
 change from one action. It is worth doing *precisely because* the
 alternative (the status quo) is that the review never happens at all,
 which is strictly worse than a reviewed batch with an audit trail.
-Size: **M**.
+
+**Built for room-type constraints, deliberately not for teacher
+capability - here's why.** Asked the user how aggressive this should be
+before building anything: **bulk-approve above a confidence threshold**
+(not "approve everything currently filtered" - too general; not
+per-row checkboxes - too many clicks for the problem it solves), gated
+behind **typing the exact count to confirm** (`approve 167`), since
+nothing else in this app lets one action change more than one record.
+`POST /room-constraints/candidates/bulk-approve` takes an explicit id
+list from the frontend (not a live re-query at commit time, so what a
+human confirmed is exactly what gets written), applies it in one
+transaction, and logs **one** audit event for the whole batch.
+
+The threshold itself came from the real distribution, not a guess: of
+199 pending room-type candidates, **167 (84%) sit at exactly 100%
+consistency** - the same ratio `room_type_constraints.py`'s own
+detection heuristic already relies on, just at its top slice. Verified
+live against the real database, not just synthetic fixtures: confirmed
+the exact phrase requirement rejects a wrong string, approved all 167
+in one action, confirmed the audit log shows one event listing all 167
+ids, confirmed the 32 genuinely-ambiguous candidates (mostly 88%
+ratios) were untouched and still render for individual review - then
+reverted every row to `PENDING` and re-ran the rules engine to restore
+the exact pre-verification state (158 open findings, matching before
+and after; the transient `room_feature_mismatch` findings that appeared
+during the test correctly resolved rather than left dangling).
+
+**Teacher capability does not get the same treatment, because the data
+doesn't support it.** Checked the real distribution before building
+anything (same discipline `docs/room-constraints.md`'s own detection
+heuristic was chosen with): `teacher_capability`'s only numeric signal
+is `lesson_count` (embedded in a free-text `notes` field, not even a
+structured column), and its real distribution has **no clean cutoff** -
+1 through 50, with mass at both 1-2 (39 candidates) and 8 (54
+candidates) and nothing resembling room-type's 84%-at-100% signal. A
+structural alternative was checked too - "the teacher has only one
+candidate subject at all, so there's nothing to weigh it against" -
+covers just **3 of 213** real candidates, too small to matter. Building
+a numeric threshold here anyway (e.g. "lesson_count ≥ 5") would be
+exactly the invented-policy-value trap this project has refused
+throughout. **Left open** - not because bulk review is a bad idea for
+this queue, but because it needs either a different design (the
+selection-checkbox option, explicitly declined for room-type, might
+still be right here) or a real signal this pass didn't find. Size: **M**
+for the part that shipped; the teacher-capability half stays unscoped.
 
 ### 1.4 🟡 The `.sfx` holds allocations, not unmet demand — this reframes the blocking prize
 
@@ -468,7 +512,7 @@ school runs on."
 |---|---|---|---|---|
 | 1 | ✅ Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
 | 2 | ✅ `suggest_fixes()` honours room-type/pool | 1.2 | — | S |
-| 3 | Bulk review over filtered sets (unblocks 412 decisions) | 1.3 | — | M |
+| 3 | 🟡 Bulk review — room-type done (167/199 unblocked), teacher-capability open (no clean signal found) | 1.3 | — | M |
 | 4 | `solver_run` + run-compare (merges Phase E scenarios) | 4.2 | — | M |
 | 5 | Printable/exportable timetables | 5 | — | M |
 | 6 | Blocking analysis on revealed demand | 4.1 | — | M |

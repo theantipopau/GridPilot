@@ -131,6 +131,16 @@ export function reviewRoomConstraintCandidate(
   return postJson(`${BASE}/room-constraints/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
 }
 
+export function bulkApproveRoomConstraintCandidates(
+  candidateIds: number[],
+  reviewedBy: string,
+  note?: string,
+): Promise<{ approved_count: number; approved_ids: number[]; missing_ids: number[]; already_reviewed_ids: number[] }> {
+  return postJson(`${BASE}/room-constraints/candidates/bulk-approve`, {
+    candidate_ids: candidateIds, reviewed_by: reviewedBy, note,
+  });
+}
+
 export function runMassRepair(
   findingIds: number[] | null,
   createdBy: string,

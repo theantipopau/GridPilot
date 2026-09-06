@@ -65,6 +65,23 @@ Review via **Room Constraints** in the sidebar, or directly:
 `/reject` (body: `{"reviewed_by": "...", "note": "optional"}`). Both
 re-run the rules engine synchronously, same as composite review.
 
+**Bulk review — added 2026-09-07, see `docs/roadmap-v3.md` 1.3.** 199
+individual clicks is what turned this queue into 0 completed reviews in
+practice. `POST /api/room-constraints/candidates/bulk-approve` (body:
+`{"candidate_ids": [...], "reviewed_by": "...", "note": "optional"}`)
+approves a whole batch in one transaction and logs **one** audit event
+for it. Deliberately narrow: the UI only offers this for candidates at
+exactly `matching_lesson_count == total_lesson_count` (167 of 199 in the
+real data - the same 100% signal, at the top of the distribution this
+page's own `MIN_RATIO = 0.7` detection threshold already trusts), the
+frontend sends the exact id list it showed the reviewer (never a
+server-side re-query at commit time, so a race between preview and
+commit can't silently approve something different), and committing
+requires typing the exact count (`approve 167`) - the only bulk write in
+this app, so it gets more friction than a normal confirm dialog. A
+candidate already reviewed by someone else in the meantime is skipped
+and reported, never silently overwritten.
+
 ## What approving actually does
 
 Only an `APPROVED` constraint feeds `room_feature_mismatch`

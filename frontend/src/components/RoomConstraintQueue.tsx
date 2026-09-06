@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BulkApproveBar from "./BulkApproveBar";
 import EmptyState from "./EmptyState";
 import PageHeader from "./PageHeader";
 import SearchBox from "./SearchBox";
@@ -11,15 +12,28 @@ interface Props {
   reviewStatus: ReviewStatus;
   onReviewStatusChange: (status: ReviewStatus) => void;
   onReview: (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => Promise<void>;
+  onBulkApprove: (
+    ids: number[],
+    reviewedBy: string,
+    note?: string,
+  ) => Promise<{ approved_count: number; approved_ids: number[]; missing_ids: number[]; already_reviewed_ids: number[] }>;
 }
 
 const TABS: ReviewStatus[] = ["PENDING", "APPROVED", "REJECTED"];
 
-export default function RoomConstraintQueue({ candidates, reviewStatus, onReviewStatusChange, onReview }: Props) {
+export default function RoomConstraintQueue({ candidates, reviewStatus, onReviewStatusChange, onReview, onBulkApprove }: Props) {
   const [reviewedBy, setReviewedBy] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const filtered = candidates.filter((c) => matchesQuery(query, [c.class_code, c.room_type]));
+  // docs/roadmap-v3.md 1.3: real data showed 167 of 199 pending candidates
+  // sit at exactly 100% consistency - the same clean signal room_type_
+  // constraints.py's own detection heuristic already relies on, not an
+  // invented cutoff. Scoped to the currently-searched set, so a filter
+  // narrows what a bulk approval can touch too.
+  const fullConfidenceIds = filtered
+    .filter((c) => c.matching_lesson_count === c.total_lesson_count)
+    .map((c) => c.id);
 
   const handleReview = async (id: number, decision: "approve" | "reject") => {
     if (!reviewedBy.trim()) {
@@ -81,6 +95,15 @@ export default function RoomConstraintQueue({ candidates, reviewStatus, onReview
           </button>
         ))}
       </div>
+
+      {reviewStatus === "PENDING" && (
+        <BulkApproveBar
+          count={fullConfidenceIds.length}
+          label="100% consistency"
+          reviewedBy={reviewedBy}
+          onConfirm={(who, note) => onBulkApprove(fullConfidenceIds, who, note)}
+        />
+      )}
 
       {candidates.length === 0 ? (
         <EmptyState

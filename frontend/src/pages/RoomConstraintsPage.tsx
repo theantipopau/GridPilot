@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchRoomConstraintCandidates, reviewRoomConstraintCandidate } from "../api";
+import { bulkApproveRoomConstraintCandidates, fetchRoomConstraintCandidates, reviewRoomConstraintCandidate } from "../api";
 import RoomConstraintQueue from "../components/RoomConstraintQueue";
 import LoadingState from "../components/LoadingState";
 import type { ReviewStatus, RoomTypeConstraintCandidate } from "../types";
@@ -24,6 +24,12 @@ export default function RoomConstraintsPage() {
     load(reviewStatus);
   };
 
+  const handleBulkApprove = async (ids: number[], reviewedBy: string, note?: string) => {
+    const result = await bulkApproveRoomConstraintCandidates(ids, reviewedBy, note);
+    load(reviewStatus);
+    return result;
+  };
+
   if (error) return <div className="p-6 text-red-600">Failed to load room-constraint candidates: {error}</div>;
   if (!candidates) return <LoadingState label="Loading room-constraint candidates…" />;
 
@@ -33,6 +39,7 @@ export default function RoomConstraintsPage() {
       reviewStatus={reviewStatus}
       onReviewStatusChange={setReviewStatus}
       onReview={handleReview}
+      onBulkApprove={handleBulkApprove}
     />
   );
 }
