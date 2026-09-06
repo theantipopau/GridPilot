@@ -10,7 +10,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
   <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-148%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-256%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-unspecified-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
@@ -41,42 +41,62 @@ for inventing them.
 
 ## What's built
 
-Six milestones, each tested against the school's real Term 3 export, not
-synthetic data alone:
+The original six milestones, plus two full follow-up passes
+(`docs/roadmap-v2.md`, `docs/roadmap-v3.md`) — every item tested against
+the school's real Term 3 export, not synthetic data alone.
+
+### Core: ingest, analyse, edit, export
 
 | | |
 |---|---|
 | ✅ **Ingestion + cross-validation** | `.tfx` (primary source) cross-checked against CSV and eMinerva exports; every mismatch surfaced as a structured discrepancy, never silently dropped. Auto-discovers the newest export file — a new term needs no code change. |
-| ✅ **Timetable grid** | **Master grid** by default - every lesson, every day, at once, rows switchable between Room/Teacher/Roll class (Room is the classic timetabler's view - a clash is two lessons stacked in one cell). "Single entity" mode still filters to one teacher/room/roll class. Lessons are colour-coded by faculty (a validated, colour-blind-safe 8-colour palette, with a legend - low-volume/no-faculty entries fall to a neutral grey rather than a 9th invented colour). Click any lesson to move it and see the clash-rule impact immediately; a proposed move renders live at its new slot, not just a marker on the old one. A **Viewing** selector lets the master grid render "through" any draft change set — hand-edited, a suggested fix, or a solver repair run — as a lightweight scenario, without touching the live timetable. See [`docs/master-timetable.md`](docs/master-timetable.md). |
-| ✅ **Search everywhere** | `Ctrl+K` opens a command palette that jumps straight to a teacher, room, or roll class's timetable, or to any page — no more hunting through a dropdown to find one teacher among 74. |
-| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room utilisation, and class room/teacher consistency (does a class keep the same room/teacher across the cycle?). Composite classes (two class codes taught as one physical lesson) are detected and held in a **human-review queue** — never silently suppressed. A finding can also be marked **accepted risk** (an intentional, known clash) - it drops out of the default view but is never hidden, and is reversible. See [`docs/rules.md`](docs/rules.md). |
-| ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of the clash rules, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
-| ✅ **Constraint-based suggestions** | Searches every valid alternate room/time, rejects anything that fails a hard constraint, ranks what's left by disruption, room familiarity as a tiebreak. Each candidate shows *why* it works (capacity, no new clash) and whether it makes the class more or less room-consistent. Available from the Findings tab, and as a "Suggested fixes" tab right in the lesson editor. Deliberately **no AI involved** — this is what the AI advisor *explains*, not invents. |
-| ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set can be exported to a re-importable `.tfx`, gated behind six validation checks including a full re-ingest through the app's own parser. File-writing is deliberately CLI-only, never a UI button. |
-| ✅ **Re-ingest persistence** | Composite-class reviews, change sets, and the audit trail now survive a re-ingest instead of being wiped - state is snapshotted by stable code (teacher/room/class/day/period code) and re-attached to the freshly-loaded data. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
-| ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. First launch walks you into an import screen automatically; re-importing a fresh export later is one click away from the sidebar. |
-| ✅ **Dashboard** | Sidebar navigation plus a real overview page - open findings by severity, composite reviews pending, draft change sets, average room utilisation, entity counts, recent activity. Every number is a live query; nothing simulated (no scenarios, no solver, no invented compliance scores - see [Project status](#project-status)). |
-| ✅ **Teachers** | Name, code, faculty, and load (contracted vs. scheduled) straight from the import - read-only. Plus middle-leadership role/tier assignment, the one thing entered directly in GridPilot - kept by teacher **code**, not an internal id, specifically so it survives a re-ingest. |
-| ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix, never sees anything beyond the finding's own codes/evidence. Also told about *other* open findings sharing an entity or time slot, so it can flag when two findings are really the same underlying clash seen from different sides, instead of explaining everything in isolation. One "Explain" button per finding in the Findings tab. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
-| ✅ **Blocking** | Read-only view of the option-line / blocking-pattern structure (which classes run in parallel so a student can pick one per line) - the board a timetabler currently has to infer from a spreadsheet. See [`docs/full-timetabler-plan.md`](docs/full-timetabler-plan.md) Phase C. |
+| ✅ **Timetable grid** | **Master grid** by default - every lesson, every day, at once, rows switchable between Room/Teacher/Roll class (Room is the classic timetabler's view - a clash is two lessons stacked in one cell). "Single entity" mode still filters to one teacher/room/roll class. Lessons are colour-coded by faculty (a validated, colour-blind-safe 8-colour palette, with a legend). Click any lesson to move it and see the clash-rule impact immediately; a proposed move renders live at its new slot. A **Viewing** selector lets the master grid render "through" any draft change set — hand-edited, a suggested fix, or a solver repair run — as a lightweight scenario, without touching the live timetable. A comfortable/compact **density toggle**, and full **keyboard navigation** (arrow keys to move, Enter to open a lesson) alongside the mouse. See [`docs/master-timetable.md`](docs/master-timetable.md). |
+| ✅ **Search everywhere** | `Ctrl+K` opens a command palette that jumps straight to a teacher, room, or roll class's timetable, or to any page. Every review queue (Findings, Room Constraints, Teacher Capabilities, Composite Review) and the Rooms page also has its own inline search/filter box, since several of these lists run past 150–200 real entries. |
+| ✅ **Deterministic rules engine** | Teacher/room/student double-booking, room capacity, teacher load, room/class-name utilisation, class room/teacher consistency, room-type mismatch, room-pool violation, unqualified-teacher, and early-career-teacher overload — 13 rules total. Composite classes and room-type/teacher-capability candidates are detected and held in **human-review queues** — never silently suppressed or auto-approved. A finding can be marked **accepted risk** - reversible, never hidden. See [`docs/rules.md`](docs/rules.md). |
+| ✅ **Safe change sets** | Propose an edit, validate it with a full what-if re-run of every rule, then approve or reject. The imported timetable is **never mutated** — approval is a durable record, not a write. |
+| ✅ **Constraint-based suggestions** | Searches every valid alternate room/time — and, since roadmap v2, alternate *teacher* (backed by confirmed capability data, never guessed) — rejects anything failing a hard constraint, ranks what's left by disruption and familiarity. Available from the Findings tab and the lesson editor. Deliberately **no AI involved**. |
+| ✅ **Mass-repair solver** | A real CP-SAT solver (OR-Tools, not an LLM) that finds a minimal set of moves resolving a chosen batch of findings at once — swaps and chains a single-lesson search can't find. Lands as a normal change set for review; nothing auto-applies. See [`docs/mass-repair.md`](docs/mass-repair.md). |
+| ✅ **Audit trail + export gate** | Every import, rules run, and review decision is logged. An approved change set exports to a re-importable `.tfx`, gated behind six validation checks. File-writing is deliberately CLI-only, never a UI button. |
+| ✅ **Re-ingest persistence** | Composite-class reviews, room-type/capability decisions, change sets, and the audit trail survive a re-ingest - snapshotted by stable code, never an internal id. See [`docs/reingest-persistence.md`](docs/reingest-persistence.md). |
+| ✅ **Browser-based import** | Load a `.tfx` and any number of `.sfx` files straight from the UI - no folder wrangling, no CLI. |
+| ✅ **AI advisor (Ollama)** | A local model *explains* an existing finding in plain English - never suggests or applies a fix. Told about related open findings so it can flag when two findings are the same underlying clash from different sides. See [`docs/ai-advisor.md`](docs/ai-advisor.md). |
+| ✅ **Dashboard** | Open findings by severity, composite/room-type/capability reviews pending, draft change sets, average room utilisation, entity counts, recent activity - every number a live query, nothing simulated. |
 
-**Not yet built:** adding/editing teacher *records* (name/faculty/load
-stay view-only - only role assignment is writable), and anything
-resembling a solver or multi-scenario planning (a real architecture
-change, not a UI addition) - see [Project status](#project-status).
+### Staffing, capability, rooms & blocking (roadmap v2)
+
+| | |
+|---|---|
+| ✅ **Staffing Policy** | The Diocesan industrial agreement modelled as reviewable data (never hard-coded): contact-time caps, middle/senior leadership release pools by enrolment band, and a reconciliation view (pool vs. allocated release). No real EA figures are seeded - the school enters and confirms its own. |
+| ✅ **Teacher Capabilities** | "Permission to teach," bootstrapped from who currently teaches what (never auto-approved - a fresh candidate is always `REVIEW_REQUIRED`), reviewed on its own page. Unblocks a `teacher_not_qualified_for_class` finding and teacher-reassignment suggestions once reviewed. |
+| ✅ **Room Constraints** | Which `room_type` each class actually needs, inferred from real usage (78% of classes already use exactly one type) and confirmed by a human before it's trusted - unblocks `room_feature_mismatch` and narrows the solver's room search. |
+| ✅ **Rooms** | Utilisation, declared room pools, confirmed room-type expectations, and open-finding counts per room - one page instead of cross-referencing four. |
+| ✅ **Teachers** | Load (contracted vs. scheduled), faculty, middle-leadership role/tier, and a registration/career-stage profile (flags an early-career teacher at/near their contact cap or covering an unusual number of subjects) - all entered directly in GridPilot, all kept by teacher **code** so they survive a re-ingest. |
+| ✅ **Blocking analytics** | Read-only option-line view, now with an open-finding badge per line and real per-course enrolment, so a timetabler can see pressure on a line without inferring it from a spreadsheet. See [`docs/full-timetabler-plan.md`](docs/full-timetabler-plan.md) Phase C. |
+| ✅ **Design system pass** | Tokens instead of ad-hoc colour, tabular numerals, a measured (not eyeballed) WCAG AA contrast pass, a full-height single-scroll grid, and a consolidated toolbar. |
+
+**Not yet built:** adding/editing teacher, student or room *records*
+(only role/capability/profile fields are writable - identity stays
+read-only from the import), and anything resembling a demand model,
+an allocation engine, or a printable/exportable output - see
+[`docs/roadmap-v3.md`](docs/roadmap-v3.md) for the honest gap analysis
+against what a full timetabling system would need.
 
 ## Design direction
 
 The UI now follows the target mockups fairly closely — a sidebar, a real
-Dashboard, and an editable timetable grid all exist. What's deliberately
-*not* built, even though the mockups show it: Scenarios (GridPilot has
-one timetable, not branching versions), a solver/"Run Solver" action (no
-optimiser exists — deterministic rules only, by design), a real-calendar
-Timetable Overview (no calendar-date mapping exists, and guessing one was
-explicitly ruled out early on), and compliance-percentage tiles (not
-things GridPilot actually computes). See
-[`docs/project-status.md`](docs/project-status.md) for the reasoning
-behind each.
+Dashboard, and an editable timetable grid all exist, and a real CP-SAT
+solver now backs "Repair with solver" on the Findings page (Mode A of
+`docs/solver.md` — find and fix, not generate from nothing). What's
+deliberately *not* built, even though the mockups show it: branchable,
+side-by-side Scenarios (today a solver run or a suggestion lands as one
+draft change set the grid can render "through," not two compared at
+once), a real-calendar Timetable Overview (no calendar-date mapping
+exists, and guessing one was explicitly ruled out early on), and
+compliance-percentage tiles (not things GridPilot actually computes).
+See [`docs/project-status.md`](docs/project-status.md) for the reasoning
+behind each, and [`docs/roadmap-v3.md`](docs/roadmap-v3.md) for what a
+full solver build-out (regional rebuild, construction, a persisted
+run-compare workflow) would still take.
 
 <p align="center">
   <img src="docs/design/ui-mockup3.png" alt="GridPilot dashboard mockup — the most recent design reference" width="850">
@@ -110,14 +130,20 @@ Open **http://localhost:5173**. With no data loaded yet, you'll land on
 an import screen — choose the `.tfx` export (required) and any `.sfx`
 Student Options files (optional, can be added later), and it ingests and
 runs the rules engine immediately. Re-import a fresh export any time via
-**Import…** in the sidebar. Sections once loaded: **Dashboard** (a
-real overview - open findings, pending reviews, room utilisation, entity
-counts), **Timetable** (a master grid of every lesson by default, click
-any to move it and see the clash impact live), **Teachers** (load,
-faculty, and middle-leadership role assignment), **Findings** (with
-one-click "Suggest fixes", a local-AI "Explain", "Mark as intentional"
-for a known/accepted clash, and an attention-count badge), **Composite
-Review**, **Change Sets**, and **Audit**.
+**Import…** in the sidebar. Sections once loaded, grouped in the
+sidebar to match: **Dashboard** (a real overview - open findings,
+pending reviews, room utilisation, entity counts); **Structure**
+(**Blocking**, read-only option-line view); **People** (**Teachers** -
+load, faculty, role, capability, career-stage profile - and **Staffing
+Policy** - the EA modelled as reviewable data, contact-time and
+leadership-release reconciliation); **Places** (**Rooms** - utilisation,
+pools, room-type expectations, open findings); **Timetable** (the master
+grid, with density and keyboard-navigation controls); **Quality**
+(**Findings** - one-click "Suggest fixes", a local-AI "Explain", "Repair
+with solver" for a batch fix, "Mark as intentional", search, and an
+attention-count badge - plus **Composite Review**, **Room Constraints**,
+and **Teacher Capabilities**, each its own human-review queue); and
+**Changes** (**Change Sets** and **Audit**).
 
 Prefer the CLI (scripting, or a file already sitting in
 `Timetabler Export/`)? Same ingestion path, just triggered directly:
@@ -218,7 +244,8 @@ Timetabling Solutions export actually contains.
 | [`docs/room-constraints.md`](docs/room-constraints.md) | Phase G1 of the solver plan: inferring which room_type each class needs from real usage (78% is a clean signal), human review before it's trusted, and the `room_feature_mismatch` rule it unblocks |
 | [`docs/mass-repair.md`](docs/mass-repair.md) | **The mass-fix button**: a real CP-SAT solver (not an LLM) that finds a minimal set of moves to resolve chosen findings, lands them in a normal change set for review. Two real-data lessons that changed the design: student clashes had to become a native constraint, and an infeasible joint batch needs to shrink and retry, not give up entirely |
 | [`docs/staff-capability-model.md`](docs/staff-capability-model.md), [`staffing-priority-policy.md`](docs/staffing-priority-policy.md), [`staffing-ux-workflows.md`](docs/staffing-ux-workflows.md) | Mapping for a larger staff-capability/allocation addendum — documented, not yet built |
-| [`docs/roadmap-v2.md`](docs/roadmap-v2.md) | **The follow-up plan**: the industrial agreement (EA) read as a machine-readable spec — including the finding that the `2580 min/cycle` load cap *is* the EA's 21.5h contact maximum — auto-calculated leadership release, permission-to-teach, ECT status, authoring students/staff/rooms/blocking, and a concrete design-system pass. Also a licence-and-usefulness review of four reference timetabling repos (verdict: nothing safely reusable) |
+| [`docs/roadmap-v2.md`](docs/roadmap-v2.md) | **Staffing, capability & design system** — the industrial agreement (EA) read as a machine-readable spec, including the finding that the `2580 min/cycle` load cap *is* the EA's 21.5h contact maximum; auto-calculated leadership release; permission-to-teach; ECT status; a full design-system pass (tokens, contrast, density, keyboard nav, search). 13 of its 16 sequencing items are built; the rest (entity authoring, editable blocking, Mode B/C solver) are gated on a still-open GUID-compatibility question and teacher-unavailability data. Also a licence review of four reference timetabling repos (verdict: nothing safely reusable) |
+| [`docs/roadmap-v3.md`](docs/roadmap-v3.md) | **The current plan**: a gap analysis of what's still missing to be a full timetabling system, grounded in queries against the real database rather than assumption — an unparsed availability data source hiding in the `.tfx`, two built rules stuck at zero findings behind a 412-item unreviewed queue, why the `.sfx` preference data can't yet answer blocking counterfactuals, and the missing `teaching_requirement` spine underneath allocation, blocking and construction alike |
 | [`docs/packaging.md`](docs/packaging.md) | Turning this into a double-clickable program: why not Electron/Tauri, the three phases (one process → a frozen `.exe` with a native window → an installer), and what's actually built so far |
 | [`docs/design/`](docs/design/) | UI mockup and logo source assets |
 
@@ -249,15 +276,23 @@ deployment environment, in [`docs/privacy-threat-model.md`](docs/privacy-threat-
 
 ## Project status
 
-All six `PROJECT_ROADMAP.md` milestones are complete, plus the Teachers
-section and the Ollama AI advisor beyond the original roadmap. The
-honest self-review in [`docs/project-status.md`](docs/project-status.md)
-covers what's solid and the remaining known weaknesses — top of the
-list: the export path hasn't yet been trial-imported into an actual
-Timetabling Solutions instance (re-ingest persistence, formerly #1, is
-now fixed, see [`docs/reingest-persistence.md`](docs/reingest-persistence.md)).
-That trial import is the main thing left that only the school itself can
-do.
+All six `PROJECT_ROADMAP.md` milestones are complete, and two full
+follow-up passes beyond it: `docs/roadmap-v2.md` (staffing/EA,
+capability, design system - 13 of 16 items built) and the design work
+this repo is currently on, tracked in `docs/roadmap-v3.md`. The export
+path has been trial-imported into a real Timetabling Solutions instance
+and read back correctly - see `docs/project-status.md` and
+`docs/export-validation.md`.
+
+What's actually left, honestly: `docs/roadmap-v3.md` is the current
+answer to "what's missing to be a full timetabling system" - a demand
+model (`teaching_requirement`), an allocation engine, an output layer
+(there is currently no print/PDF/export beyond the `.tfx` patch), and a
+persisted solver run-compare workflow, in that rough order. Two smaller
+but real items sit ahead of all of them: a source section (`Meetings`)
+that carries real teacher-availability data and isn't parsed yet, and
+199 + 213 human-review candidates sitting unreviewed, holding two built
+rules at zero findings.
 
 ---
 
