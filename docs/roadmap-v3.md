@@ -384,22 +384,55 @@ timetable impossible three months later, and it is the stage TTS splits
 across two products without ever answering the counterfactual. Size:
 **L**.
 
-### 4.2 The timetable — make a solver run a first-class object
+### 4.2 The timetable — make a solver run a first-class object — **built 2026-09-07**
 
 `docs/solver.md` §6 specifies a `solver_run` table (mode, scope,
 weights, status, objective, moves, findings resolved/introduced,
 optional change set) and the run-compare workflow around it. **It was
-never built** — today a mass-repair run either becomes a change set or
-vanishes.
+never built** — a mass-repair run either became a change set or
+vanished.
 
 That is the difference between a button and a tool. The real workflow is
 *run → inspect → "too much movement" → adjust → re-run → compare → keep
 one*, and "Run 3 fixed 18 findings with 22 moves; Run 4 fixed 20 with
 61" is not just a nicety — per `docs/solver.md` §3.3 it is **the
 interface for the objective-weight conversation with the school**,
-turning an abstract policy question into a concrete A/B choice. It also
-merges with Phase E scenarios: a kept run and a named scenario are the
-same object. Size: **M**, unblocked.
+turning an abstract policy question into a concrete A/B choice.
+
+**Built, deliberately scoped down from the full spec.** Every call to
+`POST /solver/repair` now persists a `solver_run` row
+(`app/analysis/solver_run.py`) - `GET /solver/runs` lists recent runs,
+`GET /solver/runs/{id}` returns full detail including the move list. A
+collapsible "solver run history" panel on the Findings page
+(`SolverRunHistory.tsx`) lists them and lets two be selected for a
+side-by-side comparison - exactly the "Run 3 vs Run 4" table
+`docs/solver.md` describes.
+
+Two things in the original spec were deliberately **not** built, and
+here's why: **`weights_json`** isn't a column, because the solver has no
+adjustable objective weights to record yet (movement-cost only,
+`docs/solver.md` 3.3) - adding the column before the weights themselves
+exist would be a schema guess, not a fact. **"Runs are cheap to
+discard, a change set is created only when the user says keep this"**
+was *not* implemented - that would change the existing "Repair with
+solver" button's behaviour (today, a successful run auto-creates a
+change set), and changing an existing feature's behaviour wasn't
+something to do silently inside a persistence-layer change. Today's
+persistence is purely additive: the existing button works exactly as it
+did, and every run - kept or not - is now remembered.
+
+Verified live against the real database: two bounded single-finding
+repairs recorded two real `solver_run` rows correctly (status, move
+count, `change_set_id`, most-recent-first ordering); selecting both in
+the UI rendered the side-by-side comparison; `GET /solver/runs/{id}`
+returned the full move list. Reverted afterward - deleted both test
+change sets and their proposed changes, both `solver_run` rows, and
+both audit events, confirmed findings/change-set counts matched the
+pre-test baseline exactly (also caught and removed 3 unrelated stray
+audit rows left over from earlier verification passes this session,
+sharing the same `verification-script` actor name - a genuine, if
+overdue, bonus cleanup). Size: **M**, as estimated; the discard/keep
+redesign and adjustable weights stay open.
 
 Mode B (regional rebuild) and Mode C (construction) stay where
 `docs/solver.md` put them — behind teacher unavailability (§1.1 makes a
@@ -513,10 +546,10 @@ school runs on."
 | 1 | ✅ Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
 | 2 | ✅ `suggest_fixes()` honours room-type/pool | 1.2 | — | S |
 | 3 | 🟡 Bulk review — room-type done (167/199 unblocked), teacher-capability open (no clean signal found) | 1.3 | — | M |
-| 4 | `solver_run` + run-compare (merges Phase E scenarios) | 4.2 | — | M |
+| 4 | ✅ `solver_run` + run-compare — persistence/history/compare built; discard-until-kept + adjustable weights still open | 4.2 | — | M |
 | 5 | Printable/exportable timetables | 5 | — | M |
 | 6 | Blocking analysis on revealed demand | 4.1 | — | M |
-| 7 | Infeasibility explanation | 4.3 | #4 | M |
+| 7 | Infeasibility explanation | 4.3 | — (#4 done) | M |
 | 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
 | 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |

@@ -111,3 +111,80 @@ def test_repair_is_logged_to_the_audit_trail(client, db_path):
     conn.close()
     assert len(events) == 1
     assert events[0]["actor"] == "tester"
+
+
+def test_repair_persists_a_first_class_solver_run(client, db_path):
+    """docs/roadmap-v3.md 4.2: every solve is a persisted, comparable
+    object - not just a response the browser might discard."""
+    finding_id = _finding_id(db_path, "room_double_booking")
+    resp = client.post("/api/solver/repair", json={"finding_ids": [finding_id], "created_by": "tester"})
+    run_id = resp.json()["solver_run_id"]
+    assert run_id is not None
+
+    runs = client.get("/api/solver/runs").json()["runs"]
+    assert len(runs) == 1
+    assert runs[0]["id"] == run_id
+    assert runs[0]["status"] == "SOLVED"
+    assert runs[0]["created_by"] == "tester"
+    assert runs[0]["moved_count"] == 1
+    assert runs[0]["change_set_id"] == resp.json()["change_set_id"]
+
+    detail = client.get(f"/api/solver/runs/{run_id}").json()
+    assert len(detail["moves"]) == 1
+    assert detail["moves"][0]["class_code"] in ("CLASSA", "CLASSB")
+    assert [f["id"] for f in detail["findings_resolved"]] == [finding_id]
+    assert detail["findings_resolved"][0]["title"]  # a real title, not just an id
+
+
+def test_a_run_that_resolves_nothing_is_still_persisted(client, db_path):
+    """A run isn't only worth remembering when it succeeds - "Run 3
+    resolved 0 of 1" is exactly the kind of comparison point solver.md
+    section 6 wants a future run to be judged against."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "INSERT INTO finding (dedupe_key, rule_id, severity, title, entity_refs_json, slot_refs_json, "
+        "evidence_json, status, first_seen_at, computed_at) VALUES ('k-consistency', 'class_room_instability', "
+        "'info', 'Class CLASSA used 2 rooms', '[{\"type\": \"class\", \"code\": \"CLASSA\"}]', '[]', '{}', "
+        "'OPEN', 'test', 'test')"
+    )
+    conn.commit()
+    finding_id = conn.execute("SELECT id FROM finding WHERE dedupe_key = 'k-consistency'").fetchone()["id"]
+    conn.close()
+
+    resp = client.post("/api/solver/repair", json={"finding_ids": [finding_id], "created_by": "tester"})
+    assert resp.json()["status"] == "NO_MOVABLE_ENTRIES"
+    run_id = resp.json()["solver_run_id"]
+    assert run_id is not None
+
+    detail = client.get(f"/api/solver/runs/{run_id}").json()
+    assert detail["status"] == "NO_MOVABLE_ENTRIES"
+    assert detail["moves"] == []
+    assert detail["change_set_id"] is None
+    assert len(detail["not_eligible"]) == 1
+
+
+def test_an_empty_scope_is_not_worth_a_solver_run(client, db_path):
+    """No findings selected at all never reaches solve_repair() - a
+    trivial no-op isn't a run worth remembering or comparing."""
+    client.post("/api/solver/repair", json={"finding_ids": [], "created_by": "tester"})
+    assert client.get("/api/solver/runs").json()["runs"] == []
+
+
+def test_unknown_solver_run_is_404(client, db_path):
+    resp = client.get("/api/solver/runs/999")
+    assert resp.status_code == 404
+
+
+def test_solver_runs_list_is_most_recent_first(client, db_path):
+    finding_id = _finding_id(db_path, "room_double_booking")
+    first = client.post("/api/solver/repair", json={"finding_ids": [finding_id], "created_by": "a"}).json()
+    # Re-open the finding the first run just resolved so a second run has something real to do.
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE finding SET status = 'OPEN' WHERE id = ?", (finding_id,))
+    conn.commit()
+    conn.close()
+    second = client.post("/api/solver/repair", json={"finding_ids": [finding_id], "created_by": "b"}).json()
+
+    runs = client.get("/api/solver/runs").json()["runs"]
+    assert [r["id"] for r in runs] == [second["solver_run_id"], first["solver_run_id"]]

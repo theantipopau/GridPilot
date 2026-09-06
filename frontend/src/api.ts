@@ -22,6 +22,8 @@ import type {
   ReviewStatus,
   RoomSummary,
   RoomTypeConstraintCandidate,
+  SolverRunDetail,
+  SolverRunSummary,
   StaffRole,
   SuggestionsResponse,
   TeacherCapabilityCandidate,
@@ -151,6 +153,15 @@ export function runMassRepair(
     created_by: createdBy,
     time_budget_seconds: timeBudgetSeconds,
   });
+}
+
+export function fetchSolverRuns(limit?: number): Promise<{ runs: SolverRunSummary[] }> {
+  const qs = limit ? `?limit=${limit}` : "";
+  return getJson(`${BASE}/solver/runs${qs}`);
+}
+
+export function fetchSolverRun(id: number): Promise<SolverRunDetail> {
+  return getJson(`${BASE}/solver/runs/${id}`);
 }
 
 export function findTimetableEntries(filters: {

@@ -4,15 +4,24 @@ of findings and, if it found any moves, lands them in a normal change
 set - the same review/validate/approve/export pipeline every other edit
 in this app goes through. Nothing here writes to the timetable directly;
 "solving" and "applying" are as separate as "suggesting" and "applying"
-already are for suggest_fixes()."""
+already are for suggest_fixes().
+
+Every run is also persisted as a first-class solver_run row
+(app/analysis/solver_run.py, docs/roadmap-v3.md 4.2) - purely additive,
+changes nothing about the change-set behaviour above, but means a run
+that resolved nothing (or whose change set a reviewer later rejected) is
+still a fact the app remembers, and GET /solver/runs lets two runs be
+compared side by side instead of vanishing the moment the response
+leaves the browser."""
 
 import sqlite3
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.analysis.repair_solver import REPAIR_ELIGIBLE_RULES, solve_repair
-from app.api.deps import get_db_writable
+from app.analysis.solver_run import get_solver_run, list_solver_runs, record_solver_run
+from app.api.deps import get_db, get_db_writable
 from app.audit import log_event
 from app.changes.service import add_proposed_change, create_change_set, validate_change_set
 
@@ -105,8 +114,15 @@ def repair(request: RepairRequest, conn: sqlite3.Connection = Depends(get_db_wri
             },
         )
 
+    solver_run_id = record_solver_run(
+        conn, created_by=request.created_by, finding_ids=finding_ids,
+        time_budget_seconds=request.time_budget_seconds or 20.0, result=result, change_set_id=change_set_id,
+    )
+    conn.commit()
+
     titles = _finding_titles(conn, finding_ids)
     return {
+        "solver_run_id": solver_run_id,
         "status": result.status,
         "change_set_id": change_set_id,
         "moved_count": result.moved_count,
@@ -118,3 +134,16 @@ def repair(request: RepairRequest, conn: sqlite3.Connection = Depends(get_db_wri
             {"finding_id": ne.finding_id, "rule_id": ne.rule_id, "reason": ne.reason} for ne in result.not_eligible
         ],
     }
+
+
+@router.get("/solver/runs")
+def get_solver_runs(limit: int = 50, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    return {"runs": list_solver_runs(conn, limit)}
+
+
+@router.get("/solver/runs/{run_id}")
+def get_solver_run_detail(run_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    run = get_solver_run(conn, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"No solver run {run_id}")
+    return run

@@ -155,13 +155,37 @@ feature:
   documented as a known v1 limitation rather than fixed, since it's
   strictly safer than the alternative.
 
+## Run persistence and comparison — built 2026-09-07
+
+Per `docs/solver.md` section 6: "a solver run must be a first-class,
+persisted, comparable object, not a fire-and-forget button." Every
+`POST /solver/repair` call now persists a `solver_run` row
+(`app/analysis/solver_run.py`) regardless of whether it produced a
+change set - `GET /solver/runs` lists recent runs, `GET
+/solver/runs/{id}` returns full detail (finding titles, the move list),
+and the Findings page's collapsible "solver run history" panel
+(`SolverRunHistory.tsx`) lets two runs be selected for the "Run 3 fixed
+18 findings with 22 moves; Run 4 fixed 20 with 61" side-by-side
+comparison the roadmap describes as the actual interface for the
+objective-weight conversation with the school.
+
+Deliberately not the full spec: no `weights_json` column (nothing
+adjustable to record yet - see below), and the existing "Repair with
+solver" button's behaviour is unchanged (a successful run still
+auto-creates a change set immediately) - the "cheap to discard, keep
+only when the user says so" redesign `docs/solver.md` describes would
+change how the existing button behaves, and that's a decision to make
+deliberately, not a side effect of adding persistence. See
+`docs/roadmap-v3.md` 4.2 for the full writeup and real-data
+verification.
+
 ## Not built yet
 
-Per `docs/solver.md`'s phasing: no `solver_run` persistence/comparison
-table (a run either becomes a change set or is gone - no "try again with
-different weights and compare" UI yet), no Mode B (regional rebuild) or
-Mode C (construction), no LLM explanation of a run or of infeasibility
-(H3), no doubles/triples constraint (the other deferred half of Phase
-G1), no per-user configurable weights (`MOVE_PENALTY` and the
-movement-cost tiers are the same documented-default-heuristic status as
-`suggest_fixes()`'s own weighting, not a confirmed school policy).
+Per `docs/solver.md`'s phasing: no Mode B (regional rebuild) or Mode C
+(construction), no LLM explanation of a run or of infeasibility (H3), no
+doubles/triples constraint (the other deferred half of Phase G1), no
+per-user configurable weights (`MOVE_PENALTY` and the movement-cost
+tiers are the same documented-default-heuristic status as
+`suggest_fixes()`'s own weighting, not a confirmed school policy) - and,
+following from that, no "run again with different weights" workflow,
+since there are no weights yet to vary between runs.

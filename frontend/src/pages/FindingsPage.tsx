@@ -3,6 +3,7 @@ import { fetchFindings, runMassRepair } from "../api";
 import FindingsList from "../components/FindingsList";
 import LoadingState from "../components/LoadingState";
 import PageHeader from "../components/PageHeader";
+import SolverRunHistory from "../components/SolverRunHistory";
 import { IconAlertTriangle, IconWand } from "../components/icons";
 import type { Finding, FindingsResponse, RepairResult, SuggestionCandidate } from "../types";
 
@@ -28,6 +29,7 @@ export default function FindingsPage({ onProposeFix, onApplySuggestion, onOpenCh
   const [repairing, setRepairing] = useState(false);
   const [repairResult, setRepairResult] = useState<RepairResult | null>(null);
   const [repairError, setRepairError] = useState<string | null>(null);
+  const [runHistoryKey, setRunHistoryKey] = useState(0);
 
   const load = (status: StatusTab) => {
     fetchFindings(status).then(setData).catch((e) => setError(String(e)));
@@ -49,6 +51,7 @@ export default function FindingsPage({ onProposeFix, onApplySuggestion, onOpenCh
     try {
       const result = await runMassRepair(null, reviewedBy.trim());
       setRepairResult(result);
+      setRunHistoryKey((k) => k + 1);
       load(statusTab);
     } catch (e) {
       setRepairError(String(e));
@@ -127,6 +130,8 @@ export default function FindingsPage({ onProposeFix, onApplySuggestion, onOpenCh
             )}
           </div>
         )}
+
+        <SolverRunHistory refreshKey={runHistoryKey} onOpenChangeSet={onOpenChangeSet} />
 
         <div className="mb-4 flex gap-1 border-b border-slate-200">
           {TABS.map((t) => (

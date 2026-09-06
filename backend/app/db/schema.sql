@@ -452,6 +452,40 @@ CREATE TABLE IF NOT EXISTS proposed_change_finding (
     PRIMARY KEY (proposed_change_id, finding_id)
 );
 
+-- Solver runs (docs/roadmap-v3.md 4.2, docs/solver.md section 6) - "a
+-- solver run must be a first-class, persisted, comparable object, not a
+-- fire-and-forget button." Every call to app.analysis.repair_solver.
+-- solve_repair() via POST /solver/repair persists one row here,
+-- regardless of whether it produced a change set - a run that resolved
+-- nothing, or that the reviewer discarded, is still a fact worth keeping
+-- ("Run 3 fixed 18 findings with 22 moves; Run 4 fixed 20 with 61" is
+-- the interface for the objective-weight conversation with the school,
+-- solver.md 3.3). App-owned, not source-derived - deliberately absent
+-- from app/db/resync.py's delete list, same treatment as change_set.
+--
+-- mode is a single value today (only Mode A/REPAIR is built - Mode B/C
+-- from docs/solver.md stay unbuilt); weights_json is deliberately not a
+-- column yet, since the solver has no adjustable objective weights to
+-- record (movement-cost only, solver.md 3.3) - adding the column before
+-- the weights themselves exist would be a schema guess, not a fact.
+CREATE TABLE IF NOT EXISTS solver_run (
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'REPAIR' CHECK (mode IN ('REPAIR')),
+    finding_ids_json TEXT NOT NULL,
+    time_budget_seconds REAL NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('SOLVED', 'PARTIAL', 'INFEASIBLE', 'NO_MOVABLE_ENTRIES')),
+    moved_count INTEGER NOT NULL,
+    movable_entry_count INTEGER NOT NULL,
+    solve_time_seconds REAL NOT NULL,
+    findings_resolved_json TEXT NOT NULL,
+    findings_unresolved_json TEXT NOT NULL,
+    not_eligible_json TEXT NOT NULL,
+    moves_json TEXT NOT NULL,
+    change_set_id INTEGER REFERENCES change_set(id)
+);
+
 -- Student Options (.sfx) files ---------------------------------------------
 -- The per-year-level Student Options exports (e.g. "YR 10 2026 Term 3.sfx")
 -- hold the elective/option-line structure: lines (elective bands), subjects

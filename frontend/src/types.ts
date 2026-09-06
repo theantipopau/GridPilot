@@ -384,6 +384,7 @@ export interface RepairNotEligible {
 }
 
 export interface RepairResult {
+  solver_run_id: number | null;
   status: RepairStatus;
   change_set_id: number | null;
   moved_count: number;
@@ -392,6 +393,39 @@ export interface RepairResult {
   findings_resolved: RepairFindingRef[];
   findings_unresolved: RepairFindingRef[];
   not_eligible: RepairNotEligible[];
+}
+
+// docs/roadmap-v3.md 4.2: a solver run as a first-class, persisted,
+// comparable object - "Run 3 fixed 18 findings with 22 moves; Run 4
+// fixed 20 with 61," not a result the browser might discard.
+export interface SolverRunSummary {
+  id: number;
+  created_at: string;
+  created_by: string;
+  mode: "REPAIR";
+  status: RepairStatus;
+  scope_count: number;
+  findings_resolved_count: number;
+  findings_unresolved_count: number;
+  moved_count: number;
+  movable_entry_count: number;
+  solve_time_seconds: number;
+  time_budget_seconds: number;
+  change_set_id: number | null;
+}
+
+export interface SolverRunMove {
+  entry_id: number;
+  class_code: string | null;
+  before: { day_code: string; period_code: string; room_code: string | null };
+  after: { day_code: string; period_code: string; room_code: string | null };
+}
+
+export interface SolverRunDetail extends SolverRunSummary {
+  findings_resolved: RepairFindingRef[];
+  findings_unresolved: RepairFindingRef[];
+  not_eligible: RepairNotEligible[];
+  moves: SolverRunMove[];
 }
 
 export type AgreementSector = "SECONDARY" | "PRIMARY";
