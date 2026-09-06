@@ -36,6 +36,8 @@ from app.analysis.availability_rules import teacher_commitment_busy
 from app.analysis.capability import resolve as resolve_capability
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
+from app.analysis.room_pool_rules import pool_room_ids_by_class
+from app.analysis.room_type_constraints import required_room_type_by_class
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 MAX_ENTRIES_CONSIDERED = 3  # cap on how many conflicting/minority-room entries per finding get candidates generated
@@ -187,10 +189,27 @@ def _try_candidate(
     after_room_id: int | None,
     class_name_ids: set[int],
     entries_by_class: dict[int, list[dict]],
+    room_type_by_class: dict[int, str],
+    room_pool_by_class: dict[int, frozenset[int]],
 ) -> dict | None:
+    # docs/roadmap-v3.md 1.2: the repair solver has restricted its
+    # candidate room domain to a confirmed room-type/room-pool since
+    # docs/roadmap-v2.md 3.3b - this search never did, so it could
+    # propose a room the solver would refuse. Checked here as a hard
+    # constraint, same tier as capacity, before anything expensive runs.
+    if after_room_id is not None:
+        required_type = room_type_by_class.get(entry["class_name_id"])
+        required_room_ids = room_pool_by_class.get(entry["class_name_id"])
+        if required_room_ids is not None and after_room_id not in required_room_ids:
+            return None
+    else:
+        required_type = None
+
     room_capacity: dict = {"confirmed": False}
     if after_room_id is not None:
-        room = conn.execute("SELECT seats FROM room WHERE id = ?", (after_room_id,)).fetchone()
+        room = conn.execute("SELECT seats, room_type FROM room WHERE id = ?", (after_room_id,)).fetchone()
+        if room is not None and required_type is not None and room["room_type"] != required_type:
+            return None  # hard constraint: approved room-type
         if room is not None and room["seats"] is not None:
             enrolled = _enrolled_count(conn, class_name_ids)
             if enrolled > room["seats"]:
@@ -243,6 +262,8 @@ def _clash_candidates(
     room_busy: dict,
     all_slots: list[Slot],
     entries_by_class: dict[int, list[dict]],
+    room_type_by_class: dict[int, str],
+    room_pool_by_class: dict[int, frozenset[int]],
 ) -> dict | None:
     """teacher_double_booking / room_double_booking: for each conflicting
     entry, search every alternate room-at-same-slot and same-room-at-
@@ -273,7 +294,7 @@ def _clash_candidates(
                 candidate = _try_candidate(
                     conn, before_entries, before_findings, composites, code_lookups,
                     entry, slot.day_id, slot.period_id, entry["room_id"], class_name_ids,
-                    entries_by_class,
+                    entries_by_class, room_type_by_class, room_pool_by_class,
                 )
                 if candidate:
                     all_candidates.append(candidate)
@@ -286,7 +307,7 @@ def _clash_candidates(
                 candidate = _try_candidate(
                     conn, before_entries, before_findings, composites, code_lookups,
                     entry, entry["day_id"], entry["period_id"], room_row["id"], class_name_ids,
-                    entries_by_class,
+                    entries_by_class, room_type_by_class, room_pool_by_class,
                 )
                 if candidate:
                     all_candidates.append(candidate)
@@ -303,6 +324,8 @@ def _room_instability_candidates(
     code_lookups: dict,
     room_busy: dict,
     entries_by_class: dict[int, list[dict]],
+    room_type_by_class: dict[int, str],
+    room_pool_by_class: dict[int, frozenset[int]],
 ) -> list[dict] | None:
     """class_room_instability: unlike the clash rules, there's no
     conflicting entry to move - the "fix" is consolidating the class's
@@ -333,7 +356,7 @@ def _room_instability_candidates(
         candidate = _try_candidate(
             conn, before_entries, before_findings, composites, code_lookups,
             entry, entry["day_id"], entry["period_id"], target_room_id, class_name_ids,
-            entries_by_class,
+            entries_by_class, room_type_by_class, room_pool_by_class,
         )
         if candidate:
             all_candidates.append(candidate)
@@ -474,6 +497,11 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     for teacher_id, slots in teacher_commitment_busy(conn).items():
         teacher_busy[teacher_id] |= slots
     all_slots = _all_lesson_slots(conn)
+    # docs/roadmap-v3.md 1.2: the same confirmed room-type/room-pool
+    # domain restriction the repair solver applies natively - loaded once
+    # here rather than at every _try_candidate call.
+    room_type_by_class = required_room_type_by_class(conn)
+    room_pool_by_class = pool_room_ids_by_class(conn)
 
     entries_by_class: dict[int, list[dict]] = defaultdict(list)
     for e in before_entries:
@@ -483,7 +511,7 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     if finding_row["rule_id"] == "class_room_instability":
         candidates = _room_instability_candidates(
             conn, finding_row, before_entries, before_findings, composites, code_lookups,
-            room_busy, entries_by_class,
+            room_busy, entries_by_class, room_type_by_class, room_pool_by_class,
         )
         not_found_note = "This class's lessons couldn't be matched to the current timetable - re-run the rules engine."
     elif finding_row["rule_id"] == "class_teacher_inconsistency":
@@ -495,7 +523,7 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     else:
         candidates = _clash_candidates(
             conn, finding_row, before_entries, entries_by_id, before_findings, composites, code_lookups,
-            teacher_busy, room_busy, all_slots, entries_by_class,
+            teacher_busy, room_busy, all_slots, entries_by_class, room_type_by_class, room_pool_by_class,
         )
         not_found_note = "Finding evidence predates entry_id tracking - re-run the rules engine."
 

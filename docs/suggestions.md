@@ -76,11 +76,19 @@ validated, reusing the *exact same* machinery as change-set validation
 (`app/analysis/whatif.py`, factored out so there's one implementation,
 not two that could drift):
 
-1. **Room capacity** (a hard constraint): distinct enrolled students
-   across the target room/slot against `room.seats`, skipped for rooms
-   with no confirmed capacity. Room-feature matching isn't included -
-   see `docs/rules.md`'s note on why `room_feature_mismatch` isn't
-   implemented (no controlled room-feature data yet).
+1. **Room capacity, room type, and room pool** (all hard constraints):
+   distinct enrolled students across the target room/slot against
+   `room.seats`, skipped for rooms with no confirmed capacity; the
+   target room's type against any *approved* `class_room_type_
+   constraint` for the class (`docs/room-constraints.md`); and, if the
+   class is in a `room_pool`, the target room against that pool's
+   membership. The room-type/pool checks were added 2026-09-07
+   (`docs/roadmap-v3.md` 1.2) - the repair solver enforced both from the
+   start, this engine didn't, so it could propose a room the solver
+   would refuse. `required_room_type_by_class()`
+   (`room_type_constraints.py`) and `pool_room_ids_by_class()`
+   (`room_pool_rules.py`) are the one shared implementation both engines
+   call.
 2. **No new clash** (a hard constraint): the candidate is applied to an
    in-memory copy of the timetable and every clash rule re-run; any
    finding present after that wasn't present before is a rejection.

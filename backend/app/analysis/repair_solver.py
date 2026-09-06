@@ -49,7 +49,8 @@ from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.load_rules import room_capacity_exceeded
 from app.analysis.room_feature_rules import room_feature_mismatch
-from app.analysis.room_pool_rules import room_pool_violation
+from app.analysis.room_pool_rules import pool_room_ids_by_class, room_pool_violation
+from app.analysis.room_type_constraints import required_room_type_by_class
 from app.analysis.whatif import apply_overrides, load_code_lookups, run_clash_findings
 
 # Rule types with an obvious single lesson to move and an obvious search
@@ -125,28 +126,6 @@ def _code_maps(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:
 
 def _period_id_by_day_and_code(conn: sqlite3.Connection) -> dict[tuple, int]:
     return {(r["day_id"], r["code"]): r["id"] for r in conn.execute("SELECT id, day_id, code FROM period")}
-
-
-def _pool_room_ids_by_class(conn: sqlite3.Connection) -> dict[int, frozenset[int]]:
-    """A class in a room_pool (docs/roadmap-v2.md 3.3b) may only occupy
-    one of that pool's rooms - a school-declared constraint (from the
-    .tfx's RURs), not something needing human review first the way
-    class_room_type_constraint does. Restricting the candidate room
-    domain here, the same way required_room_type already does, is both a
-    correctness fix (the solver could otherwise "resolve" a clash by
-    creating a brand new room_pool_violation) and a speed-up (fewer
-    candidates to search)."""
-    rows = conn.execute(
-        """
-        SELECT rpc.class_name_id, rpr.room_id
-        FROM room_pool_class_name rpc
-        JOIN room_pool_room rpr ON rpr.room_pool_id = rpc.room_pool_id
-        """
-    ).fetchall()
-    by_class: dict[int, set[int]] = defaultdict(set)
-    for r in rows:
-        by_class[r["class_name_id"]].add(r["room_id"])
-    return {cid: frozenset(rids) for cid, rids in by_class.items()}
 
 
 def _students_by_class(conn: sqlite3.Connection) -> dict[int, frozenset[int]]:
@@ -421,12 +400,9 @@ def solve_repair(
         r["class_name_id"]: r["n"]
         for r in conn.execute("SELECT class_name_id, COUNT(DISTINCT student_id) AS n FROM enrolment GROUP BY class_name_id")
     }
-    required_room_type_by_class = {
-        r["class_name_id"]: r["room_type"]
-        for r in conn.execute("SELECT class_name_id, room_type FROM class_room_type_constraint WHERE review_status = 'APPROVED'")
-    }
+    room_type_by_class = required_room_type_by_class(conn)
     students_by_class = _students_by_class(conn)
-    pool_room_ids_by_class = _pool_room_ids_by_class(conn)
+    room_pool_by_class = pool_room_ids_by_class(conn)
     commitment_busy = teacher_commitment_busy(conn)
     all_slots = _all_lesson_slots(conn)
 
@@ -460,7 +436,7 @@ def solve_repair(
         remaining_budget = max(1.0, time_budget_seconds - (time.monotonic() - started))
         chosen = _solve_cp_model(
             list(current_movable.values()), all_slots, rooms, teacher_busy, room_busy, student_busy,
-            students_by_class, required_room_type_by_class, pool_room_ids_by_class, enrolled_by_class,
+            students_by_class, room_type_by_class, room_pool_by_class, enrolled_by_class,
             remaining_budget,
         )
         if chosen is None:

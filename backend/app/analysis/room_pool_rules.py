@@ -12,9 +12,28 @@ real lessons currently sit outside it - 12PHY1 in ANG7, 11BIO1 in
 SPO05 - a genuine signal, not a hypothetical."""
 
 import sqlite3
+from collections import defaultdict
 
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.models import EntityRef, Finding, SlotRef
+
+
+def pool_room_ids_by_class(conn: sqlite3.Connection) -> dict[int, frozenset[int]]:
+    """class_name_id -> the set of room ids its room_pool restricts it to.
+    Shared by the repair solver (repair_solver.py) and the suggestion
+    engine (suggestions.py) - one implementation, not two that could
+    drift (docs/roadmap-v3.md 1.2)."""
+    rows = conn.execute(
+        """
+        SELECT rpc.class_name_id, rpr.room_id
+        FROM room_pool_class_name rpc
+        JOIN room_pool_room rpr ON rpr.room_pool_id = rpc.room_pool_id
+        """
+    ).fetchall()
+    by_class: dict[int, set[int]] = defaultdict(set)
+    for r in rows:
+        by_class[r["class_name_id"]].add(r["room_id"])
+    return {cid: frozenset(rids) for cid, rids in by_class.items()}
 
 
 def room_pool_violation(conn: sqlite3.Connection, entries: list[dict]) -> list[Finding]:

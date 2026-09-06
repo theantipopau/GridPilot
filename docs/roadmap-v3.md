@@ -95,27 +95,48 @@ double-booking findings with the constraint live - solved cleanly in
 under a second, read-only (confirmed no `change_set`/`proposed_change`
 rows were created). Size: **S**, as estimated.
 
-### 1.2 🔴 `suggest_fixes()` ignores the room constraints the repair solver enforces
+### 1.2 🔴 `suggest_fixes()` ignores the room constraints the repair solver enforces — **built 2026-09-07**
 
-Two engines search the same space with different rules:
+Two engines searched the same space with different rules:
 
 | | `class_room_type_constraint` | `room_pool` |
 |---|---|---|
 | `repair_solver.py` (mass repair) | ✅ enforced | ✅ enforced (roadmap-v2 A2) |
-| `suggestions.py` (per-finding "Suggest fixes") | ❌ ignored | ❌ ignored |
+| `suggestions.py` (per-finding "Suggest fixes"), before this fix | ❌ ignored | ❌ ignored |
 
 `docs/solver.md` §9 flagged this in one line — *"the mapping exists and
-is queryable, `suggest_fixes()` doesn't consult it yet"* — and it is
+is queryable, `suggest_fixes()` doesn't consult it yet"* — and it was
 still true. The practical effect: the button a human presses most often
-can still propose Drama in a science lab, while the solver they press
-rarely cannot. Same domain model, two implementations, silently
+could still propose Drama in a science lab, while the solver they press
+rarely could not. Same domain model, two implementations, silently
 divergent.
 
-Worth fixing not just for correctness but because §12.6 of the plan doc
-already identified the refactor that fixes it *and* unblocks live-drag
-feedback (§4.4 below): factor the candidate search to accept an
-arbitrary `entry_id` and consult the confirmed constraint tables. Size:
-**S**, and it pays for itself twice.
+**Built:** `required_room_type_by_class()` (promoted from an inline
+dict in `repair_solver.py` into `room_type_constraints.py`) and
+`pool_room_ids_by_class()` (promoted from `repair_solver.py`'s private
+`_pool_room_ids_by_class` into `room_pool_rules.py`) are now the one
+shared implementation both engines call - loaded once per
+`suggest_fixes()` call, checked in `_try_candidate()` as a hard
+constraint alongside room capacity, before anything expensive runs.
+
+Verified with two new synthetic tests mirroring the repair solver's own
+room-type and room-pool tests exactly (never propose a wrongly-typed
+room; never propose a room outside a pool). Checked against the real
+database too, honestly reported: **currently dormant in practice**, not
+because the fix doesn't work but because there's nothing yet for it to
+catch - 0 of 199 room-type candidates are `APPROVED` (§1.3's backlog) and
+none of the 28 real `room_pool`-member classes currently has an open
+double-booking/room-double-booking finding. The fix is correct and will
+matter the moment either changes; verified live against a real
+`room_double_booking` finding to confirm nothing broke (identical
+candidates before and after, no console errors).
+
+The per-entry endpoint §12.6 of the plan doc also identified (to unblock
+live-drag legal-slot shading, §4.4 below) was **not** built in this
+pass - scoped down to the correctness fix alone, since that refactor is
+a separate, larger change to the API surface, not required for this
+gap. Size: **S**, as estimated for the correctness fix; the endpoint
+refactor remains open under item 8 of the sequencing table.
 
 ### 1.3 🔴 412 review decisions pending, 0 completed — two built rules are producing nothing
 
@@ -446,13 +467,13 @@ school runs on."
 | # | Item | § | Blocked on | Size |
 |---|---|---|---|---|
 | 1 | ✅ Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
-| 2 | `suggest_fixes()` honours room-type/pool + per-entry endpoint | 1.2, 4.4 | — | S |
+| 2 | ✅ `suggest_fixes()` honours room-type/pool | 1.2 | — | S |
 | 3 | Bulk review over filtered sets (unblocks 412 decisions) | 1.3 | — | M |
 | 4 | `solver_run` + run-compare (merges Phase E scenarios) | 4.2 | — | M |
 | 5 | Printable/exportable timetables | 5 | — | M |
 | 6 | Blocking analysis on revealed demand | 4.1 | — | M |
 | 7 | Infeasibility explanation | 4.3 | #4 | M |
-| 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | #2 | S–M |
+| 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
 | 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |
 | 11 | Blocking optimiser (CP-SAT) | 4.1 | #6, #10 | L |

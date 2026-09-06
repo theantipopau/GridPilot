@@ -27,6 +27,19 @@ class RoomTypeCandidate:
     total_lesson_count: int
 
 
+def required_room_type_by_class(conn: sqlite3.Connection) -> dict[int, str]:
+    """class_name_id -> the room_type an APPROVED class_room_type_
+    constraint requires for it. Shared by the repair solver
+    (repair_solver.py) and the suggestion engine (suggestions.py) - one
+    implementation, not two that could drift (docs/roadmap-v3.md 1.2)."""
+    return {
+        r["class_name_id"]: r["room_type"]
+        for r in conn.execute(
+            "SELECT class_name_id, room_type FROM class_room_type_constraint WHERE review_status = 'APPROVED'"
+        )
+    }
+
+
 def class_room_type_usage(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:
     """class_code -> {room_type: lesson_count}, for every lesson in a
     typed room. The building block both detect_room_type_candidates()

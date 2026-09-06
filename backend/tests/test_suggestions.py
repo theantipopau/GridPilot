@@ -103,6 +103,58 @@ def test_candidates_never_move_into_a_standing_meeting_commitment():
             assert (c["after"]["day_code"], c["after"]["period_code"]) != ("Day 1 A", "P2")
 
 
+def test_candidates_never_propose_a_room_outside_an_approved_room_type():
+    """docs/roadmap-v3.md 1.2: the repair solver has restricted its
+    candidate room domain to a confirmed room-type since roadmap-v2 - this
+    search didn't, so it could propose a room the solver would refuse.
+    R2 is a free, otherwise-valid alternate for the Type B (same slot,
+    different room) search, but it's the wrong type for CLASSA's approved
+    requirement, so it must never appear; R3 (also Classroom, but the
+    correct type isn't asserted there either) stays available as a
+    negative control alongside R1's own type."""
+    conn = build_richer_synthetic_db()
+    conn.execute("UPDATE room SET room_type = 'Science' WHERE id = 1")
+    conn.execute("UPDATE room SET room_type = 'Classroom' WHERE id = 2")
+    conn.execute("UPDATE room SET room_type = 'Science' WHERE id = 3")
+    conn.execute(
+        "INSERT INTO class_room_type_constraint (class_name_id, room_type, review_status, "
+        "matching_lesson_count, total_lesson_count, detected_at) VALUES (1, 'Science', 'APPROVED', 4, 4, 'test')"
+    )
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    conn.commit()
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_double_booking'").fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    classa_candidates = [c for c in result["candidates"] if c["class_code"] == "CLASSA"]
+    assert len(classa_candidates) > 0
+    assert all(c["after"]["room_code"] != "R2" for c in classa_candidates)
+    assert any(c["after"]["room_code"] == "R3" for c in classa_candidates)
+
+
+def test_candidates_never_propose_a_room_outside_its_pool():
+    """Same point as the repair solver's equivalent test
+    (test_repair_solver.py's test_never_proposes_a_pooled_class_outside_
+    its_pool_even_for_an_unrelated_fix) - a room_pool restricts CLASSA to
+    R1 only, so a room-double-booking fix must never offer R2 or R3."""
+    conn = build_richer_synthetic_db()
+    conn.execute("INSERT INTO room_pool (id, source_guid, code, name, type_is_class) VALUES (1, 'g1', 'RUR 1', 'RUR 1', 1)")
+    conn.execute("INSERT INTO room_pool_room (room_pool_id, room_id) VALUES (1, 1)")
+    conn.execute("INSERT INTO room_pool_class_name (room_pool_id, class_name_id) VALUES (1, 1)")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    conn.commit()
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_double_booking'").fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    classa_candidates = [c for c in result["candidates"] if c["class_code"] == "CLASSA"]
+    assert all(c["after"]["room_code"] == "R1" for c in classa_candidates)
+
+
 def test_candidate_rejects_room_with_insufficient_capacity():
     conn = build_richer_synthetic_db()
     # Room 3 has seats=1. CLASSA has 2 enrolled students (must never be
