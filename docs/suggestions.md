@@ -63,7 +63,11 @@ clash won't generate 6x the search space):
 
 - **Type A - same room, different slot**: every `LESSON_SLOT` period in
   the cycle where both the entry's teacher and room are free (a fast
-  set-membership pre-filter before anything expensive runs).
+  set-membership pre-filter before anything expensive runs) - "free" now
+  includes a teacher's standing `teacher_commitment` rows, since
+  2026-09-07 (`docs/roadmap-v3.md` 1.1), the same shared `teacher_
+  commitment_busy()` the repair solver uses, so a slot with nothing in
+  `timetable_entry` can still be excluded.
 - **Type B - same slot, different room**: every other room free at that
   exact period.
 

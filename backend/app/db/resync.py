@@ -65,6 +65,7 @@ SOURCE_TABLES_IN_DELETE_ORDER = [
     "room_pool_class_name",
     "class_name",
     "subject",
+    "teacher_commitment",
     "yard_duty_allocation",
     "yard_duty_session",
     "yard_duty_area",

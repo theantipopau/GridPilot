@@ -300,6 +300,25 @@ CREATE TABLE IF NOT EXISTS yard_duty_allocation (
     load_minutes REAL NOT NULL DEFAULT 0
 );
 
+-- Standing teacher commitments (docs/roadmap-v3.md 1.1) - real
+-- availability data, not load data. The .tfx's Meetings[] section was
+-- deliberately left unparsed (docs/full-timetabler-plan.md 3.2) because
+-- every real meeting carries Load = 0 - that's true, and it missed the
+-- more important half: PeriodID + MeetingTeachers[] is exactly the "when
+-- is this teacher unavailable" signal docs/solver.md 4.2 calls the fatal
+-- solver gap. Source-derived like yard_duty_allocation above - rebuilt
+-- on every re-ingest, no review workflow, nothing here is a human
+-- decision to preserve.
+CREATE TABLE IF NOT EXISTS teacher_commitment (
+    id INTEGER PRIMARY KEY,
+    source_guid TEXT,
+    teacher_id INTEGER NOT NULL REFERENCES teacher(id),
+    period_id INTEGER NOT NULL REFERENCES period(id),
+    commitment_type TEXT NOT NULL DEFAULT 'MEETING' CHECK (commitment_type IN ('MEETING')),
+    code TEXT,
+    name TEXT
+);
+
 -- Composite classes: human-reviewed, not silently trusted -------------------
 -- Detected candidates (see app/analysis/composite.py) are upserted here as
 -- PENDING. A clash rule only suppresses a clash for an APPROVED group - a

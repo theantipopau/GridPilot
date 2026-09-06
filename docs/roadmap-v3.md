@@ -36,7 +36,7 @@ built rules at zero findings.
 All four came from querying the real database and the real `.tfx`, not
 from reading the design docs.
 
-### 1.1 🔴 `Meetings` is unparsed — 64 teacher-slot commitments are invisible, and the solver treats them as free
+### 1.1 🔴 `Meetings` is unparsed — 64 teacher-slot commitments are invisible, and the solver treats them as free — **built 2026-09-07**
 
 `docs/full-timetabler-plan.md` §3.2 listed `Meetings` (13 records) as
 unparsed because it "carried no load information." That is true, and it
@@ -72,12 +72,28 @@ fractions and external commitments are still unknown and still
 un-inferable, per §12.5 of the plan doc), but it converts it from "we
 know nothing" to "we know the 64 hard blocks TTS itself records."
 
-**Recommended:** parse `Meetings` into a `teacher_commitment` table
-(source-derived, rebuilt on re-ingest like every other `.tfx` table),
-feed it into `repair_solver._feasible_candidates()` and
-`suggestions.py`'s slot search as a hard constraint, and add a
-`teacher_meeting_clash` rule so an existing violation is visible rather
-than only prevented in future moves. Size: **S**.
+**Built:** `Meetings[]` parses into `teacher_commitment`
+(source-derived, rebuilt on re-ingest like every other `.tfx` table -
+`app/ingest/tfx_parser.py`'s `_ingest_meetings()`), feeds both
+`repair_solver.py` and `suggestions.py` as a hard constraint via one
+shared function (`availability_rules.teacher_commitment_busy()` - "one
+implementation, not two that could drift"), and a new
+`teacher_meeting_clash` rule (`docs/rules.md`) surfaces an existing
+violation instead of only preventing future ones.
+
+Verified against the real database, not just synthetic fixtures: the
+re-ingest recovered exactly 68 commitment rows across 18 teachers (1
+meeting's period doesn't resolve - a real, pre-existing gap in the
+school's own file, logged as `meeting_unresolved` and left alone, not
+guessed at), with every existing human review decision - 213 capability
+rows, 199 room-type rows, 16 composite reviews, 5 change sets -
+untouched by the re-ingest. The rules engine produced exactly 2 new
+findings, matching a hand-checked query of the source file: `HENE04`
+teaching 4 composite class codes during `SSSMB`, and `HOBL02` teaching
+`07EP1` during `AERO`. Re-ran the repair solver against 6 real open
+double-booking findings with the constraint live - solved cleanly in
+under a second, read-only (confirmed no `change_set`/`proposed_change`
+rows were created). Size: **S**, as estimated.
 
 ### 1.2 🔴 `suggest_fixes()` ignores the room constraints the repair solver enforces
 
@@ -429,7 +445,7 @@ school runs on."
 
 | # | Item | § | Blocked on | Size |
 |---|---|---|---|---|
-| 1 | Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
+| 1 | ✅ Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
 | 2 | `suggest_fixes()` honours room-type/pool + per-entry endpoint | 1.2, 4.4 | — | S |
 | 3 | Bulk review over filtered sets (unblocks 412 decisions) | 1.3 | — | M |
 | 4 | `solver_run` + run-compare (merges Phase E scenarios) | 4.2 | — | M |

@@ -10,6 +10,7 @@ import datetime as dt
 import json
 import sqlite3
 
+from app.analysis.availability_rules import run_availability_rules
 from app.analysis.capability_rules import run_capability_rules
 from app.analysis.clash_rules import lesson_entries, run_clash_rules
 from app.analysis.composite_review import sync_composite_candidates
@@ -74,10 +75,11 @@ def run_analysis(db_path=None) -> dict:
         composite_sync = sync_composite_candidates(conn)
         room_type_sync = sync_room_type_candidates(conn)
         teacher_capability_sync = sync_teacher_capability_candidates(conn)
+        entries = lesson_entries(conn)
         findings = [
             *run_clash_rules(conn), *run_load_rules(conn), *run_consistency_rules(conn),
             *run_room_feature_rules(conn), *run_room_pool_rules(conn),
-            *run_capability_rules(conn, lesson_entries(conn)),
+            *run_capability_rules(conn, entries), *run_availability_rules(conn, entries),
         ]
         persist_result = _persist(conn, findings)
 

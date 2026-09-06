@@ -286,3 +286,38 @@ def test_never_proposes_a_pooled_class_outside_its_pool_even_for_an_unrelated_fi
 
     classa_moves = [m for m in result.moves if m.class_code == "CLASSA"]
     assert all(m.after["room_code"] == "R1" for m in classa_moves)
+
+
+def test_never_moves_a_teacher_into_a_standing_meeting_commitment():
+    """docs/roadmap-v3.md 1.1: teacher_commitment (parsed from the .tfx's
+    Meetings[]) is a hard constraint, not a suggestion. T1 and T2 clash in
+    R1 at day1/period1 with every other room also occupied at that exact
+    slot, so a room-only fix is impossible; T2 is additionally busy at
+    every other lesson slot, making it far cheaper for the solver to move
+    T1 instead. T1 has a standing commitment at day1/period4 (P2) - an
+    otherwise completely free slot that must never be chosen."""
+    conn = build_richer_synthetic_db()
+    conn.execute("INSERT INTO teacher (id, code, first_name, last_name) VALUES (3, 'T3', 'Test', 'Three')")
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    # R2/R3 also occupied at day1/period1 - no room-only escape for either side.
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=2, teacher_id=3, room_id=2)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=2, teacher_id=3, room_id=3)
+    # T2 busy at every other lesson slot in the cycle - moving T2 anywhere
+    # else would itself be a clash, so the solver strongly prefers moving T1.
+    for day_id, period_id in ((2, 3), (1, 4), (2, 5), (3, 6)):
+        add_lesson(conn, day_id=day_id, period_id=period_id, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=1)
+    conn.execute(
+        "INSERT INTO teacher_commitment (teacher_id, period_id, commitment_type, code, name) "
+        "VALUES (1, 4, 'MEETING', 'STAFF', 'Staff Meeting')"
+    )
+    conn.commit()
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'room_double_booking'").fetchone()["id"]
+    result = solve_repair(conn, [finding_id])
+
+    assert result.status == "SOLVED"
+    t1_moves = [m for m in result.moves if m.class_code == "CLASSA"]
+    assert len(t1_moves) == 1
+    assert t1_moves[0].after["period_code"] != "P2" or t1_moves[0].after["day_code"] != "Day 1 A"

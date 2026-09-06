@@ -32,6 +32,7 @@ import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 
+from app.analysis.availability_rules import teacher_commitment_busy
 from app.analysis.capability import resolve as resolve_capability
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
@@ -466,6 +467,12 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
     entries_by_id = {e["entry_id"]: e for e in before_entries}
     before_findings = {f.dedupe_key(): f for f in run_clash_findings(conn, before_entries, composites)}
     teacher_busy, room_busy = _busy_sets(before_entries)
+    # docs/roadmap-v3.md 1.1: a standing meeting commitment blocks a slot
+    # exactly like an existing lesson would - merged into the same
+    # teacher_busy dict every candidate search below already consults, so
+    # nothing here needs to know commitments exist as a separate concept.
+    for teacher_id, slots in teacher_commitment_busy(conn).items():
+        teacher_busy[teacher_id] |= slots
     all_slots = _all_lesson_slots(conn)
 
     entries_by_class: dict[int, list[dict]] = defaultdict(list)

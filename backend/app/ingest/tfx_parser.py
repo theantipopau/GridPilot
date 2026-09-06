@@ -34,19 +34,20 @@ REQUIRED_SECTIONS = (
 )
 
 # Modelled, but optional - parsed if present (see _ingest_settings/
-# _ingest_blocking_lines/_ingest_room_pools below), never required, since
-# an older/different export might lack them and that shouldn't be a hard
-# failure (docs/full-timetabler-plan.md Phase A).
-KNOWN_MODELLED_OPTIONAL_SECTIONS = ("Settings", "MRCGs", "RURs")
+# _ingest_blocking_lines/_ingest_room_pools/_ingest_meetings below), never
+# required, since an older/different export might lack them and that
+# shouldn't be a hard failure (docs/full-timetabler-plan.md Phase A).
+KNOWN_MODELLED_OPTIONAL_SECTIONS = ("Settings", "MRCGs", "RURs", "Meetings")
 
-# Present in the known format but deliberately not modelled (see
-# docs/data-formats.md and docs/full-timetabler-plan.md #4 for why
-# Meetings/UnscheduledDuties were investigated and parked - zero load data
-# and zero references respectively, in the real export). Their presence is
-# expected; their absence is fine.
+# Present in the known format but deliberately not modelled. UnscheduledDuties
+# carries Load but no PeriodID - real load, but not a time-bound
+# availability signal, so it stays out of teacher_commitment (see
+# docs/roadmap-v3.md #1.1's distinction) pending a school conversation
+# about counting it toward load at all (docs/full-timetabler-plan.md #4).
+# Their presence is expected; their absence is fine.
 KNOWN_UNMODELLED_SECTIONS = (
     "File ID", "YardDutySessions", "YardDutyAreas", "YardDuties",
-    "TeacherFiles", "StudentFiles", "UnscheduledDuties", "Meetings",
+    "TeacherFiles", "StudentFiles", "UnscheduledDuties",
     "Groups", "PublishedTimetables",
 )
 
@@ -131,6 +132,7 @@ class TfxIngester:
         self._ingest_timetable()
         self._ingest_students_and_enrolment()
         self._ingest_yard_duty()
+        self._ingest_meetings()
         self.conn.commit()
 
     def _check_compatibility(self) -> None:
@@ -574,6 +576,38 @@ class TfxIngester:
                 "VALUES (?, ?, ?, ?)",
                 (area_id, teacher_id, session_id, (d.get("Load") or 0) / 100.0),
             )
+
+    def _ingest_meetings(self) -> None:
+        """docs/roadmap-v3.md 1.1: Meetings[] carries PeriodID +
+        MeetingTeachers[] - a standing block on a teacher's slot,
+        independent of Load (which is 0 for every real meeting, and
+        irrelevant here - this is availability, not load). An unresolved
+        period or teacher reference is logged and skipped, same discipline
+        as _ingest_yard_duty above - never guessed at."""
+        cur = self.conn.cursor()
+        for m in self.data.get("Meetings", []):
+            period_id = self.period_id_by_source.get(m.get("PeriodID"))
+            if period_id is None:
+                self.log_discrepancy(
+                    "meeting_unresolved", "warning",
+                    "Meetings entry references a PeriodID not found in Periods[]",
+                    {"meeting_code": m.get("Code")},
+                )
+                continue
+            for mt in m.get("MeetingTeachers", []):
+                teacher_id = self.teacher_id_by_source.get(mt.get("TeacherID"))
+                if teacher_id is None:
+                    self.log_discrepancy(
+                        "meeting_teacher_unresolved", "warning",
+                        "Meetings entry references a TeacherID not found in Teachers[]",
+                        {"meeting_code": m.get("Code"), "teacher_id": mt.get("TeacherID")},
+                    )
+                    continue
+                cur.execute(
+                    "INSERT INTO teacher_commitment (source_guid, teacher_id, period_id, commitment_type, code, name) "
+                    "VALUES (?, ?, ?, 'MEETING', ?, ?)",
+                    (m.get("MeetingID"), teacher_id, period_id, m.get("Code"), m.get("Name")),
+                )
 
     @staticmethod
     def _require(mapping: dict, key: str, field_name: str, record: dict) -> int:

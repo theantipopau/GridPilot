@@ -9,7 +9,8 @@ Two-layer correctness, deliberately:
 
 1. **Native hard constraints** (teacher/room/student double-booking, room
    capacity, approved room-type, declared room pools - docs/roadmap-v2.md
-   3.3b) are encoded directly in the CP-SAT
+   3.3b, and standing teacher commitments parsed from Meetings[] -
+   docs/roadmap-v3.md 1.1) are encoded directly in the CP-SAT
    model. Student clashes are modelled the same way as room/teacher ones
    - AtMostOne per (slot, student) - even though suggest_fixes() and
    REPAIR_ELIGIBLE_RULES both correctly refuse to treat
@@ -43,6 +44,7 @@ from dataclasses import dataclass, field
 
 from ortools.sat.python import cp_model
 
+from app.analysis.availability_rules import teacher_commitment_busy
 from app.analysis.clash_rules import lesson_entries
 from app.analysis.composite_review import load_approved_composites
 from app.analysis.load_rules import room_capacity_exceeded
@@ -425,6 +427,7 @@ def solve_repair(
     }
     students_by_class = _students_by_class(conn)
     pool_room_ids_by_class = _pool_room_ids_by_class(conn)
+    commitment_busy = teacher_commitment_busy(conn)
     all_slots = _all_lesson_slots(conn)
 
     current_movable: dict[int, dict] = {eid: entries_by_id[eid] for eid in movable_ids}
@@ -442,6 +445,8 @@ def solve_repair(
     while current_movable:
         fixed_entries = [e for e in before_entries if e["entry_id"] not in current_movable]
         teacher_busy: dict[int, set] = defaultdict(set)
+        for teacher_id, slots in commitment_busy.items():
+            teacher_busy[teacher_id] |= slots
         room_busy: dict[int, set] = defaultdict(set)
         student_busy: dict[int, set] = defaultdict(set)
         for e in fixed_entries:

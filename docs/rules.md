@@ -29,6 +29,33 @@ stays a real clash regardless of composite review status.
 **approved** `composite_group` (see below). A detected-but-unreviewed
 candidate still produces a finding - detection alone is never trusted.
 
+### `teacher_meeting_clash` (critical) - added 2026-09-07
+
+Unblocked by parsing the `.tfx`'s `Meetings[]` section into
+`teacher_commitment` (docs/roadmap-v3.md 1.1) - a standing block on a
+teacher's slot that Timetabling Solutions itself records, independent of
+whether anything is scheduled there in `timetable_entry`. Fires when a
+real `LESSON` is scheduled at the same `(teacher, period)` as one of that
+teacher's commitments; several class codes at one clash (a composite
+lesson) collapse into one finding, same grouping style as
+`teacher_double_booking`.
+
+Unlike every other clash rule, the "other side" of this clash never comes
+from the timetable at all - a slot with nothing in `timetable_entry` can
+still be off-limits, which is exactly why this needed its own hard
+constraint in the repair solver and suggestion engine, not just a rule
+(`app/analysis/availability_rules.py`'s `teacher_commitment_busy()`,
+shared by both - see `docs/mass-repair.md` and `docs/suggestions.md`).
+Neither engine will ever propose moving a lesson into a teacher's meeting
+slot, real or hypothetical.
+
+Verified against real data: 68 (teacher, period) commitments recovered
+across 18 staff, 66 of which were slots the timetable model would
+otherwise report as free. Exactly 2 produced a genuine clash - `HENE04`
+teaching 4 composite class codes during `SSSMB` at Tues B P2, and
+`HOBL02` teaching `07EP1` during `AERO` at Tues B P5 - both correct
+against a hand-checked query of the source file, not asserted.
+
 ### `room_double_booking` (critical)
 
 Same as above, grouped by `(room, day, period)` instead. Evidence

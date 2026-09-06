@@ -43,8 +43,13 @@ background**.
 For each movable entry, every `(day, period, room)` it could occupy
 without clashing with the fixed background is precomputed
 (`_feasible_candidates`) - filtered by teacher/room/student availability,
-room capacity, and any *approved* `class_room_type_constraint`
-(`docs/room-constraints.md`). Each candidate becomes a boolean variable;
+room capacity, any *approved* `class_room_type_constraint`
+(`docs/room-constraints.md`), and - since 2026-09-07 - a teacher's
+standing `teacher_commitment` rows (`docs/roadmap-v3.md` 1.1, parsed from
+the `.tfx`'s `Meetings[]`): a slot with nothing in `timetable_entry` can
+still be off-limits, and the solver must never "resolve" a clash by
+parking a teacher in their own meeting. Each candidate becomes a boolean
+variable;
 `AddExactlyOne` per entry, `AddAtMostOne` per (slot, teacher) / (slot,
 room) / (slot, student) group across the whole movable set. The
 objective minimises, in strict priority order: **number of lessons

@@ -172,19 +172,25 @@ Key sections for the data model:
   the school default" convention, not "no load") — fixed a real bug
   where 30 of 74 teachers had `NULL` contracted load and were silently
   excluded from load analysis.
-- **`UnscheduledDuties[]`**, **`Meetings[]`**, **`YardDuties[]`**: staff
-  duties/meetings outside normal teaching load — relevant to teacher load
-  analysis (4.3) if the school wants total load including these.
-  Investigated 2026-08-12 alongside the Phase A work above and
-  deliberately **not** parsed yet: in the real export, all 46
-  `UnscheduledDuties[]` are template/definition rows referenced nowhere
-  else in the file (zero actual assignments this term), and all 13
-  `Meetings[]` carry `Load: 0` for every one of their 18 assigned
-  teachers - both currently carry no incremental information for load
-  analysis. `Meetings[]` does have real `{TeacherID, PeriodID}`
-  assignments though, which could matter for availability/clash checks
-  even at zero load - worth a real conversation with the school before
-  parsing, not worth guessing at.
+- **`UnscheduledDuties[]`**, **`YardDuties[]`**: staff duties outside
+  normal teaching load — relevant to teacher load analysis (4.3) if the
+  school wants total load including these. Investigated 2026-08-12
+  alongside the Phase A work above and deliberately **not** parsed: in
+  the real export, all 46 `UnscheduledDuties[]` are template/definition
+  rows referenced nowhere else in the file (zero actual assignments this
+  term). `YardDuties[]` *is* parsed (`yard_duty_allocation`, kept
+  separate from teaching load per school confirmation).
+- **`Meetings[]`** — **parsed 2026-09-07** into `teacher_commitment`
+  (`docs/roadmap-v3.md` §1.1). Reassessed after the fact: `Load: 0` for
+  every one of its 18 assigned teachers is real (this is not a load
+  signal) but the file also carries real `{TeacherID, PeriodID}`
+  assignments - 64 distinct (teacher, period) commitments across 18
+  staff, 66 of 68 of which resolved as *free* in the timetable model
+  before this was parsed. That's the same class of signal
+  `docs/solver.md` §4.2 calls the single most important thing to know
+  before a solver moves a lesson - unlike the school-confirmable "does
+  this count as load" question, "is TTS's own file recording that this
+  teacher can't be here" needs no school conversation to act on.
 - **`PublishedTimetables[]`** (45 entries): metadata about past published
   snapshots (name, dates, archive) — likely just a version history, not
   needed for the current-state model.

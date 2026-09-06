@@ -79,6 +79,30 @@ def test_candidates_never_move_into_an_already_busy_slot():
             assert (c["after"]["day_code"], c["after"]["period_code"]) != ("Day 1 A", "P2")
 
 
+def test_candidates_never_move_into_a_standing_meeting_commitment():
+    """docs/roadmap-v3.md 1.1: same point as the already-busy-slot test
+    above, but for teacher_commitment (parsed from the .tfx's
+    Meetings[]) rather than an existing lesson - a slot with nothing in
+    timetable_entry can still be off-limits."""
+    conn = build_richer_synthetic_db()
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=1, class_name_id=1, teacher_id=1, room_id=1)
+    add_lesson(conn, day_id=1, period_id=1, roll_class_id=2, class_name_id=2, teacher_id=1, room_id=2)
+    conn.execute(
+        "INSERT INTO teacher_commitment (teacher_id, period_id, commitment_type, code, name) "
+        "VALUES (1, 4, 'MEETING', 'STAFF', 'Staff Meeting')"
+    )
+    conn.commit()
+    _persist_current_findings(conn)
+
+    finding_id = conn.execute("SELECT id FROM finding WHERE rule_id = 'teacher_double_booking'").fetchone()["id"]
+    result = suggest_fixes(conn, finding_id)
+
+    for c in result["candidates"]:
+        moved_to_other_slot = (c["after"]["day_code"], c["after"]["period_code"]) != (c["before"]["day_code"], c["before"]["period_code"])
+        if moved_to_other_slot:
+            assert (c["after"]["day_code"], c["after"]["period_code"]) != ("Day 1 A", "P2")
+
+
 def test_candidate_rejects_room_with_insufficient_capacity():
     conn = build_richer_synthetic_db()
     # Room 3 has seats=1. CLASSA has 2 enrolled students (must never be

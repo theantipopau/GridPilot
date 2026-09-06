@@ -163,3 +163,44 @@ def test_room_pools_match_the_real_rur_data(ingested_conn):
             "SELECT COUNT(*) FROM ingest_discrepancy WHERE check_name = ?", (check,)
         ).fetchone()[0]
         assert unresolved == 0
+
+
+def test_teacher_commitments_match_the_real_meetings_data(ingested_conn):
+    """docs/roadmap-v3.md 1.1: 13 real Meetings[], one of which references a
+    PeriodID absent from Periods[] (a real, pre-existing gap in the school's
+    file, not an ingester bug - asserted exactly, not glossed as 0) - the
+    other 12 resolve cleanly to 68 (teacher, period) commitment rows across
+    18 distinct teachers, with every MeetingTeachers[] reference resolving."""
+    count = ingested_conn.execute("SELECT COUNT(*) FROM teacher_commitment").fetchone()[0]
+    assert count == 68
+
+    distinct_teachers = ingested_conn.execute(
+        "SELECT COUNT(DISTINCT teacher_id) FROM teacher_commitment"
+    ).fetchone()[0]
+    assert distinct_teachers == 18
+
+    unresolved_meetings = ingested_conn.execute(
+        "SELECT COUNT(*) FROM ingest_discrepancy WHERE check_name = 'meeting_unresolved'"
+    ).fetchone()[0]
+    assert unresolved_meetings == 1
+
+    unresolved_teachers = ingested_conn.execute(
+        "SELECT COUNT(*) FROM ingest_discrepancy WHERE check_name = 'meeting_teacher_unresolved'"
+    ).fetchone()[0]
+    assert unresolved_teachers == 0
+
+
+def test_teacher_commitments_surface_real_availability_gaps(ingested_conn):
+    """The point of parsing this at all: some of these commitments sit at
+    slots the timetable model would otherwise report as free for that
+    teacher - exactly the gap docs/solver.md 4.2 flags."""
+    free_during_meeting = ingested_conn.execute(
+        """
+        SELECT COUNT(*) FROM teacher_commitment tc
+        WHERE NOT EXISTS (
+            SELECT 1 FROM timetable_entry te
+            WHERE te.teacher_id = tc.teacher_id AND te.period_id = tc.period_id
+        )
+        """
+    ).fetchone()[0]
+    assert free_during_meeting > 0
