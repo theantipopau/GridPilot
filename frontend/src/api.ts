@@ -1,6 +1,7 @@
 import type {
   AgreementSector,
   AuditEvent,
+  BlockingDemandResponse,
   BlockingLinesResponse,
   CapabilityStatus,
   CareerStage,
@@ -363,6 +364,10 @@ export function reviewTeacherCapabilityCandidate(
 
 export function fetchBlockingLines(): Promise<BlockingLinesResponse> {
   return getJson(`${BASE}/blocking-lines`);
+}
+
+export function fetchBlockingDemand(): Promise<BlockingDemandResponse> {
+  return getJson(`${BASE}/blocking-demand`);
 }
 
 export function fetchDashboard(): Promise<DashboardData> {

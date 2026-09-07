@@ -370,6 +370,39 @@ export interface BlockingLinesResponse {
   groups: BlockingGroup[];
 }
 
+export interface ImpossibleSubjectGroup {
+  sfx_line_id: number;
+  line_code: string | null;
+  line_name: string | null;
+  subjects: string[];
+}
+
+export interface BlockingDemandLine {
+  sfx_line_id: number;
+  line_code: string | null;
+  line_name: string | null;
+  class_count: number;
+  total_capacity: number;
+  total_enrolled: number;
+  pressure: number | null;
+}
+
+export interface UnderSubscribedClass {
+  class_code: string;
+  subject_code: string | null;
+  roll_class_code: string | null;
+  line_code: string | null;
+  enrolled: number;
+  max_class_size: number;
+  fill_ratio: number;
+}
+
+export interface BlockingDemandResponse {
+  impossible_subject_pairs: ImpossibleSubjectGroup[];
+  lines: BlockingDemandLine[];
+  under_subscribed_classes: UnderSubscribedClass[];
+}
+
 export type RepairStatus = "SOLVED" | "PARTIAL" | "INFEASIBLE" | "NO_MOVABLE_ENTRIES";
 
 export interface RepairFindingRef {

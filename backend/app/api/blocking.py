@@ -21,6 +21,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends
 
+from app.analysis.blocking_demand import compute_blocking_demand
 from app.api.deps import get_db
 
 router = APIRouter()
@@ -142,3 +143,8 @@ def list_blocking_lines(conn: sqlite3.Connection = Depends(get_db)) -> dict:
             for group_label, group_lines in sorted(groups.items())
         ]
     }
+
+
+@router.get("/blocking-demand")
+def get_blocking_demand(conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    return compute_blocking_demand(conn)

@@ -362,7 +362,7 @@ gated on §3.1.
 The user's ask, precisely: *improve lines, grids, and the timetable
 itself*. Taking those in order.
 
-### 4.1 Lines — blocking analysis, then blocking optimisation
+### 4.1 Lines — blocking analysis, then blocking optimisation — **Phase 1 built 2026-09-07**
 
 Per §1.4, honestly scoped. Two phases:
 
@@ -373,6 +373,49 @@ over-subscribed. This is the `docs/full-timetabler-plan.md` §12.4 work,
 half-built already (roadmap-v2 item 5 shipped per-line finding counts
 and per-course enrolment, and deliberately stopped short of judgements
 it couldn't evidence).
+
+**Built, computed entirely from the .sfx subject-selection export cross-
+referenced with real enrolment - `GET /blocking-demand`
+(`app/analysis/blocking_demand.py`) and a collapsible "Subject-selection
+demand" panel on the Blocking page (`BlockingDemand.tsx`).** Three
+things, all facts, none asserted as a verdict:
+
+- **Subject-pair impossibility matrix** - a subject confined to exactly
+  one `sfx_line` can never be combined with another subject also
+  confined to that same line (a student picks at most one class per
+  line). Against the real export: **22 lines, 126 pairs** - e.g. Year 12
+  Line L6 locks a student out of taking more than one of `12AIP`,
+  `12CHE`, `12DRA`, `12LST`, `12PE`, `12SIS122C2`, `12TAFE`.
+- **Per-line demand pressure** - real enrolment against the school's own
+  stated `max_class_size`, summed per line. The tightest: Line "11" at
+  95% (90/95 seats), `SP` at 94%, the Year 10 art/tech rotation lines at
+  93%.
+- **Under-subscribed classes** - real enrolment vs cap, for classes
+  running below half full. **55 of 181** genuine elective classes, 12 of
+  them at zero enrolled (`10EP4`, `10MAT4`, `11EMA2` …) - a real,
+  actionable "why does this class exist with nobody in it" list.
+
+**The one judgement this deliberately does not make: "structurally
+over-subscribed."** Checked against real data first - naively joining
+`sfx_class.max_class_size` to enrolment (matching blocking.py's own
+"detect, never assert" discipline) found 199 of 445 classes reading as
+over their cap, which fell apart on inspection: house/pastoral groups
+(`IGN5`, `SOL5`, `ASM-AQU5` …) reuse the same `class_code` across every
+roll class with unrelated `max_class_size` values per row, and every one
+of them resolves to `entry_type = REGISTRATION`, not a taught elective.
+Restricting to `class_code`s that resolve to a real `LESSON` entry (the
+same LESSON-only convention `app/analysis/contact_time.py` already
+established) makes `class_code` unique again and the false "over
+capacity" signal disappears entirely - **0 of 181** real elective
+classes currently exceed their stated cap. That absence is itself worth
+recording, and is the reason "over-subscribed" isn't a heading above.
+
+Verified against the real database (283 backend tests pass, +5 new for
+this module) and live in the browser: the panel renders all three
+sections against the real `.sqlite3`, numbers match a direct script
+query byte-for-byte, no console errors. Phase 2 (CP-SAT
+re-optimisation against this revealed demand) stays open - size **L**,
+tracked separately as sequencing item #11.
 
 **Phase 2 — re-optimisation against revealed demand (CP-SAT).** Given
 560 fixed subject sets, 193 caps and 16 curriculum constraints: is there
@@ -587,7 +630,7 @@ the set at roughly **M** overall, as originally estimated.
 | 3 | 🟡 Bulk review — room-type done (167/199 unblocked), teacher-capability open (no clean signal found) | 1.3 | — | M |
 | 4 | ✅ `solver_run` + run-compare — persistence/history/compare built; discard-until-kept + adjustable weights still open | 4.2 | — | M |
 | 5 | ✅ Printable/exportable timetables — print-CSS over existing grids built; batch export, CSV/JSON, per-student deferred | 5 | — | M |
-| 6 | Blocking analysis on revealed demand | 4.1 | — | M |
+| 6 | ✅ Blocking analysis on revealed demand — Phase 1 built (impossibility matrix, line pressure, under-subscribed classes); Phase 2 CP-SAT re-optimisation is #11 | 4.1 | — | M |
 | 7 | Infeasibility explanation | 4.3 | — (#4 done) | M |
 | 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |

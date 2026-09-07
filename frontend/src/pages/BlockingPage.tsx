@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchBlockingLines } from "../api";
+import BlockingDemand from "../components/BlockingDemand";
 import LoadingState from "../components/LoadingState";
 import PageHeader from "../components/PageHeader";
 import { IconColumns } from "../components/icons";
@@ -122,6 +123,10 @@ export default function BlockingPage() {
         {data.groups.map((group) => (
           <GroupTable key={group.group} group={group} />
         ))}
+      </div>
+
+      <div className="mt-8">
+        <BlockingDemand />
       </div>
     </div>
   );
