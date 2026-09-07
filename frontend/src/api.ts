@@ -17,6 +17,7 @@ import type {
   IngestStatus,
   IngestUploadResult,
   LeadershipTier,
+  LegalSlotsResponse,
   RegistrationStatus,
   ReferenceData,
   ReleaseReconciliation,
@@ -181,6 +182,10 @@ export function findTimetableEntries(filters: {
     Object.entries(filters).filter(([, v]) => !!v) as [string, string][],
   ).toString();
   return getJson(`${BASE}/timetable-entries?${qs}`);
+}
+
+export function fetchLegalSlots(entryId: number): Promise<LegalSlotsResponse> {
+  return getJson(`${BASE}/timetable-entries/${entryId}/legal-slots`);
 }
 
 export function fetchChangeSets(): Promise<{ change_sets: ChangeSetSummary[] }> {

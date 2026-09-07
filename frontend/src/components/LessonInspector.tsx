@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import { fetchFindings, fetchSuggestions, findTimetableEntries } from "../api";
+import { fetchFindings, fetchLegalSlots, fetchSuggestions, findTimetableEntries } from "../api";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
-import type { ReferenceData, SuggestionCandidate, TimetableEntry, TimetableEntryLookup, ValidationResult } from "../types";
+import type {
+  LegalSlot,
+  ReferenceData,
+  SuggestionCandidate,
+  TimetableEntry,
+  TimetableEntryLookup,
+  ValidationResult,
+} from "../types";
 
 export interface MoveParams {
   after_day_code?: string;
@@ -51,6 +58,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   const [error, setError] = useState<string | null>(null);
   const [occurrences, setOccurrences] = useState<TimetableEntryLookup[] | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>({ status: "idle" });
+  const [legalSlots, setLegalSlots] = useState<Map<string, LegalSlot> | null>(null);
 
   useEffect(() => {
     setOccurrences(null);
@@ -59,6 +67,18 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
       .then((r) => setOccurrences(r.entries))
       .catch(() => setOccurrences([]));
   }, [entry.class_code]);
+
+  // docs/roadmap-v3.md 4.4: live legal-slot feedback for the move-manually
+  // dropdowns below - fetched once per selected lesson, not per keystroke.
+  // A fetch failure just means no shading, not a blocking error - the
+  // dropdowns still work exactly as before, "Propose this move" is still
+  // the real check.
+  useEffect(() => {
+    setLegalSlots(null);
+    fetchLegalSlots(entry.entry_id)
+      .then((r) => setLegalSlots(new Map(r.slots.map((s) => [`${s.day_code}|${s.period_code}`, s]))))
+      .catch(() => setLegalSlots(null));
+  }, [entry.entry_id]);
 
   // A different lesson was clicked without closing the panel first - reset
   // the tab-scoped state rather than carrying it over from the old entry.
@@ -119,6 +139,16 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
     afterPeriod !== entry.period_code ||
     afterRoom !== (entry.room_code ?? "") ||
     afterTeacher !== (entry.teacher_code ?? "");
+
+  // docs/roadmap-v3.md 4.4: cheap, live feedback on the currently-selected
+  // day/period/room, computed from legalSlots (or null before it loads /
+  // if the fetch failed - in which case every dropdown just behaves as it
+  // always did, no shading). Room legality is only meaningful once the
+  // slot itself is free; an illegal slot makes every room moot.
+  const currentSlot = legalSlots?.get(`${afterDay}|${afterPeriod}`) ?? null;
+  const roomIsLegal = !currentSlot || !currentSlot.legal || afterRoom === "" || currentSlot.legal_room_codes.includes(afterRoom);
+  const isDayLegalFor = (dayCode: string) => legalSlots?.get(`${dayCode}|${afterPeriod}`)?.legal !== false;
+  const isPeriodLegalFor = (periodCode: string) => legalSlots?.get(`${afterDay}|${periodCode}`)?.legal !== false;
 
   const submit = async () => {
     setSubmitting(true);
@@ -219,7 +249,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
           {tab === "move" && (
             <>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Move to</h3>
-              <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="mb-2 grid grid-cols-2 gap-2">
                 <select
                   value={afterDay}
                   onChange={(e) => setAfterDay(e.target.value)}
@@ -228,6 +258,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                   {reference.days.map((d) => (
                     <option key={d.code} value={d.code}>
                       {d.code}
+                      {!isDayLegalFor(d.code) ? " ⚠" : ""}
                     </option>
                   ))}
                 </select>
@@ -239,6 +270,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                   {periodCodes.map((c) => (
                     <option key={c} value={c}>
                       {c}
+                      {!isPeriodLegalFor(c) ? " ⚠" : ""}
                     </option>
                   ))}
                 </select>
@@ -248,11 +280,15 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                   className="rounded border border-slate-300 px-2 py-1 text-sm"
                 >
                   <option value="">(no room)</option>
-                  {reference.rooms.map((r) => (
-                    <option key={r.code} value={r.code}>
-                      {r.code}
-                    </option>
-                  ))}
+                  {reference.rooms.map((r) => {
+                    const roomLegal = !currentSlot || !currentSlot.legal || currentSlot.legal_room_codes.includes(r.code);
+                    return (
+                      <option key={r.code} value={r.code}>
+                        {r.code}
+                        {!roomLegal ? " ⚠" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
                 <select
                   value={afterTeacher}
@@ -267,6 +303,20 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                   ))}
                 </select>
               </div>
+              {legalSlots && (
+                <p
+                  className={`mb-3 text-xs ${
+                    currentSlot && (!currentSlot.legal || !roomIsLegal) ? "text-amber-700" : "text-emerald-700"
+                  }`}
+                  title="Cheap check: teacher/student availability and room type/pool/capacity - Propose this move still runs the real, authoritative check"
+                >
+                  {currentSlot && !currentSlot.legal
+                    ? "⚠ Not free - the teacher or a shared student already has something else then."
+                    : currentSlot && !roomIsLegal
+                      ? `⚠ ${afterRoom || "This room"} isn't free at this slot${currentSlot.legal_room_codes.length ? ` - try: ${currentSlot.legal_room_codes.slice(0, 5).join(", ")}` : ""}.`
+                      : "✓ This slot and room look free."}
+                </p>
+              )}
               <input
                 placeholder="Reason (optional)"
                 value={reason}

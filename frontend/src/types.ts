@@ -159,6 +159,23 @@ export interface TimetableEntryLookup {
   roll_class_code: string;
 }
 
+// roadmap-v3.md 4.4 / full-timetabler-plan.md §12.6: live legal-slot
+// feedback for LessonInspector's move-manually dropdowns - a cheap
+// availability check (teacher/student/room), not a candidate to apply.
+export interface LegalSlot {
+  day_code: string;
+  period_code: string;
+  legal: boolean;
+  legal_room_codes: string[];
+}
+
+export interface LegalSlotsResponse {
+  entry_id: number;
+  class_code: string | null;
+  current_room_code: string | null;
+  slots: LegalSlot[];
+}
+
 export type ValidationStatus = "NOT_VALIDATED" | "VALID" | "INVALID";
 export type ApprovalStatus = "DRAFT" | "APPROVED" | "REJECTED";
 

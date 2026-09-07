@@ -535,3 +535,87 @@ def suggest_fixes(conn: sqlite3.Connection, finding_id: int) -> dict:
         "finding_id": finding_id, "supported": True, "note": None,
         "candidates": candidates[:MAX_CANDIDATES_RETURNED],
     }
+
+
+def legal_slots_for_entry(conn: sqlite3.Connection, entry_id: int) -> dict | None:
+    """docs/full-timetabler-plan.md §12.6 / roadmap-v3.md 4.4: the
+    per-entry candidate endpoint, generalised from "which finding is
+    this" to "which lesson is this" - live legal-slot feedback in
+    LessonInspector's move-manually dropdowns needs an answer for any
+    selected lesson, most of which have no open finding at all.
+
+    Deliberately the CHEAP check, not suggest_fixes()'s full
+    re-validation: teacher/student availability plus room type/pool/
+    capacity - the same three-layer check app/analysis/infeasibility.py
+    and repair_solver.py's _feasible_candidates already use, not a second
+    call to run_clash_findings() for every (slot, room) pair, which at
+    ~50 slots x ~15+ rooms per lesson would be hundreds of full
+    rules-engine passes for what is only ever a live UI hint. This is
+    honest about that trade-off, not silently unsound: composite-
+    suppression edge cases aren't re-checked here the way
+    suggest_fixes()'s candidates are, exactly as "Propose this move"
+    already does the real, authoritative check via validate_change_set
+    before anything is ever written - this endpoint only ever shades a
+    dropdown, never proposes a change on its own.
+
+    Returns None if entry_id doesn't resolve to a LESSON entry."""
+    before_entries = lesson_entries(conn)
+    entry = next((e for e in before_entries if e["entry_id"] == entry_id), None)
+    if entry is None:
+        return None
+
+    all_slots = _all_lesson_slots(conn)
+    teacher_busy, room_busy = _busy_sets([e for e in before_entries if e["entry_id"] != entry_id])
+    for teacher_id, slots in teacher_commitment_busy(conn).items():
+        teacher_busy[teacher_id] |= slots
+
+    students_by_class: dict[int, set[int]] = defaultdict(set)
+    for r in conn.execute("SELECT class_name_id, student_id FROM enrolment"):
+        students_by_class[r["class_name_id"]].add(r["student_id"])
+    students = students_by_class.get(entry["class_name_id"], set())
+    student_busy: dict[int, set] = defaultdict(set)
+    for e in before_entries:
+        if e["entry_id"] == entry_id:
+            continue
+        for sid in students_by_class.get(e["class_name_id"], ()):
+            student_busy[sid].add((e["day_id"], e["period_id"]))
+
+    rooms = {r["id"]: dict(r) for r in conn.execute("SELECT id, code, seats, room_type FROM room")}
+    enrolled = len(students)
+    required_room_type = required_room_type_by_class(conn).get(entry["class_name_id"])
+    required_room_ids = pool_room_ids_by_class(conn).get(entry["class_name_id"])
+
+    def room_is_eligible(room: dict) -> bool:
+        if room["seats"] is not None and enrolled > room["seats"]:
+            return False
+        if required_room_type is not None and room["room_type"] != required_room_type:
+            return False
+        if required_room_ids is not None and room["id"] not in required_room_ids:
+            return False
+        return True
+
+    eligible_rooms = [r for r in rooms.values() if room_is_eligible(r)]
+
+    teacher_id = entry["teacher_id"]
+    slots_out = []
+    for slot in all_slots:
+        if teacher_id is not None and (slot.day_id, slot.period_id) in teacher_busy.get(teacher_id, ()):
+            slots_out.append({"day_code": slot.day_code, "period_code": slot.period_code, "legal": False, "legal_room_codes": []})
+            continue
+        if any((slot.day_id, slot.period_id) in student_busy.get(sid, ()) for sid in students):
+            slots_out.append({"day_code": slot.day_code, "period_code": slot.period_code, "legal": False, "legal_room_codes": []})
+            continue
+        legal_rooms = [
+            r["code"] for r in eligible_rooms if (slot.day_id, slot.period_id) not in room_busy.get(r["id"], ())
+        ]
+        slots_out.append({
+            "day_code": slot.day_code, "period_code": slot.period_code,
+            "legal": len(legal_rooms) > 0, "legal_room_codes": sorted(legal_rooms),
+        })
+
+    return {
+        "entry_id": entry_id,
+        "class_code": entry["class_code"],
+        "current_room_code": entry["room_code"],
+        "slots": slots_out,
+    }

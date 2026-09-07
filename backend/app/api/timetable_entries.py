@@ -1,7 +1,8 @@
 import sqlite3
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.analysis.suggestions import legal_slots_for_entry
 from app.api.deps import get_db
 
 router = APIRouter()
@@ -53,3 +54,15 @@ def find_timetable_entries(
 
     rows = conn.execute(sql, params).fetchall()
     return {"entries": [dict(r) for r in rows]}
+
+
+@router.get("/timetable-entries/{entry_id}/legal-slots")
+def get_legal_slots(entry_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """docs/roadmap-v3.md 4.4: live legal-slot feedback for LessonInspector's
+    move-manually dropdowns, checked the cheap way (see app/analysis/
+    suggestions.py's legal_slots_for_entry) - not a candidate to apply,
+    "Propose this move" still does the real validation."""
+    result = legal_slots_for_entry(conn, entry_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"No LESSON entry {entry_id}")
+    return result

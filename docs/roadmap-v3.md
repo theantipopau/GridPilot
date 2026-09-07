@@ -546,7 +546,7 @@ ever touched), and the `mass_repair_run` audit event. 291 backend tests
 pass (+8 new: 4 for the diagnosis logic, 4 for the endpoint, mocked
 per `test_findings_explain_api.py`'s existing hermetic pattern).
 
-### 4.4 Grids — live constraint feedback instead of run-then-check
+### 4.4 Grids — live constraint feedback instead of run-then-check — **built 2026-09-07**
 
 `docs/full-timetabler-plan.md` §7.2 item 1, still unbuilt: dragging a
 lesson should shade every legal target slot *before* the drop. We
@@ -559,6 +559,49 @@ Also still open from that list: **explain-on-hover** from a grid cell
 (the advisor is reachable only from the Findings list), and
 **side-by-side scenario diff** (the Viewing selector renders one
 scenario at a time, not two next to each other).
+
+**Built, deliberately reinterpreted for the interaction model that
+actually exists.** Checked against the real UI first: this app has no
+drag-and-drop anywhere - a move is proposed through `LessonInspector`'s
+"Move manually" tab, four plain dropdowns (day/period/room/teacher) with
+zero live feedback until "Propose this move" is clicked. Building real
+drag-and-drop across `MasterTimetableGrid`/`TimetableGrid` would be a new
+UI paradigm with no precedent in this codebase, reconciling awkwardly
+with the click-to-select/keyboard-nav flow those grids already have -
+confirmed with the user before building rather than assumed. The actual
+product need - "live constraint feedback instead of run-then-check" -
+maps directly onto the dropdowns that already exist.
+
+The §12.6 per-entry candidate endpoint is real:
+`GET /timetable-entries/{id}/legal-slots`
+(`app/analysis/suggestions.py`'s `legal_slots_for_entry()`) answers "is
+there any legal room for this lesson's teacher/students at this slot,
+right now" for an arbitrary entry, no finding required - the same three-
+layer check (teacher, student, room type/pool/capacity) `repair_solver.py`
+and `infeasibility.py` (§4.3) use, deliberately the cheap check rather
+than `suggest_fixes()`'s full re-validation: at ~50 slots × 15+ rooms per
+lesson, hundreds of full rules-engine passes would be wasted work for
+what is only ever a live UI hint - "Propose this move" still runs the
+real, authoritative check before anything is written, exactly as it
+always has. `LessonInspector` fetches this once per selected lesson and
+marks illegal day/period options and rooms with ⚠, cross-filtering as the
+user changes either (pick an illegal period and the day options update to
+show which days it *would* work on), plus a live status line summarising
+the currently-selected combination.
+
+Verified live against the real database: opened a real lesson
+(`08HIS3`, teacher Ryan Gordon), confirmed the home slot read "✓ This
+slot and room look free," then changed the period dropdown to one where
+that teacher has another real fixed lesson - the day/period dropdowns
+correctly re-flagged and the status line correctly read "⚠ Not free -
+the teacher or a shared student already has something else then,"
+matching the real clash. No console errors; nothing written (read-only
+throughout, no cleanup needed). 299 backend tests pass (+8 new).
+
+Explain-on-hover and side-by-side scenario diff remain open, unbuilt -
+neither shares this pass's mechanism (one needs the Ollama advisor
+reachable from a grid cell, the other needs the Viewing selector to
+render two scenarios at once) and each is its own follow-up.
 
 ### 4.5 A portfolio advisor, not a per-finding one
 
@@ -680,7 +723,7 @@ the set at roughly **M** overall, as originally estimated.
 | 5 | ✅ Printable/exportable timetables — print-CSS over existing grids built; batch export, CSV/JSON, per-student deferred | 5 | — | M |
 | 6 | ✅ Blocking analysis on revealed demand — Phase 1 built (impossibility matrix, line pressure, under-subscribed classes); Phase 2 CP-SAT re-optimisation is #11 | 4.1 | — | M |
 | 7 | ✅ Infeasibility explanation — per-entry "is there any legal slot at all" diagnosis + local-Ollama explanation built; full MUS extraction deliberately not attempted | 4.3 | — (#4 done) | M |
-| 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
+| 8 | ✅ Live legal-slot feedback — §12.6 per-entry endpoint + dropdown shading built, reinterpreted from drag (no precedent in this UI) to the existing move-manually form; explain-on-hover and scenario diff still open | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
 | 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |
 | 11 | Blocking optimiser (CP-SAT) | 4.1 | #6, #10 | L |
