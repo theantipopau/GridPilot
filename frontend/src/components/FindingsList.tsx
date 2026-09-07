@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding } from "../api";
+import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding, summarizeFindings } from "../api";
 import EmptyState from "./EmptyState";
 import SearchBox from "./SearchBox";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
 import { IconCheckCircle } from "./icons";
 import { matchesQuery } from "../lib/search";
-import type { Finding, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
+import type { Finding, PortfolioExplanation, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
 
 interface Props {
   findings: Finding[];
@@ -46,6 +46,24 @@ export default function FindingsList({
   const filteredFindings = findings.filter((f) =>
     matchesQuery(query, [f.title, f.rule_id, ...f.entity_refs.map((r) => r.code)]),
   );
+  const [portfolio, setPortfolio] = useState<
+    { status: "loading" } | { status: "error"; message: string } | { status: "done"; result: PortfolioExplanation } | null
+  >(null);
+
+  // docs/roadmap-v3.md 4.5: summarize exactly what's currently visible -
+  // whichever status tab/search the user has applied - not every
+  // finding in the database. Re-running clears the old result rather
+  // than appending, since a stale summary for a different filter would
+  // be misleading.
+  const summarizeVisible = async () => {
+    setPortfolio({ status: "loading" });
+    try {
+      const result = await summarizeFindings(filteredFindings.map((f) => f.id));
+      setPortfolio({ status: "done", result });
+    } catch (e) {
+      setPortfolio({ status: "error", message: String(e) });
+    }
+  };
 
   const toggleSuggestions = async (finding: Finding) => {
     const current = suggestionsByFinding[finding.id];
@@ -149,14 +167,53 @@ export default function FindingsList({
             </span>
           ))}
         </div>
-        <SearchBox
-          value={query}
-          onChange={setQuery}
-          placeholder="Search title, rule, or entity code…"
-          resultCount={filteredFindings.length}
-          totalCount={findings.length}
-        />
+        <div className="flex items-center gap-2">
+          <SearchBox
+            value={query}
+            onChange={setQuery}
+            placeholder="Search title, rule, or entity code…"
+            resultCount={filteredFindings.length}
+            totalCount={findings.length}
+          />
+          <button
+            type="button"
+            onClick={summarizeVisible}
+            disabled={filteredFindings.length === 0 || portfolio?.status === "loading"}
+            title="Ask the local AI advisor to summarise the shape of the findings currently shown here - docs/roadmap-v3.md 4.5"
+            className="whitespace-nowrap rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {portfolio?.status === "loading" ? "Summarizing…" : `Summarize these ${filteredFindings.length}`}
+          </button>
+        </div>
       </div>
+
+      {portfolio && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm">
+          {portfolio.status === "loading" && <p className="text-xs text-ink-muted">Asking the local AI advisor…</p>}
+          {portfolio.status === "error" && (
+            <p className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{portfolio.message}</p>
+          )}
+          {portfolio.status === "done" && (
+            <>
+              <p className="text-slate-700">{portfolio.result.explanation}</p>
+              {portfolio.result.summary.top_entities.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {portfolio.result.summary.top_entities.slice(0, 8).map((e) => (
+                    <span
+                      key={`${e.type}:${e.code}`}
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+                      title={`Appears in ${e.count} of the ${portfolio.result.summary.total_count} findings summarised`}
+                    >
+                      {e.type}:{e.code} · {e.count}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {filteredFindings.length === 0 ? (
         <EmptyState icon={<IconCheckCircle className="h-8 w-8" />} title="No findings match your search" />
       ) : (

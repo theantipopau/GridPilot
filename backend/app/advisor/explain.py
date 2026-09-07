@@ -19,6 +19,12 @@ OLLAMA_HOST = os.environ.get("GRIDPILOT_OLLAMA_HOST", "http://localhost:11434")
 # machine (a laptop with an Intel Arc iGPU, not a discrete GPU) - override
 # via env var on hardware that can comfortably run something bigger.
 OLLAMA_MODEL = os.environ.get("GRIDPILOT_OLLAMA_MODEL", "qwen3.5:4b")
+# full-timetabler-plan.md §8: "portfolio reasoning is a harder task than
+# single-finding explanation - this is the natural moment to point it at
+# [bigger hardware]." A separate env var, not a hard switch, so a
+# machine with nothing bigger pulled still works - defaults to the same
+# model as everything else.
+PORTFOLIO_OLLAMA_MODEL = os.environ.get("GRIDPILOT_OLLAMA_PORTFOLIO_MODEL", OLLAMA_MODEL)
 
 REQUEST_TIMEOUT_SECONDS = 60.0
 
@@ -147,16 +153,17 @@ def _build_infeasibility_prompt(diagnoses: list[dict]) -> str:
     )
 
 
-async def _generate(prompt: str) -> str:
+async def _generate(prompt: str, model: str = OLLAMA_MODEL) -> str:
     """The one call to Ollama's /api/generate every explain_* function
     shares - same host/model/timeout/error handling either way, so there's
     exactly one implementation of "how this project talks to Ollama" to
-    keep correct."""
+    keep correct. `model` defaults to the standard single-finding model;
+    explain_portfolio() points it at PORTFOLIO_OLLAMA_MODEL instead."""
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
             resp = await client.post(
                 f"{OLLAMA_HOST}/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "think": False},
+                json={"model": model, "prompt": prompt, "stream": False, "think": False},
             )
     except httpx.ConnectError as e:
         raise AdvisorError(
@@ -165,11 +172,11 @@ async def _generate(prompt: str) -> str:
     except httpx.TimeoutException as e:
         raise AdvisorError(
             f"Ollama didn't respond within {REQUEST_TIMEOUT_SECONDS:.0f}s - "
-            f"{OLLAMA_MODEL!r} may be too large for this machine."
+            f"{model!r} may be too large for this machine."
         ) from e
 
     if resp.status_code == 404:
-        raise AdvisorError(f"Model {OLLAMA_MODEL!r} isn't pulled - run `ollama pull {OLLAMA_MODEL}`.")
+        raise AdvisorError(f"Model {model!r} isn't pulled - run `ollama pull {model}`.")
     if resp.status_code != 200:
         raise AdvisorError(f"Ollama returned an error ({resp.status_code}): {resp.text[:200]}")
 
@@ -178,6 +185,40 @@ async def _generate(prompt: str) -> str:
     if not text:
         raise AdvisorError("Ollama returned an empty response.")
     return text
+
+
+def _build_portfolio_prompt(summary: dict, findings: list[dict]) -> str:
+    """docs/full-timetabler-plan.md §8 / roadmap-v3.md 4.5: read the
+    *shape* of a filtered set of findings, not one at a time. Only the
+    computed summary and a bounded sample of real titles go in - the
+    model never sees more findings than it's told about, and the prompt
+    says so explicitly, so it can't imply completeness it doesn't have."""
+    by_rule_lines = "\n".join(f"- {r['rule_id']}: {r['count']}" for r in summary["by_rule"]) or "(none)"
+    entity_lines = "\n".join(f"- {e['type']}:{e['code']} -> {e['count']} findings" for e in summary["top_entities"]) or "(none)"
+    sample = findings[:20]
+    sample_lines = "\n".join(f"- [{f['rule_id']}] {f['title']}" for f in sample) or "(none)"
+    sample_note = (
+        f"\n(showing {len(sample)} of {summary['total_count']} - not exhaustive)" if summary["total_count"] > len(sample) else ""
+    )
+
+    return (
+        "You are summarising a SET of scheduling issues a deterministic rules engine found in a school "
+        "timetable - not explaining one issue, describing the shape of the whole set. Write 3-6 sentences: "
+        "what's structurally going on, which entity (if any) is the most implicated and why that matters "
+        "(fixing it would resolve the most findings at once), and which rule type dominates. Do not suggest "
+        "a specific fix - a separate feature already handles that. Do not invent any fact not given below - "
+        "only use the codes and counts provided, and never guess a name.\n\n"
+        f"Total findings in this set: {summary['total_count']}\n"
+        f"By severity: critical {summary['by_severity']['critical']}, warning {summary['by_severity']['warning']}, "
+        f"info {summary['by_severity']['info']}\n"
+        f"By rule type:\n{by_rule_lines}\n\n"
+        f"Entities appearing in the most findings (fixing these would have the broadest impact):\n{entity_lines}\n\n"
+        f"A sample of individual finding titles:{sample_note}\n{sample_lines}"
+    )
+
+
+async def explain_portfolio(summary: dict, findings: list[dict]) -> str:
+    return await _generate(_build_portfolio_prompt(summary, findings), model=PORTFOLIO_OLLAMA_MODEL)
 
 
 async def explain_infeasibility(diagnoses: list[dict]) -> str:

@@ -18,6 +18,7 @@ import type {
   IngestUploadResult,
   LeadershipTier,
   LegalSlotsResponse,
+  PortfolioExplanation,
   RegistrationStatus,
   ReferenceData,
   ReleaseReconciliation,
@@ -96,6 +97,10 @@ export function fetchSuggestions(findingId: number): Promise<SuggestionsResponse
 
 export function explainFinding(findingId: number): Promise<{ finding_id: number; explanation: string; model: string }> {
   return postJson(`${BASE}/findings/${findingId}/explain`, {});
+}
+
+export function summarizeFindings(findingIds: number[]): Promise<PortfolioExplanation> {
+  return postJson(`${BASE}/findings/summarize`, { finding_ids: findingIds });
 }
 
 export function acceptFindingRisk(findingId: number, reviewedBy: string, note?: string): Promise<{ id: number; status: string }> {

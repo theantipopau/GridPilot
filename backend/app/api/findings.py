@@ -5,7 +5,8 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from app.advisor.explain import AdvisorError, OLLAMA_MODEL, explain_finding
+from app.advisor.explain import AdvisorError, OLLAMA_MODEL, PORTFOLIO_OLLAMA_MODEL, explain_finding, explain_portfolio
+from app.analysis.portfolio import summarize_findings
 from app.analysis.suggestions import suggest_fixes
 from app.api.deps import get_db, get_db_writable
 from app.audit import log_event
@@ -130,6 +131,45 @@ async def explain_finding_endpoint(finding_id: int, conn: sqlite3.Connection = D
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     return {"finding_id": finding_id, "explanation": explanation, "model": OLLAMA_MODEL}
+
+
+class SummarizeFindingsRequest(BaseModel):
+    finding_ids: list[int]
+
+
+@router.post("/findings/summarize")
+async def summarize_findings_endpoint(
+    request: SummarizeFindingsRequest, conn: sqlite3.Connection = Depends(get_db)
+) -> dict:
+    """docs/roadmap-v3.md 4.5 / full-timetabler-plan.md §8: a portfolio-
+    level explanation over a *set* of findings - typically whatever the
+    Findings page's current filters/search show - not one at a time.
+    The deterministic layer still computes every number
+    (app/analysis/portfolio.py); the model only reads that summary plus a
+    bounded sample of real titles, same explain-never-decide boundary as
+    POST /findings/{id}/explain."""
+    if not request.finding_ids:
+        raise HTTPException(status_code=400, detail="No findings selected to summarize.")
+
+    placeholders = ",".join("?" for _ in request.finding_ids)
+    rows = conn.execute(
+        f"SELECT rule_id, severity, title, entity_refs_json FROM finding WHERE id IN ({placeholders})",
+        tuple(request.finding_ids),
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="None of the given finding ids exist.")
+
+    findings = [
+        {"rule_id": r["rule_id"], "severity": r["severity"], "title": r["title"], "entity_refs": json.loads(r["entity_refs_json"])}
+        for r in rows
+    ]
+    summary = summarize_findings(findings)
+    try:
+        explanation = await explain_portfolio(summary, findings)
+    except AdvisorError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+    return {"summary": summary, "explanation": explanation, "model": PORTFOLIO_OLLAMA_MODEL}
 
 
 class FindingReviewRequest(BaseModel):

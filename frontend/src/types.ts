@@ -121,6 +121,28 @@ export interface FindingsResponse {
   counts_by_severity: Record<Severity, number>;
 }
 
+// roadmap-v3.md 4.5 / full-timetabler-plan.md §8: portfolio-level
+// summarisation over a set of findings - plain computed counts, never a
+// ranking or a judgement.
+export interface PortfolioEntitySummary {
+  type: string;
+  code: string;
+  count: number;
+}
+
+export interface PortfolioSummary {
+  total_count: number;
+  by_rule: { rule_id: string; count: number }[];
+  by_severity: Record<Severity, number>;
+  top_entities: PortfolioEntitySummary[];
+}
+
+export interface PortfolioExplanation {
+  summary: PortfolioSummary;
+  explanation: string;
+  model: string;
+}
+
 export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface CompositeCandidate {

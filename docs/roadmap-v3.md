@@ -603,7 +603,7 @@ neither shares this pass's mechanism (one needs the Ollama advisor
 reachable from a grid cell, the other needs the Viewing selector to
 render two scenarios at once) and each is its own follow-up.
 
-### 4.5 A portfolio advisor, not a per-finding one
+### 4.5 A portfolio advisor, not a per-finding one — **built 2026-09-07**
 
 `docs/full-timetabler-plan.md` §8: the advisor explains one finding.
 The next job is reading the *set* — "what's structurally wrong with Year
@@ -611,6 +611,49 @@ The next job is reading the *set* — "what's structurally wrong with Year
 needs a summarisation endpoint over a filtered finding set, and a bigger
 local model. The deterministic layer still computes; the model still
 only explains. Size: **M**.
+
+**Built, scoped to summarising an arbitrary filtered set of findings -
+not a general natural-language query engine over the three example
+questions above, which are three genuinely different computations
+(entity leaderboards, per-teacher constraint reasoning, blocking-line
+cross-reference) that would each need their own deterministic layer
+first.** `summarize_findings()` (`app/analysis/portfolio.py`) computes,
+over any given set: counts by rule type and severity, and a "top
+entities" leaderboard - which teacher/room/class code is implicated in
+the most findings at once, directly answering "which single fix would
+resolve the most problems" without inventing a ranking. `explain_portfolio()`
+(`app/advisor/explain.py`, sharing the same `_generate()` Ollama call as
+every other explain_* function) turns that into 3-6 sentences, given
+those computed facts plus a capped sample of real finding titles - never
+the full set, and the prompt says so, so it can't imply completeness it
+doesn't have. `POST /findings/summarize` takes whatever `finding_ids`
+the caller sends; the Findings page's new "Summarize these N" button
+sends exactly the currently-visible set (whatever status tab and search
+filter is active), so the summary always matches what's on screen.
+
+Per §8's "point it at a bigger model when the hardware allows":
+`GRIDPILOT_OLLAMA_PORTFOLIO_MODEL` overrides the model for this endpoint
+specifically, independent of `GRIDPILOT_OLLAMA_MODEL` (defaults to the
+same value). Verified the override itself works end-to-end - pointed it
+at `qwen3.6:35b` (already pulled on the dev machine) and got a real,
+correctly-surfaced timeout (`AdvisorError`, clean 503) rather than a
+silent fallback, confirming 35B is genuinely too slow for this laptop's
+iGPU within the 60s budget, not that the override is broken.
+
+Verified against the real database with the default model: summarised
+all 158 real OPEN findings (20s). The computed summary was exact
+(`class_room_instability`: 78, `room:ANG6`: 13 findings); the generated
+prose correctly named `room:ANG6` as the highest-leverage fix and
+`class_room_instability` as the dominant rule type, grounded in the real
+numbers - but also, worth recording honestly rather than glossing over,
+misstated the total as "265" instead of 158 in one sentence despite
+being given the correct number, a real arithmetic slip from the small
+4B model on a set this large. The computed summary object itself (what
+the frontend actually renders as the entity chips) is unaffected - only
+the model's own prose can be wrong, which is exactly why the boundary
+keeps that layer to explanation, never computation. Live in the browser:
+the panel rendered the same explanation and entity chips, no console
+errors, nothing written (read-only). 307 backend tests pass (+8 new).
 
 ### 4.6 A timetable quality score
 
@@ -724,7 +767,7 @@ the set at roughly **M** overall, as originally estimated.
 | 6 | ✅ Blocking analysis on revealed demand — Phase 1 built (impossibility matrix, line pressure, under-subscribed classes); Phase 2 CP-SAT re-optimisation is #11 | 4.1 | — | M |
 | 7 | ✅ Infeasibility explanation — per-entry "is there any legal slot at all" diagnosis + local-Ollama explanation built; full MUS extraction deliberately not attempted | 4.3 | — (#4 done) | M |
 | 8 | ✅ Live legal-slot feedback — §12.6 per-entry endpoint + dropdown shading built, reinterpreted from drag (no precedent in this UI) to the existing move-manually form; explain-on-hover and scenario diff still open | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
-| 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
+| 9 | ✅ Portfolio advisor — set summarisation (counts + entity leaderboard) + Ollama explanation built, scoped to a filtered finding set, not a general NL query engine | 4.5 | — | M |
 | 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |
 | 11 | Blocking optimiser (CP-SAT) | 4.1 | #6, #10 | L |
 | 12 | Teacher allocation engine | 3.2 | #10 | L |
