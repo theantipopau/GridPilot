@@ -461,6 +461,33 @@ export interface SolverRunDetail extends SolverRunSummary {
   moves: SolverRunMove[];
 }
 
+// roadmap-v3.md 4.3: "is there ANY legal slot for this lesson alone,
+// right now" - a real, provable bottleneck when has_legal_slot is false;
+// an honest "not a single-lesson cause" signal when true.
+export interface InfeasibilityDiagnosis {
+  entry_id: number;
+  class_code: string | null;
+  teacher_code: string | null;
+  room_code: string | null;
+  day_code: string;
+  period_code: string;
+  has_legal_slot: boolean;
+  total_slots: number;
+  slots_lost_to_teacher_availability: number;
+  slots_lost_to_student_clash: number;
+  slots_checked_for_a_room: number;
+  slots_with_a_legal_room: number;
+  required_room_type: string | null;
+  matching_rooms_total: number;
+}
+
+export interface InfeasibilityExplanation {
+  solver_run_id: number;
+  explanation: string;
+  model: string;
+  diagnoses: InfeasibilityDiagnosis[];
+}
+
 export type AgreementSector = "SECONDARY" | "PRIMARY";
 export type LeadershipTier = "MIDDLE" | "SENIOR";
 

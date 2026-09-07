@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
-import { fetchSolverRuns } from "../api";
+import { Fragment, useEffect, useState } from "react";
+import { explainInfeasibility, fetchSolverRuns } from "../api";
 import type { RepairStatus, SolverRunSummary } from "../types";
 
 interface Props {
   refreshKey: number;
   onOpenChangeSet?: (changeSetId: number) => void;
 }
+
+type ExplanationState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "done"; text: string };
 
 const STATUS_LABEL: Record<RepairStatus, string> = {
   SOLVED: "Solved",
@@ -39,6 +44,7 @@ export default function SolverRunHistory({ refreshKey, onOpenChangeSet }: Props)
   const [runs, setRuns] = useState<SolverRunSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
+  const [explanations, setExplanations] = useState<Record<number, ExplanationState>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +63,24 @@ export default function SolverRunHistory({ refreshKey, onOpenChangeSet }: Props)
   };
 
   const compareRuns = runs?.filter((r) => selected.includes(r.id)) ?? [];
+
+  const toggleExplanation = async (runId: number) => {
+    if (explanations[runId]) {
+      setExplanations((prev) => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
+      return;
+    }
+    setExplanations((prev) => ({ ...prev, [runId]: { status: "loading" } }));
+    try {
+      const result = await explainInfeasibility(runId);
+      setExplanations((prev) => ({ ...prev, [runId]: { status: "done", text: result.explanation } }));
+    } catch (e) {
+      setExplanations((prev) => ({ ...prev, [runId]: { status: "error", message: String(e) } }));
+    }
+  };
 
   return (
     <div className="mb-4">
@@ -107,41 +131,74 @@ export default function SolverRunHistory({ refreshKey, onOpenChangeSet }: Props)
                 </thead>
                 <tbody>
                   {runs.map((r) => (
-                    <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                      <td className="p-1.5">
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(r.id)}
-                          onChange={() => toggleSelect(r.id)}
-                          title="Select to compare (up to 2)"
-                        />
-                      </td>
-                      <td className="p-1.5 font-medium text-slate-700">#{r.id}</td>
-                      <td className="p-1.5 text-ink-muted">{formatTime(r.created_at)}</td>
-                      <td className="p-1.5 text-ink-muted">{r.created_by}</td>
-                      <td className="p-1.5">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`} />
-                          {STATUS_LABEL[r.status]}
-                        </span>
-                      </td>
-                      <td className="p-1.5 tabular-figures text-slate-600">
-                        {r.findings_resolved_count} of {r.scope_count}
-                      </td>
-                      <td className="p-1.5 tabular-figures text-slate-600">{r.moved_count}</td>
-                      <td className="p-1.5 tabular-figures text-ink-muted">{r.solve_time_seconds.toFixed(1)}s</td>
-                      <td className="p-1.5">
-                        {r.change_set_id != null && onOpenChangeSet && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenChangeSet(r.change_set_id!)}
-                            className="text-violet-600 underline hover:text-violet-800"
-                          >
-                            View change set
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={r.id}>
+                      <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                        <td className="p-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(r.id)}
+                            onChange={() => toggleSelect(r.id)}
+                            title="Select to compare (up to 2)"
+                          />
+                        </td>
+                        <td className="p-1.5 font-medium text-slate-700">#{r.id}</td>
+                        <td className="p-1.5 text-ink-muted">{formatTime(r.created_at)}</td>
+                        <td className="p-1.5 text-ink-muted">{r.created_by}</td>
+                        <td className="p-1.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[r.status]}`} />
+                            {STATUS_LABEL[r.status]}
+                          </span>
+                        </td>
+                        <td className="p-1.5 tabular-figures text-slate-600">
+                          {r.findings_resolved_count} of {r.scope_count}
+                        </td>
+                        <td className="p-1.5 tabular-figures text-slate-600">{r.moved_count}</td>
+                        <td className="p-1.5 tabular-figures text-ink-muted">{r.solve_time_seconds.toFixed(1)}s</td>
+                        <td className="p-1.5">
+                          <div className="flex items-center gap-2">
+                            {r.change_set_id != null && onOpenChangeSet && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenChangeSet(r.change_set_id!)}
+                                className="text-violet-600 underline hover:text-violet-800"
+                              >
+                                View change set
+                              </button>
+                            )}
+                            {r.findings_unresolved_count > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExplanation(r.id)}
+                                title="Ask the local AI advisor why these findings couldn't be resolved - docs/roadmap-v3.md 4.3"
+                                className="text-slate-500 underline hover:text-slate-700"
+                              >
+                                {explanations[r.id] ? "Hide explanation" : "Explain"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {explanations[r.id] && (
+                        <tr className="border-b border-slate-100 last:border-0">
+                          <td colSpan={9} className="bg-slate-50 p-2.5">
+                            {explanations[r.id].status === "loading" && (
+                              <p className="text-xs text-ink-muted">Asking the local AI advisor…</p>
+                            )}
+                            {explanations[r.id].status === "error" && (
+                              <p className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                                {(explanations[r.id] as { status: "error"; message: string }).message}
+                              </p>
+                            )}
+                            {explanations[r.id].status === "done" && (
+                              <p className="rounded border border-slate-200 bg-white p-2 text-xs text-slate-700">
+                                {(explanations[r.id] as { status: "done"; text: string }).text}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

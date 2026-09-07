@@ -19,6 +19,8 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.advisor.explain import OLLAMA_MODEL, AdvisorError, explain_infeasibility
+from app.analysis.infeasibility import diagnose_unresolved_findings
 from app.analysis.repair_solver import REPAIR_ELIGIBLE_RULES, solve_repair
 from app.analysis.solver_run import get_solver_run, list_solver_runs, record_solver_run
 from app.api.deps import get_db, get_db_writable
@@ -147,3 +149,33 @@ def get_solver_run_detail(run_id: int, conn: sqlite3.Connection = Depends(get_db
     if run is None:
         raise HTTPException(status_code=404, detail=f"No solver run {run_id}")
     return run
+
+
+@router.post("/solver/runs/{run_id}/explain-infeasibility")
+async def explain_run_infeasibility(run_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """AI-generated explanation of why this run left findings unresolved -
+    same local-Ollama, explain-never-decide boundary as
+    POST /findings/{id}/explain (app/advisor/explain.py). Diagnosis is
+    computed fresh against the live timetable (app/analysis/
+    infeasibility.py), not read back from the run's stored state."""
+    run = get_solver_run(conn, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"No solver run {run_id}")
+
+    unresolved_ids = [f["id"] for f in run["findings_unresolved"]]
+    if not unresolved_ids:
+        raise HTTPException(status_code=400, detail="Every requested finding was resolved - nothing to explain.")
+
+    diagnoses = diagnose_unresolved_findings(conn, unresolved_ids)
+    if not diagnoses:
+        raise HTTPException(
+            status_code=400,
+            detail="The unresolved finding(s) could not be resolved back to a timetable entry to diagnose.",
+        )
+
+    try:
+        explanation = await explain_infeasibility(diagnoses)
+    except AdvisorError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+    return {"solver_run_id": run_id, "explanation": explanation, "model": OLLAMA_MODEL, "diagnoses": diagnoses}

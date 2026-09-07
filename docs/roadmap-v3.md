@@ -481,7 +481,7 @@ Mode B (regional rebuild) and Mode C (construction) stay where
 `docs/solver.md` put them — behind teacher unavailability (§1.1 makes a
 dent) and, for C, behind §3.1.
 
-### 4.3 Infeasibility explanation — the actual product gap
+### 4.3 Infeasibility explanation — the actual product gap — **built 2026-09-07**
 
 The most valuable single item in `docs/solver.md` (§7.2) and still
 unbuilt. When a solver returns INFEASIBLE it has proven something
@@ -497,6 +497,54 @@ It is a genuine language task on top of a genuine computation, it stays
 strictly inside the explain-never-decide boundary
 (`docs/ai-advisor.md`), and it applies to blocking runs (§4.1) as much
 as timetable runs. Size: **M**, gated only on §4.2.
+
+**Built, deliberately scoped down from a full minimal-unsatisfiable-core
+extraction.** A true CP-SAT assumption-based MUS would mean
+reformulating `repair_solver.py`'s model with assumption literals - a
+real rewrite of a tested, load-bearing 550+ line module, for a return
+that's provably correct but no more *useful* than a cheaper question:
+for each timetable entry behind a finding mass-repair left unresolved,
+**"if this lesson were the only thing allowed to move, is there ANY
+legal slot for it at all, right now?"** - the same three-layer check
+(teacher, then student, then room) `repair_solver.py`'s own
+`_feasible_candidates` uses, so the answer is guaranteed consistent with
+what actually makes the solver fail
+(`app/analysis/infeasibility.py`). When the answer is no, the layer
+that ran out is a real, provable bottleneck. When the answer is yes -
+the lesson has options alone but the joint problem still failed - that's
+a genuine multi-lesson interaction a single-entry check can't diagnose,
+and it's reported honestly as that (`has_legal_slot: true`, no invented
+cause) rather than fabricating a specific reason - the same "detect,
+never assert" discipline as everywhere else in this project.
+
+The explanation itself reuses the existing local-Ollama advisor
+(`app/advisor/explain.py`, `docs/ai-advisor.md`) rather than a new AI
+integration - `explain_infeasibility()` shares the same
+host/model/timeout/error-handling call (`_generate()`, factored out of
+what was two copies of the same ~25 lines) as the finding-explain
+feature, with its own prompt built only from the structured facts
+`infeasibility.py` computed. `POST /solver/runs/{id}/explain-infeasibility`
+surfaces as an "Explain" link next to any solver run with unresolved
+findings, in the same collapsible run-history panel §4.2 built
+(`SolverRunHistory.tsx`).
+
+Verified against the real database and a real (not mocked) local Ollama
+call, twice - once via a direct API call, once end-to-end through the
+browser UI. A real mass-repair run over the live timetable's 46 open
+eligible findings resolved 6 and left 40 findings behind (45 distinct
+entries) as genuinely unresolved; the diagnosis correctly found six real
+`10SCI3` entries with `matching_rooms_total: 0` (the school has zero
+rooms matching whatever pool that class is confined to - a genuine,
+provable bottleneck) among 39 entries individually placeable but stuck
+in joint conflicts, and the model's explanation named the `10SCI3`
+bottleneck specifically and correctly described the rest as a multi-
+lesson interaction rather than inventing a cause for them - unprompted,
+matching the diagnosis data exactly. Reverted afterward: deleted the
+verification `solver_run` row, its `change_set`/`proposed_change` rows
+(still DRAFT, never approved - nothing in the live timetable itself was
+ever touched), and the `mass_repair_run` audit event. 291 backend tests
+pass (+8 new: 4 for the diagnosis logic, 4 for the endpoint, mocked
+per `test_findings_explain_api.py`'s existing hermetic pattern).
 
 ### 4.4 Grids — live constraint feedback instead of run-then-check
 
@@ -631,7 +679,7 @@ the set at roughly **M** overall, as originally estimated.
 | 4 | ✅ `solver_run` + run-compare — persistence/history/compare built; discard-until-kept + adjustable weights still open | 4.2 | — | M |
 | 5 | ✅ Printable/exportable timetables — print-CSS over existing grids built; batch export, CSV/JSON, per-student deferred | 5 | — | M |
 | 6 | ✅ Blocking analysis on revealed demand — Phase 1 built (impossibility matrix, line pressure, under-subscribed classes); Phase 2 CP-SAT re-optimisation is #11 | 4.1 | — | M |
-| 7 | Infeasibility explanation | 4.3 | — (#4 done) | M |
+| 7 | ✅ Infeasibility explanation — per-entry "is there any legal slot at all" diagnosis + local-Ollama explanation built; full MUS extraction deliberately not attempted | 4.3 | — (#4 done) | M |
 | 8 | Live legal-slot shading on drag; explain-on-hover | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | Portfolio advisor (set summarisation) | 4.5 | — | M |
 | 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |

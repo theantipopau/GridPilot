@@ -13,6 +13,7 @@ import type {
   ExportPreview,
   FindingsResponse,
   IndustrialAgreement,
+  InfeasibilityExplanation,
   IngestStatus,
   IngestUploadResult,
   LeadershipTier,
@@ -159,6 +160,10 @@ export function runMassRepair(
 export function fetchSolverRuns(limit?: number): Promise<{ runs: SolverRunSummary[] }> {
   const qs = limit ? `?limit=${limit}` : "";
   return getJson(`${BASE}/solver/runs${qs}`);
+}
+
+export function explainInfeasibility(runId: number): Promise<InfeasibilityExplanation> {
+  return postJson(`${BASE}/solver/runs/${runId}/explain-infeasibility`, {});
 }
 
 export function fetchSolverRun(id: number): Promise<SolverRunDetail> {

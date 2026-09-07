@@ -112,8 +112,46 @@ def _build_prompt(finding: dict, related: list[dict] | None = None) -> str:
     )
 
 
-async def explain_finding(finding: dict, related: list[dict] | None = None) -> str:
-    prompt = _build_prompt(finding, related)
+def _build_infeasibility_prompt(diagnoses: list[dict]) -> str:
+    blocks = []
+    for i, d in enumerate(diagnoses, start=1):
+        header = f"Lesson {i}: class {d['class_code'] or '(none)'}, teacher {d['teacher_code'] or '(none)'}, currently {d['day_code']} {d['period_code']}"
+        if not d["has_legal_slot"]:
+            required = f"a room of type {d['required_room_type']!r}" if d["required_room_type"] else "a room"
+            blocks.append(
+                f"{header}\n"
+                f"- has_legal_slot: false (this lesson alone has NO legal slot anywhere in the timetable)\n"
+                f"- of {d['total_slots']} total lesson slots, {d['slots_lost_to_teacher_availability']} are ruled out because the teacher is already committed then\n"
+                f"- of the remaining slots, {d['slots_lost_to_student_clash']} more are ruled out because a student in this class already has another lesson then\n"
+                f"- of the {d['slots_checked_for_a_room']} slots left, a legal room was available in {d['slots_with_a_legal_room']} of them\n"
+                f"- this class requires {required}; the whole school has {d['matching_rooms_total']} room(s) matching that requirement"
+            )
+        else:
+            blocks.append(
+                f"{header}\n"
+                f"- has_legal_slot: true (this lesson alone DOES have legal slots available - "
+                f"the failure only shows up when trying to place it together with the other lessons below)"
+            )
+    return (
+        "You are explaining, to a school timetabler, why a constraint solver could not find any way to "
+        "resolve certain scheduling clashes. Below are structured facts about specific lessons the solver "
+        "tried and failed to place, computed directly against the real timetable - not guessed. Write 2-5 "
+        "sentences of plain English giving the structural reason, in the style of: \"Year 10 Science needs "
+        "5 periods across 4 lab-capable rooms, but three of those are already committed to Year 11 - the "
+        "structure can't fit, this isn't a scheduling problem.\" Do not suggest a fix - a separate feature "
+        "already handles that. Do not invent any fact not given below - only use the codes and counts "
+        "provided, and never guess a name. For any lesson marked has_legal_slot: true, say plainly that no "
+        "single-lesson structural cause was found for it and that it looks like an interaction between "
+        "several lessons competing for the same slots, rather than inventing a specific reason.\n\n"
+        + "\n\n".join(blocks)
+    )
+
+
+async def _generate(prompt: str) -> str:
+    """The one call to Ollama's /api/generate every explain_* function
+    shares - same host/model/timeout/error handling either way, so there's
+    exactly one implementation of "how this project talks to Ollama" to
+    keep correct."""
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
             resp = await client.post(
@@ -140,3 +178,11 @@ async def explain_finding(finding: dict, related: list[dict] | None = None) -> s
     if not text:
         raise AdvisorError("Ollama returned an empty response.")
     return text
+
+
+async def explain_infeasibility(diagnoses: list[dict]) -> str:
+    return await _generate(_build_infeasibility_prompt(diagnoses))
+
+
+async def explain_finding(finding: dict, related: list[dict] | None = None) -> str:
+    return await _generate(_build_prompt(finding, related))
