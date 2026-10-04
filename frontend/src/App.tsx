@@ -9,6 +9,7 @@ import {
   fetchReference,
   fetchRoomConstraintCandidates,
   fetchTeacherCapabilityCandidates,
+  fetchTeachingRequirementCandidates,
 } from "./api";
 import CommandPalette from "./components/CommandPalette";
 import ImportPanel from "./components/ImportPanel";
@@ -38,6 +39,7 @@ import RoomsPage from "./pages/RoomsPage";
 import StaffingPolicyPage from "./pages/StaffingPolicyPage";
 import TeacherCapabilitiesPage from "./pages/TeacherCapabilitiesPage";
 import TeachersPage from "./pages/TeachersPage";
+import TeachingRequirementsPage from "./pages/TeachingRequirementsPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
 
@@ -63,6 +65,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
       { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
       { id: "teacher-capabilities", label: "Teacher Capabilities", icon: (c) => <IconCheckCircle className={c} /> },
+      { id: "teaching-requirements", label: "Teaching Requirements", icon: (c) => <IconClipboardList className={c} /> },
     ],
   },
   {
@@ -93,6 +96,7 @@ interface BadgeCounts {
   composites: number;
   roomConstraints: number;
   teacherCapabilities: number;
+  teachingRequirements: number;
   changes: number;
 }
 
@@ -105,7 +109,7 @@ export default function App() {
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({
-    findings: 0, composites: 0, roomConstraints: 0, teacherCapabilities: 0, changes: 0,
+    findings: 0, composites: 0, roomConstraints: 0, teacherCapabilities: 0, teachingRequirements: 0, changes: 0,
   });
   const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -149,10 +153,11 @@ export default function App() {
       fetchCompositeCandidates("PENDING").then((r) => r.candidates.length),
       fetchRoomConstraintCandidates("PENDING").then((r) => r.candidates.length),
       fetchTeacherCapabilityCandidates("REVIEW_REQUIRED").then((r) => r.candidates.length),
+      fetchTeachingRequirementCandidates("PENDING").then((r) => r.candidates.length),
       fetchChangeSets().then((r) => r.change_sets.filter((c) => c.approval_status === "DRAFT").length),
     ])
-      .then(([findings, composites, roomConstraints, teacherCapabilities, changes]) =>
-        setBadgeCounts({ findings, composites, roomConstraints, teacherCapabilities, changes }),
+      .then(([findings, composites, roomConstraints, teacherCapabilities, teachingRequirements, changes]) =>
+        setBadgeCounts({ findings, composites, roomConstraints, teacherCapabilities, teachingRequirements, changes }),
       )
       .catch(() => {
         // Badge counts are a convenience, not core data - a transient failure here shouldn't block the tab.
@@ -206,6 +211,7 @@ export default function App() {
     if (id === "composites") return badgeCounts.composites;
     if (id === "room-constraints") return badgeCounts.roomConstraints;
     if (id === "teacher-capabilities") return badgeCounts.teacherCapabilities;
+    if (id === "teaching-requirements") return badgeCounts.teachingRequirements;
     if (id === "changes") return badgeCounts.changes;
     return 0;
   };
@@ -277,6 +283,7 @@ export default function App() {
         {tab === "composites" && <CompositeReviewPage />}
         {tab === "room-constraints" && <RoomConstraintsPage />}
         {tab === "teacher-capabilities" && <TeacherCapabilitiesPage />}
+        {tab === "teaching-requirements" && <TeachingRequirementsPage />}
         {tab === "changes" && (
           <ChangeSetsPage
             reference={reference}

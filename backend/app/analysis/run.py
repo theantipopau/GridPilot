@@ -20,7 +20,9 @@ from app.analysis.models import Finding
 from app.analysis.room_feature_rules import run_room_feature_rules
 from app.analysis.room_pool_rules import run_room_pool_rules
 from app.analysis.room_type_review import sync_room_type_candidates
+from app.analysis.staffing_rules import run_staffing_rules
 from app.analysis.teacher_capability_review import sync_teacher_capability_candidates
+from app.analysis.teaching_requirement_review import sync_teaching_requirement_candidates
 from app.audit import log_event
 from app.config import DB_PATH
 
@@ -75,11 +77,13 @@ def run_analysis(db_path=None) -> dict:
         composite_sync = sync_composite_candidates(conn)
         room_type_sync = sync_room_type_candidates(conn)
         teacher_capability_sync = sync_teacher_capability_candidates(conn)
+        teaching_requirement_sync = sync_teaching_requirement_candidates(conn)
         entries = lesson_entries(conn)
         findings = [
             *run_clash_rules(conn), *run_load_rules(conn), *run_consistency_rules(conn),
             *run_room_feature_rules(conn), *run_room_pool_rules(conn),
             *run_capability_rules(conn, entries), *run_availability_rules(conn, entries),
+            *run_staffing_rules(conn),
         ]
         persist_result = _persist(conn, findings)
 
@@ -91,13 +95,15 @@ def run_analysis(db_path=None) -> dict:
             conn, "rules_run_completed", f"Rules engine run: {len(findings)} findings",
             detail={"findings_by_rule": by_rule, "finding_persistence": persist_result,
                     "composite_sync": composite_sync, "room_type_sync": room_type_sync,
-                    "teacher_capability_sync": teacher_capability_sync},
+                    "teacher_capability_sync": teacher_capability_sync,
+                    "teaching_requirement_sync": teaching_requirement_sync},
         )
 
         return {
             "composite_sync": composite_sync,
             "room_type_sync": room_type_sync,
             "teacher_capability_sync": teacher_capability_sync,
+            "teaching_requirement_sync": teaching_requirement_sync,
             "findings_total": len(findings),
             "findings_by_rule": by_rule,
             "finding_persistence": persist_result,

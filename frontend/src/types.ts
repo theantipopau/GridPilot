@@ -171,6 +171,29 @@ export interface RoomTypeConstraintCandidate {
   review_note: string | null;
 }
 
+export interface TeachingRequirementCandidate {
+  id: number;
+  requirement_key: string;
+  source: "BOOTSTRAPPED_FROM_TIMETABLE" | "AUTHORED";
+  class_code: string | null;
+  member_class_codes: string[] | null;
+  subject_code: string | null;
+  roll_class_code: string | null;
+  periods_per_cycle: number;
+  assigned_teacher_code: string | null;
+  assigned_room_code: string | null;
+  matching_lesson_count: number;
+  total_lesson_count: number;
+  planning_year: string;
+  lock_status: "UNLOCKED" | "LOCKED";
+  allocation_priority: "CRITICAL" | "HIGH" | "STANDARD" | "FLEXIBLE" | null;
+  review_status: ReviewStatus;
+  detected_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+}
+
 export interface TimetableEntryLookup {
   entry_id: number;
   day_code: string;

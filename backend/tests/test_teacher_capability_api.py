@@ -96,6 +96,96 @@ def test_review_unknown_candidate_is_404(client, db_path):
     assert resp.status_code == 404
 
 
+def _add_second_review_required_candidate(db_path) -> None:
+    """The shared fixture only produces one candidate (T1 x SUBA) - bulk
+    tests need a second one to actually exercise "bulk"."""
+    conn = sqlite3.connect(db_path)
+    add_lesson(conn, day_id=2, period_id=3, roll_class_id=2, class_name_id=2, teacher_id=2, room_id=2)
+    conn.close()
+
+
+def test_bulk_approve_approves_every_given_id_in_one_action(client, db_path):
+    _run_sync(db_path)
+    _add_second_review_required_candidate(db_path)
+    _run_sync(db_path)
+    pending = client.get("/api/teacher-capabilities/candidates?capability_status=REVIEW_REQUIRED").json()["candidates"]
+    assert len(pending) == 2
+    ids = [c["id"] for c in pending]
+
+    resp = client.post(
+        "/api/teacher-capabilities/candidates/bulk-approve",
+        json={"candidate_ids": ids, "reviewed_by": "tester", "note": "Confirmed against the staffing list"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["approved_count"] == 2
+    assert sorted(body["approved_ids"]) == sorted(ids)
+    assert body["missing_ids"] == []
+    assert body["already_reviewed_ids"] == []
+
+    assert client.get("/api/teacher-capabilities/candidates?capability_status=REVIEW_REQUIRED").json()["candidates"] == []
+    eligible = client.get("/api/teacher-capabilities/candidates?capability_status=ELIGIBLE").json()["candidates"]
+    assert len(eligible) == 2
+
+
+def test_bulk_approve_reports_but_does_not_choke_on_an_already_reviewed_id(client, db_path):
+    _run_sync(db_path)
+    _add_second_review_required_candidate(db_path)
+    _run_sync(db_path)
+    ids = [c["id"] for c in client.get("/api/teacher-capabilities/candidates?capability_status=REVIEW_REQUIRED").json()["candidates"]]
+
+    client.post(f"/api/teacher-capabilities/candidates/{ids[0]}/reject", json={"reviewed_by": "someone-else"})
+
+    resp = client.post(
+        "/api/teacher-capabilities/candidates/bulk-approve",
+        json={"candidate_ids": ids, "reviewed_by": "tester"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["approved_count"] == 1
+    assert body["approved_ids"] == [ids[1]]
+    assert body["already_reviewed_ids"] == [ids[0]]
+
+    rejected = client.get("/api/teacher-capabilities/candidates?capability_status=NOT_ELIGIBLE").json()["candidates"]
+    assert [c["id"] for c in rejected] == [ids[0]]
+
+
+def test_bulk_approve_reports_a_missing_id_without_failing_the_whole_batch(client, db_path):
+    _run_sync(db_path)
+    candidate_id = client.get("/api/teacher-capabilities/candidates?capability_status=REVIEW_REQUIRED").json()["candidates"][0]["id"]
+
+    resp = client.post(
+        "/api/teacher-capabilities/candidates/bulk-approve",
+        json={"candidate_ids": [candidate_id, 999999], "reviewed_by": "tester"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["approved_count"] == 1
+    assert body["approved_ids"] == [candidate_id]
+    assert body["missing_ids"] == [999999]
+
+
+def test_bulk_approve_rejects_an_empty_id_list(client, db_path):
+    resp = client.post(
+        "/api/teacher-capabilities/candidates/bulk-approve",
+        json={"candidate_ids": [], "reviewed_by": "tester"},
+    )
+    assert resp.status_code == 400
+
+
+def test_bulk_approve_logs_one_audit_event_for_the_whole_batch(client, db_path):
+    _run_sync(db_path)
+    _add_second_review_required_candidate(db_path)
+    _run_sync(db_path)
+    ids = [c["id"] for c in client.get("/api/teacher-capabilities/candidates?capability_status=REVIEW_REQUIRED").json()["candidates"]]
+
+    client.post("/api/teacher-capabilities/candidates/bulk-approve", json={"candidate_ids": ids, "reviewed_by": "tester"})
+
+    events = client.get("/api/audit?event_type=teacher_capability_bulk_approved").json()["events"]
+    assert len(events) == 1
+    assert events[0]["actor"] == "tester"
+
+
 def test_reviewed_capability_survives_a_teacher_table_rebuild(client, db_path):
     """The actual point of keying by teacher_code, not teacher_id: simulate
     what a re-ingest does to the teacher table (delete + reinsert with new

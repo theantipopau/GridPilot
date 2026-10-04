@@ -52,7 +52,7 @@ export default function BulkApproveBar({ count, label, reviewedBy, onConfirm }: 
       {!open ? (
         <div className="flex items-center justify-between gap-3">
           <span className="text-emerald-900">
-            <span className="font-medium">{count}</span> candidate{count === 1 ? "" : "s"} at {label} - a clean signal
+            <span className="font-medium">{count}</span> candidate{count === 1 ? "" : "s"} — {label} — a clean signal
             worth approving in one action instead of {count} clicks.
           </span>
           <button

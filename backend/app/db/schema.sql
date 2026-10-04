@@ -750,6 +750,55 @@ CREATE TABLE IF NOT EXISTS school_enrolment_declaration (
 -- ids) on every re-ingest (app/db/resync.py). A code is the one thing
 -- about each that's stable across terms - this table needs no
 -- resync.py snapshot/restore handling as a result, same as staff_role.
+-- The demand model: what the school intends to run, bootstrapped from the
+-- currently-resolved timetable (docs/roadmap-v3.md 3.1,
+-- docs/staff-capability-model.md). Everything built so far describes an
+-- already-resolved timetable; nothing describes intent. Same detect ->
+-- human-confirm -> use discipline as class_room_type_constraint above: a
+-- bootstrapped row is never asserted as fact, and re-syncing never
+-- silently rewrites an already-reviewed row's facts (see
+-- app/analysis/teaching_requirement_review.py).
+--
+-- One row per class_name not in an APPROVED composite group, one row per
+-- APPROVED composite_group (collapsing its members) - per staff-
+-- capability-model.md's explicit recommendation, so composite classes
+-- don't double-count scarcity/load. requirement_key is the code-based
+-- identity that survives re-ingest (a class code, or a deterministic
+-- "COMPOSITE:<sorted member codes>" string for the composite path) - see
+-- app/db/resync.py, same reasoning as every other human-reviewed table
+-- keyed by code rather than a source-derived internal id.
+--
+-- lock_status/allocation_priority are unused today - included now per
+-- docs/staffing-priority-policy.md's explicit instruction ("written now
+-- so schema fields are in place from the start rather than retrofitted"),
+-- the one place in this codebase pre-declaring a column ahead of use as a
+-- deliberate, documented choice (contrast solver_run's weights_json,
+-- deliberately withheld until real weights exist).
+CREATE TABLE IF NOT EXISTS teaching_requirement (
+    id INTEGER PRIMARY KEY,
+    requirement_key TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL DEFAULT 'BOOTSTRAPPED_FROM_TIMETABLE'
+        CHECK (source IN ('BOOTSTRAPPED_FROM_TIMETABLE', 'AUTHORED')),
+    class_name_id INTEGER REFERENCES class_name(id),
+    composite_group_id INTEGER REFERENCES composite_group(id),
+    roll_class_id INTEGER REFERENCES roll_class(id),
+    subject_id INTEGER REFERENCES subject(id),
+    periods_per_cycle INTEGER NOT NULL,
+    assigned_teacher_id INTEGER REFERENCES teacher(id),
+    assigned_room_id INTEGER REFERENCES room(id),
+    matching_lesson_count INTEGER NOT NULL,
+    total_lesson_count INTEGER NOT NULL,
+    planning_year TEXT NOT NULL,
+    lock_status TEXT NOT NULL DEFAULT 'UNLOCKED' CHECK (lock_status IN ('UNLOCKED', 'LOCKED')),
+    allocation_priority TEXT CHECK (allocation_priority IN ('CRITICAL', 'HIGH', 'STANDARD', 'FLEXIBLE')),
+    review_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (review_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    detected_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    review_note TEXT,
+    CHECK (class_name_id IS NOT NULL OR composite_group_id IS NOT NULL)
+);
+
 CREATE TABLE IF NOT EXISTS teacher_capability (
     id INTEGER PRIMARY KEY,
     teacher_code TEXT NOT NULL,

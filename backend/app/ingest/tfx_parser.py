@@ -313,7 +313,36 @@ class TfxIngester:
 
     def _ingest_subjects_and_class_names(self) -> None:
         cur = self.conn.cursor()
+        class_name_id_by_code: dict[str, int] = {}
         for c in self.data.get("ClassNames", []):
+            code = c["Code"]
+            if code in class_name_id_by_code:
+                # Real, observed case: a still-under-construction export
+                # can carry two ClassNames entries sharing a Code with
+                # different ClassNameIDs - found against a genuine 2027
+                # construction-in-progress file, where every duplicate was
+                # an orphaned leftover (referenced nowhere else in the
+                # file) next to the one actually wired into
+                # ClassGroupCourses/Timetable. schema.sql's own model
+                # treats the code as a class's true identity (one row per
+                # offering), so every ClassNameID sharing a code is mapped
+                # onto the single first-seen row here rather than
+                # inserted again - class_name_id_by_source is the only
+                # thing every downstream section (ClassGroupCourses, RUR
+                # references, Timetable entries) looks up, so whichever
+                # GUID they actually reference still resolves correctly.
+                # Logged, never silently absorbed - see docs/rules.md's
+                # "fail loudly" discipline.
+                existing_id = class_name_id_by_code[code]
+                self.class_name_id_by_source[c["ClassNameID"]] = existing_id
+                self.log_discrepancy(
+                    "class_name_duplicate_code", "warning",
+                    f"Two ClassNames entries share the code '{code}' - the duplicate was merged onto "
+                    "the first-seen class rather than inserted separately.",
+                    detail={"code": code, "kept_class_name_id": existing_id, "duplicate_source_guid": c["ClassNameID"]},
+                )
+                continue
+
             subject_code = c.get("SubjectCode")
             subject_id = None
             if subject_code:
@@ -330,11 +359,12 @@ class TfxIngester:
             cur.execute(
                 "INSERT INTO class_name (source_guid, code, name, subject_id, suffix, faculty_id) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (c["ClassNameID"], c["Code"], c.get("Name"), subject_id, c.get("Suffix"), faculty_id),
+                (c["ClassNameID"], code, c.get("Name"), subject_id, c.get("Suffix"), faculty_id),
             )
             class_name_id = cur.lastrowid
             self.class_name_id_by_source[c["ClassNameID"]] = class_name_id
             self.class_name_subject_code_by_id[class_name_id] = subject_code
+            class_name_id_by_code[code] = class_name_id
 
     def _ingest_class_groups(self) -> None:
         cur = self.conn.cursor()

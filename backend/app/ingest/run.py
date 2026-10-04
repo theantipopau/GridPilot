@@ -4,6 +4,7 @@ read from it - see app.config for the read-only/working-dir separation."""
 
 import datetime as dt
 import hashlib
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -75,7 +76,7 @@ def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
     return {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
 
 
-def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None) -> dict[str, int]:
+def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None, validate_against_csvs=True) -> dict[str, int]:
     """Fresh-loads the working DB from the .tfx export (primary source),
     cross-validates against the CSV exports, layers in the eMinerva
     enrolment list, then ingests every Student Options (.sfx) file found
@@ -100,33 +101,71 @@ def run_full_ingest(tfx_path=None, db_path=None, sfx_paths=None) -> dict[str, in
     def _do_ingest() -> None:
         run_id = start_ingest_run(conn, str(path))
         ingest_tfx(conn, path, run_id)
-        run_all_validations(conn, run_id, {
-            "rooms": ROOM_DETAILS_CSV,
-            "periods": PERIOD_DETAILS_CSV,
-            "teachers": TEACHER_DETAILS_CSV,
-            "roll_classes": ROLL_CLASS_DETAILS_CSV,
-            "students": STUDENT_DETAILS_CSV,
-            "master_timetable": MASTER_TIMETABLE_CYCLE_CSV,
-        })
-        ingest_eminerva_scourse(conn, run_id, EMINERVA_SCOURSE_PATH)
+        # CSV/eMinerva cross-validation reads from a *fixed* path under
+        # SOURCE_DIR, independent of whatever .tfx was actually ingested -
+        # correct for the CLI workflow, where a term's .tfx and its CSV/
+        # eMinerva exports are dropped into Timetabler Export/ together,
+        # but wrong for a browser-uploaded .tfx describing a different
+        # cohort entirely (e.g. next year's construction file cross-
+        # checked against this year's leftover CSVs - guaranteed to
+        # "fail loudly" over mismatches that were never real problems).
+        # validate_against_csvs=False (the browser upload path, see
+        # app/api/ingest.py) honours this module's own documented
+        # contract: "a .tfx uploaded on its own is a complete, valid
+        # ingest" without them.
+        if validate_against_csvs:
+            run_all_validations(conn, run_id, {
+                "rooms": ROOM_DETAILS_CSV,
+                "periods": PERIOD_DETAILS_CSV,
+                "teachers": TEACHER_DETAILS_CSV,
+                "roll_classes": ROLL_CLASS_DETAILS_CSV,
+                "students": STUDENT_DETAILS_CSV,
+                "master_timetable": MASTER_TIMETABLE_CYCLE_CSV,
+            })
+            ingest_eminerva_scourse(conn, run_id, EMINERVA_SCOURSE_PATH)
         ingest_all_sfx(conn, sfx_files, run_id)
         finish_ingest_run(conn, run_id)
 
     is_first_ingest = not target_db_path.exists()
     if is_first_ingest:
         conn = fresh_database(target_db_path)
-    else:
-        conn = get_connection(target_db_path)
-        init_schema(conn)  # idempotent (CREATE TABLE IF NOT EXISTS) - picks up any schema additions
-
-    try:
-        if is_first_ingest:
+        try:
             _do_ingest()
-        else:
-            resync_source_tables(conn, _do_ingest)
-        return table_counts(conn)
-    finally:
+            return table_counts(conn)
+        finally:
+            conn.close()
+
+    # A re-ingest's resync_source_tables() deletes every source-derived
+    # table in one committed step before repopulating them from the new
+    # file (see app/db/resync.py) - a crash partway through repopulation
+    # (a malformed source file, a parser bug on data this app has never
+    # seen before) would otherwise leave the working database with those
+    # tables permanently empty and every human review decision gone, with
+    # no way back. Found the hard way: ingesting a genuinely new, still-
+    # under-construction .tfx failed on a duplicate class_name.code deep
+    # in the parser, after the old data was already wiped.
+    #
+    # A whole-file backup, restored on any failure, is the simplest
+    # correct guarantee here - the ingest pipeline commits at several
+    # points internally (start_ingest_run, finish_ingest_run, each
+    # parser), so a single in-process transaction/rollback can't be
+    # trusted to undo all of it; only the file itself is a safe unit.
+    backup_path = target_db_path.with_name(target_db_path.name + ".pre-ingest-backup")
+    shutil.copy2(target_db_path, backup_path)
+    conn = get_connection(target_db_path)
+    init_schema(conn)  # idempotent (CREATE TABLE IF NOT EXISTS) - picks up any schema additions
+    try:
+        resync_source_tables(conn, _do_ingest)
+        result = table_counts(conn)
+    except Exception:
         conn.close()
+        shutil.copy2(backup_path, target_db_path)
+        raise
+    else:
+        conn.close()
+        return result
+    finally:
+        backup_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

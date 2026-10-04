@@ -14,6 +14,7 @@ export type Tab =
   | "composites"
   | "room-constraints"
   | "teacher-capabilities"
+  | "teaching-requirements"
   | "changes"
   | "audit";
 

@@ -33,6 +33,7 @@ import type {
   TeacherCapabilityCandidate,
   TeacherProfile,
   TeacherSummary,
+  TeachingRequirementCandidate,
   TimetableEntry,
   TimetableEntryLookup,
   TimetableResponse,
@@ -375,6 +376,32 @@ export function reviewTeacherCapabilityCandidate(
   note?: string,
 ): Promise<{ id: number; capability_status: CapabilityStatus }> {
   return postJson(`${BASE}/teacher-capabilities/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
+}
+
+export function bulkApproveTeacherCapabilityCandidates(
+  candidateIds: number[],
+  reviewedBy: string,
+  note?: string,
+): Promise<{ approved_count: number; approved_ids: number[]; missing_ids: number[]; already_reviewed_ids: number[] }> {
+  return postJson(`${BASE}/teacher-capabilities/candidates/bulk-approve`, {
+    candidate_ids: candidateIds, reviewed_by: reviewedBy, note,
+  });
+}
+
+export function fetchTeachingRequirementCandidates(
+  reviewStatus?: ReviewStatus,
+): Promise<{ candidates: TeachingRequirementCandidate[] }> {
+  const qs = reviewStatus ? `?review_status=${reviewStatus}` : "";
+  return getJson(`${BASE}/teaching-requirements/candidates${qs}`);
+}
+
+export function reviewTeachingRequirementCandidate(
+  id: number,
+  decision: "approve" | "reject",
+  reviewedBy: string,
+  note?: string,
+): Promise<{ id: number; review_status: ReviewStatus }> {
+  return postJson(`${BASE}/teaching-requirements/candidates/${id}/${decision}`, { reviewed_by: reviewedBy, note });
 }
 
 export function fetchBlockingLines(): Promise<BlockingLinesResponse> {

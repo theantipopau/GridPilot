@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchTeacherCapabilityCandidates, reviewTeacherCapabilityCandidate } from "../api";
+import { bulkApproveTeacherCapabilityCandidates, fetchTeacherCapabilityCandidates, reviewTeacherCapabilityCandidate } from "../api";
 import TeacherCapabilityQueue from "../components/TeacherCapabilityQueue";
 import LoadingState from "../components/LoadingState";
 import type { CapabilityStatus, TeacherCapabilityCandidate } from "../types";
@@ -24,6 +24,12 @@ export default function TeacherCapabilitiesPage() {
     load(capabilityStatus);
   };
 
+  const handleBulkApprove = async (ids: number[], reviewedBy: string, note?: string) => {
+    const result = await bulkApproveTeacherCapabilityCandidates(ids, reviewedBy, note);
+    load(capabilityStatus);
+    return result;
+  };
+
   if (error) return <div className="p-6 text-red-600">Failed to load teacher-capability candidates: {error}</div>;
   if (!candidates) return <LoadingState label="Loading teacher-capability candidates…" />;
 
@@ -33,6 +39,7 @@ export default function TeacherCapabilitiesPage() {
       capabilityStatus={capabilityStatus}
       onStatusChange={setCapabilityStatus}
       onReview={handleReview}
+      onBulkApprove={handleBulkApprove}
     />
   );
 }

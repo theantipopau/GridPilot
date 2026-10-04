@@ -141,6 +141,53 @@ def test_status_and_reference_work_normally_after_a_real_import(client):
     assert ref.json() == {"days": [], "periods": [], "rooms": [], "teachers": [], "roll_classes": [], "year_levels": []}
 
 
+def test_a_stale_mismatched_csv_does_not_block_a_browser_upload(client, tmp_path, monkeypatch):
+    """The real bug this guards against: found ingesting a genuinely
+    different year's construction file through the browser while last
+    year's CSV exports were still sitting at their fixed path under
+    Timetabler Export/ - cross-validation failed loudly over a student
+    code mismatch that was never a real problem, since a browser upload
+    has no CSVs of its own at all (see app/ingest/run.py's
+    validate_against_csvs). Unlike the `client` fixture's default (every
+    CSV path pointed at a location that doesn't exist), this points
+    STUDENT_DETAILS_CSV at a real file with data that would mismatch the
+    uploaded .tfx, to prove the browser path skips validating against it
+    entirely rather than merely "getting lucky" because nothing was there."""
+    student_csv = tmp_path / "Student Details.csv"
+    student_csv.write_text("Student Code,Roll Class\n999999,7A\n", encoding="utf-8")
+    monkeypatch.setattr(ingest_run, "STUDENT_DETAILS_CSV", student_csv)
+
+    resp = client.post(
+        "/api/ingest/upload",
+        files=[("tfx_file", ("Term 3.tfx", json.dumps(MINIMAL_TFX), "application/json"))],
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_the_same_mismatched_csv_still_fails_loudly_for_a_direct_cli_style_call(tmp_path, monkeypatch):
+    """Confirms validate_against_csvs=True (the default, used by the CLI
+    entry point python -m app.ingest.run) still preserves the original
+    "fail loudly on a real mismatch" behaviour - the browser upload's
+    opt-out must not have weakened this for the workflow it was designed
+    for (a term's .tfx and its own CSV exports, dropped into
+    Timetabler Export/ together)."""
+    db_path = tmp_path / "test.sqlite3"
+    tfx_path = tmp_path / "Term 3.tfx"
+    tfx_path.write_text(json.dumps(MINIMAL_TFX), encoding="utf-8")
+    student_csv = tmp_path / "Student Details.csv"
+    student_csv.write_text("Student Code,Roll Class\n999999,7A\n", encoding="utf-8")
+
+    monkeypatch.setattr(ingest_run, "STUDENT_DETAILS_CSV", student_csv)
+    missing = tmp_path / "no-such-cross-validation-file"
+    for name in ("ROOM_DETAILS_CSV", "PERIOD_DETAILS_CSV", "TEACHER_DETAILS_CSV",
+                 "ROLL_CLASS_DETAILS_CSV", "MASTER_TIMETABLE_CYCLE_CSV", "EMINERVA_SCOURSE_PATH"):
+        monkeypatch.setattr(ingest_run, name, missing)
+
+    from app.ingest.errors import IngestError
+    with pytest.raises(IngestError, match="999999"):
+        ingest_run.run_full_ingest(tfx_path=tfx_path, db_path=db_path, sfx_paths=[])
+
+
 def test_status_reflects_a_successful_import(client):
     tfx_with_a_day = dict(MINIMAL_TFX, Days=[{"DayID": "d1", "Code": "Mon A"}])
     resp = client.post(

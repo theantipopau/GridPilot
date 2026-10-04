@@ -761,14 +761,14 @@ the set at roughly **M** overall, as originally estimated.
 |---|---|---|---|---|
 | 1 | ✅ Parse `Meetings` → availability constraint + rule | 1.1 | — | S |
 | 2 | ✅ `suggest_fixes()` honours room-type/pool | 1.2 | — | S |
-| 3 | 🟡 Bulk review — room-type done (167/199 unblocked), teacher-capability open (no clean signal found) | 1.3 | — | M |
+| 3 | ✅ Bulk review — room-type done (167/199 unblocked, threshold-based); teacher-capability done 2026-09-14 via checkbox multi-select instead (no clean confidence threshold exists in the real distribution, so a human ticks the set) | 1.3 | — | M |
 | 4 | ✅ `solver_run` + run-compare — persistence/history/compare built; discard-until-kept + adjustable weights still open | 4.2 | — | M |
 | 5 | ✅ Printable/exportable timetables — print-CSS over existing grids built; batch export, CSV/JSON, per-student deferred | 5 | — | M |
 | 6 | ✅ Blocking analysis on revealed demand — Phase 1 built (impossibility matrix, line pressure, under-subscribed classes); Phase 2 CP-SAT re-optimisation is #11 | 4.1 | — | M |
 | 7 | ✅ Infeasibility explanation — per-entry "is there any legal slot at all" diagnosis + local-Ollama explanation built; full MUS extraction deliberately not attempted | 4.3 | — (#4 done) | M |
 | 8 | ✅ Live legal-slot feedback — §12.6 per-entry endpoint + dropdown shading built, reinterpreted from drag (no precedent in this UI) to the existing move-manually form; explain-on-hover and scenario diff still open | 4.4 | per-entry candidate endpoint (§12.6 of the plan doc - not built by #2, which fixed the room-type/pool gap but not this) | S–M |
 | 9 | ✅ Portfolio advisor — set summarisation (counts + entity leaderboard) + Ollama explanation built, scoped to a filtered finding set, not a general NL query engine | 4.5 | — | M |
-| 10 | `teaching_requirement` — bootstrap + review | 3.1 | — | L |
+| 10 | 🟡 `teaching_requirement` — bootstrap + review built 2026-09-14 (`docs/teaching-requirement.md`); not yet verified against the real database (no working Python/Node toolchain in the session that built it) | 3.1 | — | L |
 | 11 | Blocking optimiser (CP-SAT) | 4.1 | #6, #10 | L |
 | 12 | Teacher allocation engine | 3.2 | #10 | L |
 | 13 | Parse `UnscheduledDuties` + `Groups` | 1.4, 2 | school Q3 for load | S |
@@ -787,6 +787,30 @@ tool GridPilot already is. Everything below it builds the system TTS
 currently is. They are both defensible; they are not the same project,
 and the second one should be started deliberately rather than drifted
 into.
+
+*2026-09-14 update: item 3's teacher-capability half is built - a
+checkbox multi-select on the Teacher Capabilities queue plus `POST
+/teacher-capabilities/candidates/bulk-approve`, structurally identical to
+room-type's bulk-approve (explicit id list, one audit event, "type the
+exact count" gate) but without a confidence-threshold auto-selection,
+since none exists in the real `lesson_count` distribution. Item 10
+(`teaching_requirement`) is built - schema, bootstrap detection
+(`app/analysis/teaching_requirement.py`), the review sync
+(`teaching_requirement_review.py`), re-ingest persistence
+(`app/db/resync.py`), a new `teaching_requirement_blocking` finding
+(`app/analysis/staffing_rules.py`, per `docs/staffing-priority-policy.md`'s
+explicit recommendation), the API, and a new Teaching Requirements queue
+page - full detail in `docs/teaching-requirement.md`. **Not yet verified
+against the real database or exercised through a live re-ingest** - the
+session that built it had no working Python or Node toolchain available
+to run `python -m pytest`, real ingestion, or `npm run build`. Treat
+items 3 and 10 as code-complete, not yet real-data-verified, until that
+pass happens (synthetic-fixture tests were written throughout and should
+be run first). A cloud-hosting tradeoffs note
+(`docs/cloud-hosting-tradeoffs.md`) was also written this session,
+unrelated to the sequencing table above - a governance and architecture
+decision record for an eventual Cloudflare-hosted, real-data deployment,
+not itself a roadmap item.*
 
 ---
 

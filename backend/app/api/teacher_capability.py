@@ -93,3 +93,65 @@ def reject_teacher_capability_candidate(
     candidate_id: int, request: ReviewRequest, conn: sqlite3.Connection = Depends(get_db_writable)
 ) -> dict:
     return _review(candidate_id, "NOT_ELIGIBLE", request, conn)
+
+
+class BulkApproveRequest(BaseModel):
+    candidate_ids: list[int]
+    reviewed_by: str
+    note: str | None = None
+
+
+@router.post("/teacher-capabilities/candidates/bulk-approve")
+def bulk_approve_teacher_capability_candidates(
+    request: BulkApproveRequest, conn: sqlite3.Connection = Depends(get_db_writable)
+) -> dict:
+    """docs/roadmap-v3.md 1.3: unlike room-type's 100%-consistency signal,
+    teacher-capability's only signal (lesson_count) has no clean cutoff in
+    the real distribution, so there is no threshold-based auto-selection
+    here - the frontend's checkbox multi-select sends whatever set of
+    REVIEW_REQUIRED ids a human actually ticked, same "what was confirmed
+    in the UI is exactly what gets written" discipline as
+    room_constraints.py's bulk-approve, structured identically: a
+    candidate id that no longer exists or was already reviewed by someone
+    else in the meantime is skipped and reported, never silently dropped
+    or force-overwritten, and the whole batch is one audit event."""
+    if not request.candidate_ids:
+        raise HTTPException(status_code=400, detail="candidate_ids must not be empty")
+
+    placeholders = ",".join("?" for _ in request.candidate_ids)
+    rows = conn.execute(
+        f"SELECT id, capability_status FROM teacher_capability WHERE id IN ({placeholders})",
+        request.candidate_ids,
+    ).fetchall()
+    found = {r["id"]: r["capability_status"] for r in rows}
+    missing_ids = [cid for cid in request.candidate_ids if cid not in found]
+    already_reviewed_ids = [cid for cid, status in found.items() if status != "REVIEW_REQUIRED"]
+    approved_ids = [cid for cid, status in found.items() if status == "REVIEW_REQUIRED"]
+
+    now = dt.datetime.now(dt.UTC).isoformat()
+    for cid in approved_ids:
+        conn.execute(
+            "UPDATE teacher_capability SET capability_status = 'ELIGIBLE', updated_at = ? WHERE id = ?",
+            (now, cid),
+        )
+    # One audit event for the whole batch, not one per record - same as
+    # room_constraints.py's bulk-approve.
+    log_event(
+        conn, "teacher_capability_bulk_approved",
+        f"{len(approved_ids)} teacher-capability candidates bulk-approved",
+        actor=request.reviewed_by,
+        detail={
+            "candidate_ids": approved_ids, "note": request.note,
+            "missing_ids": missing_ids, "already_reviewed_ids": already_reviewed_ids,
+        },
+    )
+    conn.commit()
+    conn.close()
+
+    if approved_ids:
+        run_analysis()
+
+    return {
+        "approved_count": len(approved_ids), "approved_ids": approved_ids,
+        "missing_ids": missing_ids, "already_reviewed_ids": already_reviewed_ids,
+    }

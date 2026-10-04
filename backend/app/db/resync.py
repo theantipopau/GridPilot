@@ -44,8 +44,8 @@ from app.audit import log_event
 # table - the one holding the FK column - always comes before the parent
 # table it references). Anything NOT in this list (finding, audit_event,
 # change_set, ingest_run, ingest_discrepancy, and the composite_group*/
-# class_room_type_constraint/proposed_change* tables, handled separately
-# below) is left untouched by this delete pass.
+# class_room_type_constraint/teaching_requirement/proposed_change* tables,
+# handled separately below) is left untouched by this delete pass.
 SOURCE_TABLES_IN_DELETE_ORDER = [
     "class_group_course_room_override",
     "enrolment",
@@ -125,6 +125,44 @@ def _snapshot_room_type_constraints(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _snapshot_teaching_requirements(conn: sqlite3.Connection) -> list[dict]:
+    """Snapshots every row (PENDING included, same as
+    _snapshot_room_type_constraints) by code, since class_name_id/
+    composite_group_id/roll_class_id/subject_id/assigned_teacher_id/
+    assigned_room_id are all source-derived internal ids that go stale
+    the moment SOURCE_TABLES_IN_DELETE_ORDER is rebuilt below."""
+    rows = conn.execute(
+        """
+        SELECT tr.id, tr.requirement_key, tr.source, tr.periods_per_cycle, tr.matching_lesson_count,
+               tr.total_lesson_count, tr.planning_year, tr.lock_status, tr.allocation_priority,
+               tr.review_status, tr.detected_at, tr.reviewed_at, tr.reviewed_by, tr.review_note,
+               cn.code AS class_code, s.source_code AS subject_code,
+               rc.code AS roll_class_code, at.code AS assigned_teacher_code, ar.code AS assigned_room_code
+        FROM teaching_requirement tr
+        LEFT JOIN class_name cn ON cn.id = tr.class_name_id
+        LEFT JOIN subject s ON s.id = tr.subject_id
+        LEFT JOIN roll_class rc ON rc.id = tr.roll_class_id
+        LEFT JOIN teacher at ON at.id = tr.assigned_teacher_id
+        LEFT JOIN room ar ON ar.id = tr.assigned_room_id
+        """
+    ).fetchall()
+    member_codes_by_group: dict[int, list[str]] = {}
+    for r in conn.execute(
+        "SELECT cgm.composite_group_id, cn.code AS class_code "
+        "FROM composite_group_member cgm JOIN class_name cn ON cn.id = cgm.class_name_id"
+    ):
+        member_codes_by_group.setdefault(r["composite_group_id"], []).append(r["class_code"])
+
+    composite_group_id_by_req = {
+        r["id"]: r["composite_group_id"]
+        for r in conn.execute("SELECT id, composite_group_id FROM teaching_requirement WHERE composite_group_id IS NOT NULL")
+    }
+    return [
+        {**dict(r), "member_class_codes": member_codes_by_group.get(composite_group_id_by_req.get(r["id"]), None)}
+        for r in rows
+    ]
+
+
 def _snapshot_proposed_changes(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT pc.id, pc.change_set_id, pc.reason, rc.code AS roll_class_code, "
@@ -154,9 +192,15 @@ def _snapshot_proposed_changes(conn: sqlite3.Connection) -> list[dict]:
 def _detach_app_owned_links(conn: sqlite3.Connection) -> None:
     """Removes the rows that hold a *live* FK into source tables, now that
     they've been snapshotted by code above. composite_group/proposed_change/
-    class_room_type_constraint are re-created after the rebuild from their
-    snapshots; their parent change_set row (proposed_change's case) is
-    untouched throughout."""
+    class_room_type_constraint/teaching_requirement are re-created after
+    the rebuild from their snapshots; their parent change_set row
+    (proposed_change's case) is untouched throughout."""
+    # teaching_requirement rows carry live FKs into composite_group (and the
+    # source tables), so it must be cleared BEFORE composite_group is deleted,
+    # not after - with PRAGMA foreign_keys = ON, deleting the parent first
+    # fails with a FOREIGN KEY constraint error (caught by
+    # test_composite_teaching_requirement_survives_reingest_...).
+    conn.execute("DELETE FROM teaching_requirement")
     conn.execute("DELETE FROM composite_group_member")
     conn.execute("DELETE FROM composite_group")
     conn.execute("DELETE FROM class_room_type_constraint")
@@ -229,6 +273,77 @@ def _restore_room_type_constraints(conn: sqlite3.Connection, snapshot: list[dict
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (class_name_id, c["room_type"], c["review_status"], c["matching_lesson_count"], c["total_lesson_count"],
              c["detected_at"], c["reviewed_at"], c["reviewed_by"], c["review_note"]),
+        )
+        restored += 1
+    return {"restored": restored, "dropped": dropped}
+
+
+def _restore_teaching_requirements(conn: sqlite3.Connection, snapshot: list[dict]) -> dict[str, int]:
+    """Must run after _restore_composite_groups - a composite-path row is
+    re-linked by re-finding the freshly-restored composite_group whose
+    member-code set matches the snapshot's, since composite_group itself
+    gets a brand new id on every re-ingest (see _restore_composite_groups
+    above, which never tries to preserve the old id)."""
+    class_name_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM class_name")}
+    subject_id_by_code = {r["source_code"]: r["id"] for r in conn.execute("SELECT id, source_code FROM subject")}
+    roll_class_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM roll_class")}
+    teacher_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM teacher")}
+    room_id_by_code = {r["code"]: r["id"] for r in conn.execute("SELECT id, code FROM room")}
+
+    member_codes_by_group: dict[int, set[str]] = {}
+    for r in conn.execute(
+        "SELECT cgm.composite_group_id, cn.code AS class_code "
+        "FROM composite_group_member cgm JOIN class_name cn ON cn.id = cgm.class_name_id"
+    ):
+        member_codes_by_group.setdefault(r["composite_group_id"], set()).add(r["class_code"])
+    group_id_by_member_codes = {frozenset(v): k for k, v in member_codes_by_group.items()}
+
+    restored = 0
+    dropped = 0
+    for t in snapshot:
+        if t["member_class_codes"] is not None:
+            class_name_id = None
+            composite_group_id = group_id_by_member_codes.get(frozenset(t["member_class_codes"]))
+            if composite_group_id is None:
+                dropped += 1
+                log_event(
+                    conn, "teaching_requirement_dropped_on_reingest",
+                    f"A {t['review_status']} teaching requirement could not be carried forward into the new "
+                    "export - its composite group's member classes no longer match any approved composite.",
+                    entity_type="teaching_requirement",
+                    detail={"requirement_key": t["requirement_key"], "review_status": t["review_status"]},
+                )
+                continue
+        else:
+            composite_group_id = None
+            class_name_id = class_name_id_by_code.get(t["class_code"])
+            if class_name_id is None:
+                dropped += 1
+                log_event(
+                    conn, "teaching_requirement_dropped_on_reingest",
+                    f"A {t['review_status']} teaching requirement could not be carried forward into the new "
+                    "export - its class code no longer exists.",
+                    entity_type="teaching_requirement",
+                    detail={"requirement_key": t["requirement_key"], "class_code": t["class_code"],
+                            "review_status": t["review_status"]},
+                )
+                continue
+
+        subject_id = subject_id_by_code.get(t["subject_code"]) if t["subject_code"] else None
+        roll_class_id = roll_class_id_by_code.get(t["roll_class_code"]) if t["roll_class_code"] else None
+        assigned_teacher_id = teacher_id_by_code.get(t["assigned_teacher_code"]) if t["assigned_teacher_code"] else None
+        assigned_room_id = room_id_by_code.get(t["assigned_room_code"]) if t["assigned_room_code"] else None
+
+        conn.execute(
+            "INSERT INTO teaching_requirement (requirement_key, source, class_name_id, composite_group_id, "
+            "roll_class_id, subject_id, periods_per_cycle, assigned_teacher_id, assigned_room_id, "
+            "matching_lesson_count, total_lesson_count, planning_year, lock_status, allocation_priority, "
+            "review_status, detected_at, reviewed_at, reviewed_by, review_note) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (t["requirement_key"], t["source"], class_name_id, composite_group_id, roll_class_id, subject_id,
+             t["periods_per_cycle"], assigned_teacher_id, assigned_room_id, t["matching_lesson_count"],
+             t["total_lesson_count"], t["planning_year"], t["lock_status"], t["allocation_priority"],
+             t["review_status"], t["detected_at"], t["reviewed_at"], t["reviewed_by"], t["review_note"]),
         )
         restored += 1
     return {"restored": restored, "dropped": dropped}
@@ -323,6 +438,7 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
     keeping - i.e. every ingest after the first."""
     composite_snapshot = _snapshot_composite_groups(conn)
     room_type_snapshot = _snapshot_room_type_constraints(conn)
+    teaching_requirement_snapshot = _snapshot_teaching_requirements(conn)
     proposed_change_snapshot = _snapshot_proposed_changes(conn)
 
     _detach_app_owned_links(conn)
@@ -333,6 +449,8 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
 
     composite_result = _restore_composite_groups(conn, composite_snapshot)
     room_type_result = _restore_room_type_constraints(conn, room_type_snapshot)
+    # Must follow _restore_composite_groups - see that function's docstring.
+    teaching_requirement_result = _restore_teaching_requirements(conn, teaching_requirement_snapshot)
     proposed_result = _restore_proposed_changes(conn, proposed_change_snapshot)
     conn.commit()
 
@@ -340,12 +458,14 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
         conn, "reingest_state_carried_forward",
         f"Re-ingest carried forward {composite_result['restored']} composite review(s) "
         f"({composite_result['dropped']} dropped), {room_type_result['restored']} room-type "
-        f"constraint(s) ({room_type_result['dropped']} dropped), and {proposed_result['restored']} "
+        f"constraint(s) ({room_type_result['dropped']} dropped), "
+        f"{teaching_requirement_result['restored']} teaching requirement(s) "
+        f"({teaching_requirement_result['dropped']} dropped), and {proposed_result['restored']} "
         f"proposed change(s) ({proposed_result['dropped']} dropped).",
         detail={"composite_groups": composite_result, "room_type_constraints": room_type_result,
-                "proposed_changes": proposed_result},
+                "teaching_requirements": teaching_requirement_result, "proposed_changes": proposed_result},
     )
     conn.commit()
 
     return {"composite_groups": composite_result, "room_type_constraints": room_type_result,
-            "proposed_changes": proposed_result}
+            "teaching_requirements": teaching_requirement_result, "proposed_changes": proposed_result}

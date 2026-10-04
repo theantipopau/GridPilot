@@ -256,6 +256,28 @@ the bootstrap-sync upserts at most one row per (teacher, subject), and
 there's no authoring UI yet for a second overlapping row, so there's no
 path that could produce a genuine conflict to detect.
 
+### `teaching_requirement_blocking` (critical) - added 2026-09-14
+
+Unblocked by `teaching_requirement` (`docs/teaching-requirement.md`, the
+demand model) - once a requirement is `APPROVED`, checks whether *any*
+teacher resolves `ELIGIBLE` for its subject/faculty via the same
+`app/analysis/capability.py::resolve()` `teacher_not_qualified_for_class`
+uses (one implementation, not two that could drift). Zero eligible
+teachers is a genuine, provable staffing gap -
+`docs/staffing-priority-policy.md` calls this "one of the first useful
+things to build once the capability tables land... doesn't need a
+solver." A `PENDING` or `REJECTED` requirement produces nothing, same
+suppression discipline as every other reviewed table. A composite
+requirement (no single subject - it spans several by definition) is
+skipped, not silently treated as blocked. Deliberately scoped to
+eligibility only, not the fuller `BLOCKING`/`HIGH`/`MEDIUM`/`HEALTHY` risk
+banding `staffing-priority-policy.md` describes - that needs real load
+accounting (`remaining_capacity_minutes`) a solver would provide.
+
+**Not yet verified against the real database** - written in a session
+with no working Python/Node toolchain available; run it against the real
+export before treating it as production-verified.
+
 ## Composite classes: reviewable, not silently trusted
 
 `backend/app/analysis/composite.py` heuristically detects candidates:

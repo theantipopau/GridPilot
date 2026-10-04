@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BulkApproveBar from "./BulkApproveBar";
 import EmptyState from "./EmptyState";
 import PageHeader from "./PageHeader";
 import SearchBox from "./SearchBox";
@@ -11,6 +12,11 @@ interface Props {
   capabilityStatus: CapabilityStatus;
   onStatusChange: (status: CapabilityStatus) => void;
   onReview: (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => Promise<void>;
+  onBulkApprove: (
+    ids: number[],
+    reviewedBy: string,
+    note?: string,
+  ) => Promise<{ approved_count: number; approved_ids: number[]; missing_ids: number[]; already_reviewed_ids: number[] }>;
 }
 
 const TABS: { value: CapabilityStatus; label: string }[] = [
@@ -19,11 +25,41 @@ const TABS: { value: CapabilityStatus; label: string }[] = [
   { value: "NOT_ELIGIBLE", label: "Not eligible" },
 ];
 
-export default function TeacherCapabilityQueue({ candidates, capabilityStatus, onStatusChange, onReview }: Props) {
+export default function TeacherCapabilityQueue({ candidates, capabilityStatus, onStatusChange, onReview, onBulkApprove }: Props) {
   const [reviewedBy, setReviewedBy] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  // docs/roadmap-v3.md 1.3: unlike room-type's 100%-consistency signal,
+  // lesson_count has no clean confidence cutoff in the real distribution,
+  // so there is no auto-selected "high confidence" set here - a human
+  // ticks exactly the rows they agree with, same "what was confirmed in
+  // the UI is exactly what gets written" discipline as the room-type
+  // bulk-approve.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const filtered = candidates.filter((c) => matchesQuery(query, [c.teacher_code, c.subject_code, c.faculty_code, c.notes]));
+  const selectedInFilter = filtered.filter((c) => selectedIds.has(c.id));
+  const allFilteredSelected = filtered.length > 0 && selectedInFilter.length === filtered.length;
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const c of filtered) next.delete(c.id);
+      } else {
+        for (const c of filtered) next.add(c.id);
+      }
+      return next;
+    });
+  };
 
   const handleReview = async (id: number, decision: "approve" | "reject") => {
     if (!reviewedBy.trim()) {
@@ -87,6 +123,19 @@ export default function TeacherCapabilityQueue({ candidates, capabilityStatus, o
         ))}
       </div>
 
+      {capabilityStatus === "REVIEW_REQUIRED" && (
+        <BulkApproveBar
+          count={selectedInFilter.length}
+          label="hand-checked"
+          reviewedBy={reviewedBy}
+          onConfirm={async (who, note) => {
+            const result = await onBulkApprove(selectedInFilter.map((c) => c.id), who, note);
+            setSelectedIds(new Set());
+            return result;
+          }}
+        />
+      )}
+
       {candidates.length === 0 ? (
         <EmptyState
           icon={<IconInbox className="h-8 w-8" />}
@@ -96,13 +145,27 @@ export default function TeacherCapabilityQueue({ candidates, capabilityStatus, o
         <EmptyState icon={<IconInbox className="h-8 w-8" />} title="No candidates match your search" />
       ) : (
         <div className="flex flex-col gap-2">
+          {capabilityStatus === "REVIEW_REQUIRED" && (
+            <label className="flex items-center gap-2 px-1 text-xs text-ink-muted">
+              <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} />
+              Select all {filtered.length} filtered
+            </label>
+          )}
           {filtered.map((c) => (
             <div
               key={c.id}
               className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md"
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">
+                <span className="flex items-center gap-2 font-medium text-slate-900">
+                  {capabilityStatus === "REVIEW_REQUIRED" && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(c.id)}
+                      onChange={() => toggleSelected(c.id)}
+                      aria-label={`Select ${c.teacher_code} x ${c.subject_code ?? c.faculty_code}`}
+                    />
+                  )}
                   {c.teacher_code} <span className="mx-1 opacity-50">→</span> {c.subject_code ?? c.faculty_code}
                 </span>
                 <span className="text-xs text-ink-muted">{c.source_type}</span>

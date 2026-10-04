@@ -178,6 +178,102 @@ def test_room_type_constraint_dropped_when_class_disappears():
     assert audit is not None
 
 
+def _insert_teaching_requirement(conn: sqlite3.Connection, *, class_name_id: int, subject_id: int,
+                                  assigned_teacher_id: int, assigned_room_id: int,
+                                  requirement_key: str, review_status: str = "APPROVED") -> int:
+    cur = conn.execute(
+        "INSERT INTO teaching_requirement (requirement_key, class_name_id, subject_id, roll_class_id, "
+        "periods_per_cycle, assigned_teacher_id, assigned_room_id, matching_lesson_count, total_lesson_count, "
+        "planning_year, review_status, detected_at, reviewed_at, reviewed_by, review_note) "
+        "VALUES (?, ?, ?, 1, 2, ?, ?, 2, 2, '2026', ?, 'test', 'test', 'reviewer', 'confirmed real')",
+        (requirement_key, class_name_id, subject_id, assigned_teacher_id, assigned_room_id, review_status),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_approved_teaching_requirement_survives_reingest_by_code():
+    conn = build_synthetic_db()
+    _insert_teaching_requirement(
+        conn, class_name_id=1, subject_id=1, assigned_teacher_id=1, assigned_room_id=1, requirement_key="CLASSA",
+    )
+
+    result = resync_source_tables(conn, lambda: _reseed_shifted(conn))
+
+    assert result["teaching_requirements"] == {"restored": 1, "dropped": 0}
+    row = conn.execute("SELECT * FROM teaching_requirement").fetchone()
+    assert row["review_status"] == "APPROVED"
+    assert row["reviewed_by"] == "reviewer"
+    assert row["review_note"] == "confirmed real"
+
+    new_class_a_id = conn.execute("SELECT id FROM class_name WHERE code = 'CLASSA'").fetchone()["id"]
+    new_teacher1_id = conn.execute("SELECT id FROM teacher WHERE code = 'T1'").fetchone()["id"]
+    new_room1_id = conn.execute("SELECT id FROM room WHERE code = 'R1'").fetchone()["id"]
+    assert row["class_name_id"] == new_class_a_id
+    assert row["assigned_teacher_id"] == new_teacher1_id
+    assert row["assigned_room_id"] == new_room1_id
+
+
+def test_teaching_requirement_dropped_when_class_disappears():
+    conn = build_synthetic_db()
+    _insert_teaching_requirement(
+        conn, class_name_id=2, subject_id=2, assigned_teacher_id=1, assigned_room_id=1, requirement_key="CLASSB",
+    )
+
+    result = resync_source_tables(conn, lambda: _reseed_shifted(conn, include_class_b=False))
+
+    assert result["teaching_requirements"] == {"restored": 0, "dropped": 1}
+    assert conn.execute("SELECT COUNT(*) FROM teaching_requirement").fetchone()[0] == 0
+
+    audit = conn.execute(
+        "SELECT * FROM audit_event WHERE event_type = 'teaching_requirement_dropped_on_reingest'"
+    ).fetchone()
+    assert audit is not None
+
+
+def test_composite_teaching_requirement_survives_reingest_by_relinking_to_the_fresh_composite_group():
+    conn = build_synthetic_db()
+    group_id = _insert_composite_group(conn, teacher_id=1, room_id=1, member_class_name_ids=[1, 2])
+    cur = conn.execute(
+        "INSERT INTO teaching_requirement (requirement_key, composite_group_id, periods_per_cycle, "
+        "matching_lesson_count, total_lesson_count, planning_year, review_status, detected_at, reviewed_at, "
+        "reviewed_by, review_note) VALUES ('COMPOSITE:CLASSA|CLASSB', ?, 1, 2, 2, '2026', 'APPROVED', 'test', "
+        "'test', 'reviewer', 'confirmed real')",
+        (group_id,),
+    )
+    conn.commit()
+
+    def reseed_with_a_different_composite_group() -> None:
+        _reseed_shifted(conn)
+        # The new export "detects" a different composite first (members
+        # CLASSA only, not CLASSA+CLASSB), so the restored requirement cannot
+        # land on the right group by stale-id coincidence - it must relink by
+        # member-code set, onto the second-inserted, genuinely-fresh id.
+        decoy_teacher = conn.execute("SELECT id FROM teacher WHERE code = 'T0'").fetchone()["id"]
+        decoy_room = conn.execute("SELECT id FROM room WHERE code = 'R0'").fetchone()["id"]
+        class_a = conn.execute("SELECT id FROM class_name WHERE code = 'CLASSA'").fetchone()["id"]
+        decoy = conn.execute(
+            "INSERT INTO composite_group (teacher_id, room_id, review_status, slot_count, detected_at) "
+            "VALUES (?, ?, 'PENDING', 0, 'test')",
+            (decoy_teacher, decoy_room),
+        )
+        conn.execute(
+            "INSERT INTO composite_group_member (composite_group_id, class_name_id) VALUES (?, ?)",
+            (decoy.lastrowid, class_a),
+        )
+
+    resync_source_tables(conn, reseed_with_a_different_composite_group)
+
+    row = conn.execute("SELECT * FROM teaching_requirement").fetchone()
+    assert row["review_status"] == "APPROVED"
+    new_group_id = row["composite_group_id"]
+    assert new_group_id != group_id  # genuinely a fresh id, not a coincidental match
+    linked_members = conn.execute(
+        "SELECT COUNT(*) FROM composite_group_member WHERE composite_group_id = ?", (new_group_id,)
+    ).fetchone()[0]
+    assert linked_members == 2  # ...and it relinked to the CLASSA+CLASSB group, not the decoy
+
+
 def test_proposed_change_moved_to_a_different_day_with_the_same_period_code_resolves_correctly():
     """Regression test for a real bug found against production data: period
     codes repeat once per day (P1 on day 1, P1 on day 2, ...), so a lookup

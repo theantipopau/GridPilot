@@ -98,7 +98,16 @@ async def upload_and_ingest(
     sfx_paths = [await _save_upload(f, ".sfx") for f in sfx_files if f.filename]
 
     try:
-        counts = await run_in_threadpool(run_full_ingest, tfx_path=tfx_path, sfx_paths=sfx_paths)
+        # A browser upload has no accompanying CSV/eMinerva export - those
+        # live at a fixed path under Timetabler Export/ and describe
+        # whatever term's data happens to already be there, which may be
+        # a different cohort entirely (e.g. a future year's construction
+        # file). Cross-validating against them here would "fail loudly"
+        # over mismatches that were never real problems - see
+        # app/ingest/run.py's validate_against_csvs.
+        counts = await run_in_threadpool(
+            run_full_ingest, tfx_path=tfx_path, sfx_paths=sfx_paths, validate_against_csvs=False,
+        )
     except IngestError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
