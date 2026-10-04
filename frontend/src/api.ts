@@ -31,6 +31,7 @@ import type {
   StaffRole,
   SuggestionsResponse,
   TeacherCapabilityCandidate,
+  TeacherLoadsResponse,
   TeacherProfile,
   TeacherSummary,
   TeachingRequirementCandidate,
@@ -248,6 +249,10 @@ export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> 
 
 export function fetchTeachers(): Promise<{ teachers: TeacherSummary[] }> {
   return getJson(`${BASE}/teachers`);
+}
+
+export function fetchTeacherLoads(): Promise<TeacherLoadsResponse> {
+  return getJson(`${BASE}/teacher-loads`);
 }
 
 export function fetchTeacher(code: string): Promise<TeacherSummary> {

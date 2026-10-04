@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { fetchAuditEvents, fetchDashboard } from "../api";
+import CountUp from "../components/CountUp";
 import LoadingState from "../components/LoadingState";
 import PageHeader from "../components/PageHeader";
 import Ring from "../components/Ring";
@@ -83,7 +84,9 @@ export default function DashboardPage({ onNavigate, onImportClick }: Props) {
           {data.room_utilisation_pct != null ? (
             <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
               <Ring percent={data.room_utilisation_pct} size={56} strokeWidth={6} />
-              <span className="absolute text-xs font-semibold text-slate-700">{data.room_utilisation_pct}%</span>
+              <span className="absolute text-xs font-semibold tabular-nums text-slate-700">
+                <CountUp value={data.room_utilisation_pct} decimals={0} />%
+              </span>
             </div>
           ) : (
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-300">
@@ -127,7 +130,9 @@ export default function DashboardPage({ onNavigate, onImportClick }: Props) {
               {recentEvents.map((e) => (
                 <div key={e.id} className="text-xs">
                   <span className="font-medium text-slate-700">{EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}</span>
-                  <span className="ml-2 text-ink-muted">{e.occurred_at}</span>
+                  <span className="ml-2 text-ink-muted">
+                    {new Date(e.occurred_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                  </span>
                   <p className="text-slate-500">{e.summary}</p>
                 </div>
               ))}
@@ -172,7 +177,9 @@ function ScoreCard({
     >
       <div className="flex items-center justify-between">
         <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${classes.icon}`}>{icon}</span>
-        <span className={`text-2xl font-semibold ${classes.value}`}>{value}</span>
+        <span className={`text-2xl font-semibold tabular-nums ${classes.value}`}>
+          <CountUp value={value} />
+        </span>
       </div>
       <div>
         <p className="text-sm font-medium text-slate-900">{label}</p>
@@ -186,7 +193,9 @@ function StatTile({ icon, label, value }: { icon: ReactNode; label: string; valu
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="mb-1 text-ink-muted">{icon}</div>
-      <div className="text-lg font-semibold text-slate-900">{value}</div>
+      <div className="text-lg font-semibold tabular-nums text-slate-900">
+        <CountUp value={value} />
+      </div>
       <div className="text-xs text-slate-500">{label}</div>
     </div>
   );

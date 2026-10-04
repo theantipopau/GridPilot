@@ -100,11 +100,11 @@ export default function CommandPalette({ reference, onClose, onNavigateTab, onJu
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-[12vh]"
+      className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center bg-slate-900/30 pt-[12vh] backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+        className="w-full max-w-lg animate-panel-in overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">

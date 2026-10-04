@@ -127,8 +127,8 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 px-6 py-16">
-      <div className="w-full max-w-xl">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center bg-slate-900/40 px-6 py-16 backdrop-blur-[2px]">
+      <div className="w-full max-w-xl animate-panel-in">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-white">Import a timetable</h2>
           {!submitting && (

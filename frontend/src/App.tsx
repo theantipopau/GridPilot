@@ -17,6 +17,7 @@ import LoadingState from "./components/LoadingState";
 import Sidebar, { type SidebarGroup, type Tab } from "./components/Sidebar";
 import {
   IconAlertTriangle,
+  IconBarChart,
   IconBuilding,
   IconCalendar,
   IconCheckCircle,
@@ -38,6 +39,7 @@ import RoomConstraintsPage from "./pages/RoomConstraintsPage";
 import RoomsPage from "./pages/RoomsPage";
 import StaffingPolicyPage from "./pages/StaffingPolicyPage";
 import TeacherCapabilitiesPage from "./pages/TeacherCapabilitiesPage";
+import TeacherLoadsPage from "./pages/TeacherLoadsPage";
 import TeachersPage from "./pages/TeachersPage";
 import TeachingRequirementsPage from "./pages/TeachingRequirementsPage";
 import TimetablePage from "./pages/TimetablePage";
@@ -53,6 +55,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     title: "People",
     items: [
       { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
+      { id: "teacher-loads", label: "Teacher loads", icon: (c) => <IconBarChart className={c} /> },
       { id: "staffing-policy", label: "Staffing Policy", icon: (c) => <IconClipboardList className={c} /> },
     ],
   },
@@ -195,7 +198,7 @@ export default function App() {
   }
 
   if (!ingestStatus) {
-    return <LoadingState />;
+    return <LoadingState variant="screen" />;
   }
 
   if (!ingestStatus.has_data) {
@@ -203,7 +206,7 @@ export default function App() {
   }
 
   if (!reference) {
-    return <LoadingState />;
+    return <LoadingState variant="screen" />;
   }
 
   const badgeFor = (id: Tab): number => {
@@ -250,49 +253,61 @@ export default function App() {
         {showImportModal && (
           <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
         )}
-        {tab === "dashboard" && (
-          <DashboardPage
-            onNavigate={(t) => setTab(t)}
-            onImportClick={() => setShowImportModal(true)}
-          />
-        )}
-        {tab === "timetable" && (
-          <TimetablePage
-            reference={reference}
-            gridChangeSetId={gridChangeSetId}
-            onGridChangeSetCreated={setGridChangeSetId}
-            onOpenChangeSet={openChangeSetInTab}
-            jumpTarget={jumpTarget}
-            onJumpConsumed={() => setJumpTarget(null)}
-          />
-        )}
-        {tab === "blocking" && <BlockingPage />}
-        {tab === "teachers" && <TeachersPage />}
-        {tab === "staffing-policy" && <StaffingPolicyPage />}
-        {tab === "rooms" && <RoomsPage />}
-        {tab === "findings" && (
-          <FindingsPage
-            onProposeFix={(finding) => {
-              setProposeFixContext(buildProposeFixContext(finding));
-              setTab("changes");
-            }}
-            onApplySuggestion={handleApplySuggestion}
-            onOpenChangeSet={openChangeSetInTab}
-          />
-        )}
-        {tab === "composites" && <CompositeReviewPage />}
-        {tab === "room-constraints" && <RoomConstraintsPage />}
-        {tab === "teacher-capabilities" && <TeacherCapabilitiesPage />}
-        {tab === "teaching-requirements" && <TeachingRequirementsPage />}
-        {tab === "changes" && (
-          <ChangeSetsPage
-            reference={reference}
-            proposeFixContext={proposeFixContext}
-            onConsumeProposeFixContext={() => setProposeFixContext(null)}
-            openChangeSetId={openChangeSetId}
-          />
-        )}
-        {tab === "audit" && <AuditPage />}
+        {/* Keyed on the tab so each navigation replays one short entrance -
+            the page you asked for arrives, instead of swapping in place. */}
+        <div key={tab} className="h-full animate-page-in print:h-auto">
+          {tab === "dashboard" && (
+            <DashboardPage
+              onNavigate={(t) => setTab(t)}
+              onImportClick={() => setShowImportModal(true)}
+            />
+          )}
+          {tab === "timetable" && (
+            <TimetablePage
+              reference={reference}
+              gridChangeSetId={gridChangeSetId}
+              onGridChangeSetCreated={setGridChangeSetId}
+              onOpenChangeSet={openChangeSetInTab}
+              jumpTarget={jumpTarget}
+              onJumpConsumed={() => setJumpTarget(null)}
+            />
+          )}
+          {tab === "blocking" && <BlockingPage />}
+          {tab === "teachers" && <TeachersPage />}
+          {tab === "teacher-loads" && (
+            <TeacherLoadsPage
+              onOpenTimetable={(code) => {
+                setJumpTarget({ view: "teacher", code });
+                setTab("timetable");
+              }}
+            />
+          )}
+          {tab === "staffing-policy" && <StaffingPolicyPage />}
+          {tab === "rooms" && <RoomsPage />}
+          {tab === "findings" && (
+            <FindingsPage
+              onProposeFix={(finding) => {
+                setProposeFixContext(buildProposeFixContext(finding));
+                setTab("changes");
+              }}
+              onApplySuggestion={handleApplySuggestion}
+              onOpenChangeSet={openChangeSetInTab}
+            />
+          )}
+          {tab === "composites" && <CompositeReviewPage />}
+          {tab === "room-constraints" && <RoomConstraintsPage />}
+          {tab === "teacher-capabilities" && <TeacherCapabilitiesPage />}
+          {tab === "teaching-requirements" && <TeachingRequirementsPage />}
+          {tab === "changes" && (
+            <ChangeSetsPage
+              reference={reference}
+              proposeFixContext={proposeFixContext}
+              onConsumeProposeFixContext={() => setProposeFixContext(null)}
+              openChangeSetId={openChangeSetId}
+            />
+          )}
+          {tab === "audit" && <AuditPage />}
+        </div>
       </main>
     </div>
   );

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { fetchCompositeCandidates, reviewCompositeCandidate } from "../api";
 import CompositeReviewQueue from "../components/CompositeReviewQueue";
 import LoadingState from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import type { CompositeCandidate, ReviewStatus } from "../types";
 
 export default function CompositeReviewPage() {
+  const toast = useToast();
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("PENDING");
   const [candidates, setCandidates] = useState<CompositeCandidate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export default function CompositeReviewPage() {
 
   const handleReview = async (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => {
     await reviewCompositeCandidate(id, decision, reviewedBy, note);
+    toast(decision === "approve" ? "Composite group approved" : "Composite group rejected");
     load(reviewStatus);
   };
 

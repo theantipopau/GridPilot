@@ -181,3 +181,14 @@ export function IconPrinter({ className = base }: IconProps) {
     </svg>
   );
 }
+
+export function IconBarChart({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+      <path d="M3.5 16.5h13" strokeLinecap="round" />
+      <rect x="4.5" y="10" width="2.5" height="6" rx="0.5" strokeLinejoin="round" />
+      <rect x="8.75" y="5" width="2.5" height="11" rx="0.5" strokeLinejoin="round" />
+      <rect x="13" y="8" width="2.5" height="8" rx="0.5" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { fetchTeachingRequirementCandidates, reviewTeachingRequirementCandidate } from "../api";
 import TeachingRequirementQueue from "../components/TeachingRequirementQueue";
 import LoadingState from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import type { ReviewStatus, TeachingRequirementCandidate } from "../types";
 
 export default function TeachingRequirementsPage() {
+  const toast = useToast();
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("PENDING");
   const [candidates, setCandidates] = useState<TeachingRequirementCandidate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export default function TeachingRequirementsPage() {
 
   const handleReview = async (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => {
     await reviewTeachingRequirementCandidate(id, decision, reviewedBy, note);
+    toast(decision === "approve" ? "Confirmed as what we run" : "Marked not accurate");
     load(reviewStatus);
   };
 

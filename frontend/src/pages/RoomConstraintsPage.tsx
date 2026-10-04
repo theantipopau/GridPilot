@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { bulkApproveRoomConstraintCandidates, fetchRoomConstraintCandidates, reviewRoomConstraintCandidate } from "../api";
 import RoomConstraintQueue from "../components/RoomConstraintQueue";
 import LoadingState from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import type { ReviewStatus, RoomTypeConstraintCandidate } from "../types";
 
 export default function RoomConstraintsPage() {
+  const toast = useToast();
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("PENDING");
   const [candidates, setCandidates] = useState<RoomTypeConstraintCandidate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +23,13 @@ export default function RoomConstraintsPage() {
 
   const handleReview = async (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => {
     await reviewRoomConstraintCandidate(id, decision, reviewedBy, note);
+    toast(decision === "approve" ? "Room type now required for that class" : "Marked: any room is fine");
     load(reviewStatus);
   };
 
   const handleBulkApprove = async (ids: number[], reviewedBy: string, note?: string) => {
     const result = await bulkApproveRoomConstraintCandidates(ids, reviewedBy, note);
+    toast(`${result.approved_count} room-type constraint${result.approved_count === 1 ? "" : "s"} approved`);
     load(reviewStatus);
     return result;
   };

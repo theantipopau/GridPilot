@@ -654,3 +654,34 @@ export interface RoomSummary {
   expected_class_codes: string[];
   open_finding_count: number;
 }
+
+export interface TeacherLoadDay {
+  day_code: string;
+  minutes: number;
+  periods: number;
+}
+
+export interface TeacherLoad {
+  code: string;
+  first_name: string | null;
+  last_name: string | null;
+  staff_category: string | null;
+  faculty_codes: string[];
+  contracted_minutes: number | null;
+  scheduled_minutes: number;
+  remaining_minutes: number | null;
+  percent_of_contract: number | null;
+  teaching_periods: number;
+  class_count: number;
+  subject_count: number;
+  year_levels: string[];
+  fte: number | null;
+  release_minutes_per_cycle: number | null;
+  by_day: TeacherLoadDay[];
+}
+
+export interface TeacherLoadsResponse {
+  contact_entry_types: string[];
+  days: string[];
+  teachers: TeacherLoad[];
+}

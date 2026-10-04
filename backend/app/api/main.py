@@ -17,6 +17,7 @@ from app.api import (
     solver,
     staffing_policy,
     teacher_capability,
+    teacher_loads,
     teachers,
     teaching_requirements,
     timetable,
@@ -50,6 +51,7 @@ app.include_router(solver.router, prefix="/api")
 app.include_router(staffing_policy.router, prefix="/api")
 app.include_router(teacher_capability.router, prefix="/api")
 app.include_router(teaching_requirements.router, prefix="/api")
+app.include_router(teacher_loads.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -194,7 +194,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-96 flex-col overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-xl">
+    <div className="fixed inset-y-0 right-0 z-40 flex w-96 animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-xl">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-900">

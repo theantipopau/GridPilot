@@ -31,42 +31,130 @@
   --color-severity-info: oklch(0.65 0.1 240);
   --color-pending: oklch(0.76 0.15 80); /* amber - a lesson with a pending move */
   --color-scenario: oklch(0.58 0.19 300); /* violet - scenario / solver output */
+
+  /* Motion. Short, decelerating, and always in answer to something the
+   * person did (navigate, open, confirm) - never decorative. Easing is
+   * "out" everywhere: things arrive fast and settle, which reads as
+   * responsive rather than slow. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-page-in: page-in 200ms var(--ease-out-quart) backwards;
+  --animate-fade-in: fade-in 150ms ease-out backwards;
+  --animate-panel-in: panel-in 220ms var(--ease-out-expo) backwards;
+  --animate-slide-in-right: slide-in-right 260ms var(--ease-out-expo) backwards;
+  --animate-pop: pop 260ms var(--ease-out-expo) backwards;
+  --animate-bar-grow: bar-grow 700ms var(--ease-out-expo) backwards;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(28px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pop {
+    0% { transform: scale(0.6); }
+    60% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+  @keyframes bar-grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
 }
 
 body {
   margin: 0;
 }
 
-/* Digits that line up in a column. Period times, load minutes, seat counts
- * and finding counts are all read by scanning DOWN a column, and
- * proportional figures make that ragged. Applied to the grids and to any
- * element opting in with .tabular-figures. */
-table,
-.tabular-figures {
-  font-variant-numeric: tabular-nums;
-}
-
-/* The frozen first column of the master grid. A named class rather than a
- * `shadow-[...]` arbitrary value: the arbitrary form did not generate a
- * rule here (verified in the browser - computed box-shadow stayed empty),
- * which silently left the frozen column with no edge at all. A real
- * shadow, not a border, so the column reads as a layer floating over the
- * scrolled content rather than as one more cell divider. */
-.sticky-col-edge {
-  box-shadow: 2px 0 4px -2px rgb(15 23 42 / 0.18);
-}
-
-/* Printable timetables - docs/roadmap-v3.md 5. Browser print-to-PDF over
- * the existing grid components, not a new rendering pipeline: the
- * single-entity and master grids already show exactly what a printed
- * timetable needs. App chrome (sidebar, toolbar, the "Print" button
- * itself) is hidden via Tailwind's print: variant at each call site;
- * this covers only what a utility class can't - page size/margins, and
- * the one non-Tailwind-expressible rule (an element mid-way through a
- * scroll position must not print blank space above/below its content). */
-@media print {
-  @page {
-    size: landscape;
-    margin: 12mm;
+@layer base {
+  html {
+    scroll-behavior: smooth;
   }
+
+  /* One visible-focus treatment for the whole app, for keyboard users -
+   * the grids, queues and forms are all heavily keyboard-driven (see
+   * lib/gridKeyboardNav.ts). Pointer clicks never show it. */
+  :focus-visible {
+    outline: 2px solid oklch(0.6 0.17 240);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Thin, quiet scrollbars - the app's panes scroll constantly and the
+   * default Windows bar is wide and heavy against a light UI. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.82 0.01 250) transparent;
+  }
+
+  /* A press should feel like a press. */
+  button:not(:disabled),
+  [role="button"] {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: var(--ease-out-quart);
+  }
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  input,
+  select,
+  textarea {
+    transition: border-color 150ms var(--ease-out-quart), box-shadow 150ms var(--ease-out-quart);
+  }
+  input:focus,
+  select:focus,
+  textarea:focus {
+    border-color: oklch(0.6 0.17 240);
+    box-shadow: 0 0 0 3px oklch(0.6 0.17 240 / 0.15);
+    outline: none;
+  }
+}
+
+/* Loading placeholder shaped like the content that's coming, instead of a
+ * spinner over blank space - the page layout doesn't jump when data lands. */
+.skeleton {
+  border-radius: 6px;
+  background-color: oklch(0.94 0.004 250);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(1 0 0 / 0.7) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Reduced motion: no entrance animations, no sliding, no shimmer, instant
+ * scrolling. State changes still happen - they just aren't animated.
+ * Driven by <html data-motion>, set in lib/motion.ts: it follows the OS
+ * "reduce motion" setting by default, but the person using the app can
+ * override it from the sidebar either way. */
+html[data-motion="reduce"] {
+  scroll-behavior: auto;
+}
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

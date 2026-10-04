@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { bulkApproveTeacherCapabilityCandidates, fetchTeacherCapabilityCandidates, reviewTeacherCapabilityCandidate } from "../api";
 import TeacherCapabilityQueue from "../components/TeacherCapabilityQueue";
 import LoadingState from "../components/LoadingState";
+import { useToast } from "../components/Toast";
 import type { CapabilityStatus, TeacherCapabilityCandidate } from "../types";
 
 export default function TeacherCapabilitiesPage() {
+  const toast = useToast();
   const [capabilityStatus, setCapabilityStatus] = useState<CapabilityStatus>("REVIEW_REQUIRED");
   const [candidates, setCandidates] = useState<TeacherCapabilityCandidate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +23,13 @@ export default function TeacherCapabilitiesPage() {
 
   const handleReview = async (id: number, decision: "approve" | "reject", reviewedBy: string, note?: string) => {
     await reviewTeacherCapabilityCandidate(id, decision, reviewedBy, note);
+    toast(decision === "approve" ? "Marked qualified" : "Marked not qualified");
     load(capabilityStatus);
   };
 
   const handleBulkApprove = async (ids: number[], reviewedBy: string, note?: string) => {
     const result = await bulkApproveTeacherCapabilityCandidates(ids, reviewedBy, note);
+    toast(`${result.approved_count} teacher${result.approved_count === 1 ? "" : "s"} marked qualified`);
     load(capabilityStatus);
     return result;
   };

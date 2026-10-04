@@ -37,3 +37,6 @@ Thumbs.db
 
 # --- Ollama local model cache (if pulled into project dir) ---
 .ollama/
+
+# --- Browser-automation scratch (screenshots/snapshots can contain real names) ---
+.playwright-mcp/
