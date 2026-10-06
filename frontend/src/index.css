@@ -17,20 +17,103 @@
 @theme {
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
     "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Codes, periods, rule ids and any highly structured timetable datum read
+   * better in a fixed pitch - and columns of them then line up for free. */
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono",
+    "Roboto Mono", ui-monospace, monospace;
 
   /* Dense-grid secondary line. Was a scattered mix of text-[10px]/[11px]. */
   --text-grid: 0.6875rem;
 
-  --color-surface: oklch(1 0 0);
-  --color-surface-sunken: oklch(0.985 0.002 250);
-  --color-border-subtle: oklch(0.93 0.004 250);
-  --color-ink-muted: oklch(0.55 0.012 250);
+  /* ---------------------------------------------------------------------
+   * Semantic colour. Every value here describes a ROLE, never a hue: pages
+   * say bg-surface / text-text-secondary / border-critical, never a Tailwind
+   * palette name and never a hex. Three rules govern this block:
+   *
+   * 1. Contrast: every *-ink value clears WCAG AA (4.5:1) as text on the
+   *    canvas/surface it is used on; every outline/focus value clears 3:1
+   *    as a graphical object. Soft surfaces (…-surface) are backgrounds
+   *    only and are always paired with their ink.
+   * 2. The faculty palette (lib/facultyColors.ts) is IDENTITY, not state,
+   *    and lives outside this block - it is never borrowed for a status.
+   * 3. No webfonts, no external assets (local-first, offline .exe).
+   * --------------------------------------------------------------------- */
 
-  --color-severity-critical: oklch(0.58 0.2 25);
-  --color-severity-warning: oklch(0.72 0.16 65);
-  --color-severity-info: oklch(0.65 0.1 240);
-  --color-pending: oklch(0.76 0.15 80); /* amber - a lesson with a pending move */
-  --color-scenario: oklch(0.58 0.19 300); /* violet - scenario / solver output */
+  /* Canvas & surfaces */
+  --color-canvas: oklch(0.972 0.003 250); /* app background behind panels */
+  --color-surface: oklch(1 0 0); /* default panel / card / table */
+  --color-surface-elevated: oklch(1 0 0); /* drawer, dialog, popover - always with shadow */
+  --color-surface-sunken: oklch(0.985 0.002 250); /* table headers, wells, inset areas */
+  --color-surface-muted: oklch(0.96 0.005 250); /* hovered/pressed neutral fills */
+
+  /* Text */
+  --color-text-primary: oklch(0.24 0.02 255);
+  --color-text-secondary: oklch(0.45 0.018 255);
+  --color-text-muted: oklch(0.55 0.012 250); /* metadata only - still 4.8:1 */
+  --color-ink-muted: oklch(0.55 0.012 250); /* legacy alias of text-muted */
+
+  /* Borders */
+  --color-border: oklch(0.915 0.005 250); /* default hairline */
+  --color-border-strong: oklch(0.825 0.008 250); /* inputs, table headers, focusable edges */
+  --color-border-subtle: oklch(0.93 0.004 250); /* legacy alias */
+
+  /* Brand - the app's own blue; navigation, primary action, links */
+  --color-brand: oklch(0.52 0.13 240);
+  --color-brand-strong: oklch(0.45 0.14 240); /* hover/pressed */
+  --color-brand-surface: oklch(0.96 0.03 240);
+  --color-brand-border: oklch(0.87 0.06 240);
+  --color-brand-contrast: oklch(0.99 0 0); /* text/icons on a brand fill */
+
+  /* Accent - draft/scenario/solver content, distinct from brand */
+  --color-accent: oklch(0.52 0.17 300);
+  --color-accent-surface: oklch(0.96 0.035 300);
+  --color-accent-border: oklch(0.86 0.08 300);
+
+  /* Status inks + their soft surfaces. Always ship in threes so a status
+   * can be a pill, a card fill or bare text without inventing a colour. */
+  --color-information: oklch(0.52 0.13 245);
+  --color-information-surface: oklch(0.96 0.025 245);
+  --color-information-border: oklch(0.87 0.06 245);
+  --color-success: oklch(0.52 0.13 155);
+  --color-success-surface: oklch(0.965 0.03 155);
+  --color-success-border: oklch(0.88 0.06 155);
+  --color-warning: oklch(0.55 0.13 62);
+  --color-warning-surface: oklch(0.97 0.035 80);
+  --color-warning-border: oklch(0.89 0.07 80);
+  --color-critical: oklch(0.54 0.19 25);
+  --color-critical-strong: oklch(0.47 0.19 25); /* hover/pressed on a critical fill */
+  --color-critical-surface: oklch(0.965 0.03 25);
+  --color-critical-border: oklch(0.89 0.07 25);
+
+  /* Interaction */
+  --color-focus: oklch(0.6 0.16 240); /* outline only - 3.9:1 on canvas */
+  --color-selected: oklch(0.955 0.03 240); /* current selection in a list/grid */
+  --color-hovered: oklch(0.965 0.012 250); /* hovered row/surface tint */
+
+  /* Overlay chrome: one scrim, one inverse surface (tooltips, kbd hints). */
+  --color-scrim: oklch(0.21 0.02 255 / 0.42);
+  --color-inverse: oklch(0.29 0.02 255);
+  --color-on-inverse: oklch(0.98 0 0);
+
+  /* Timetable cell states. State, never identity - the faculty stripe says
+   * WHICH faculty, these say WHAT IS HAPPENING to the lesson. Each has an
+   * -ink and a -surface so cells can be tinted without losing legibility. */
+  --color-timetable-current: oklch(0.52 0.11 245); /* live, untouched source data */
+  --color-timetable-current-surface: oklch(0.965 0.02 245);
+  --color-timetable-proposed: oklch(0.52 0.17 300); /* draft change set / scenario */
+  --color-timetable-proposed-surface: oklch(0.96 0.035 300);
+  --color-timetable-conflict: oklch(0.54 0.19 25); /* open finding / clash */
+  --color-timetable-conflict-surface: oklch(0.965 0.03 25);
+  --color-timetable-resolved: oklch(0.52 0.13 155); /* resolved by an approved/draft change */
+  --color-timetable-resolved-surface: oklch(0.965 0.03 155);
+
+  /* Legacy aliases - still read by pages not yet migrated. They map onto
+   * the semantic set above rather than defining a second palette. */
+  --color-severity-critical: var(--color-critical);
+  --color-severity-warning: var(--color-warning);
+  --color-severity-info: var(--color-information);
+  --color-pending: oklch(0.7 0.15 75); /* amber - a lesson with a pending move */
+  --color-scenario: var(--color-accent); /* violet - scenario / solver output */
 
   /* Motion. Short, decelerating, and always in answer to something the
    * person did (navigate, open, confirm) - never decorative. Easing is
@@ -78,6 +161,63 @@
   }
 }
 
+/* ---------------------------------------------------------------------
+ * Type scale. One definition each for the seven roles the app actually
+ * uses, so a page title is a page title on every screen. Sizes are fixed
+ * (no fluid clamp()): this is a dense operational tool and column widths
+ * must be predictable.
+ * --------------------------------------------------------------------- */
+@layer components {
+  .text-page-title {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+    color: var(--color-text-primary);
+  }
+  .text-section-title {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--color-text-primary);
+  }
+  .text-body {
+    font-size: 0.875rem;
+    line-height: 1.4375rem;
+    color: var(--color-text-secondary);
+  }
+  .text-table {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--color-text-primary);
+  }
+  .text-label {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+  }
+  .text-meta {
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    color: var(--color-text-muted);
+  }
+  /* Codes, rule ids, period names, entity refs: fixed pitch + tabular
+   * figures so a column of them forms a readable block. */
+  .text-code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 body {
   margin: 0;
 }
@@ -91,7 +231,7 @@ body {
    * the grids, queues and forms are all heavily keyboard-driven (see
    * lib/gridKeyboardNav.ts). Pointer clicks never show it. */
   :focus-visible {
-    outline: 2px solid oklch(0.6 0.17 240);
+    outline: 2px solid var(--color-focus);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -122,9 +262,18 @@ body {
   input:focus,
   select:focus,
   textarea:focus {
-    border-color: oklch(0.6 0.17 240);
-    box-shadow: 0 0 0 3px oklch(0.6 0.17 240 / 0.15);
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus) 22%, transparent);
     outline: none;
+  }
+
+  /* Long identifiers (class codes, room codes, file names) must clip rather
+   * than push a column wider - with the full value still on offer via the
+   * native tooltip a title attribute provides. */
+  .truncate-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -157,4 +306,18 @@ html[data-motion="reduce"] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+}
+
+/* Same guarantee, expressed natively: if the OS setting flips after initMotion
+ * has run (or the page is opened with the attribute missing), CSS still honours
+ * reduce-motion. State changes remain visible - they simply aren't animated. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
