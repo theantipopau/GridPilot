@@ -121,11 +121,14 @@ export interface SwitchProps {
   hideLabel?: boolean;
   className?: string;
   disabled?: boolean;
+  /** Explains the consequence of toggling - used where the state depends on
+   *  the OS ("your system asks for reduced motion"). */
+  title?: string;
 }
 
 /** Immediate, non-formal setting (motion on/off, density) - role=switch so
  *  assistive tech announces the on/off state, not a checked checkbox. */
-export function Switch({ label, checked, onChange, hint, hideLabel, className, disabled }: SwitchProps) {
+export function Switch({ label, checked, onChange, hint, hideLabel, className, disabled, title }: SwitchProps) {
   const autoId = useId();
   const labelId = `${autoId}-label`;
 
@@ -136,6 +139,7 @@ export function Switch({ label, checked, onChange, hint, hideLabel, className, d
         role="switch"
         aria-checked={checked}
         aria-labelledby={labelId}
+        title={title}
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cx(

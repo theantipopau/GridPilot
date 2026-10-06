@@ -1,25 +1,22 @@
 import type { ReactNode } from "react";
+import { PageHeader as DesignSystemPageHeader } from "../ui/PageHeader";
 
 interface Props {
-  icon: ReactNode;
+  icon?: ReactNode;
   title: string;
-  description?: string;
+  description?: ReactNode;
+  /** Kept as `action` (singular) so every existing page compiles unchanged. */
   action?: ReactNode;
+  meta?: ReactNode;
+  breadcrumb?: { label: string; onClick?: () => void }[];
+  headingLevel?: 1 | 2;
+  compact?: boolean;
 }
 
-export default function PageHeader({ icon, title, description, action }: Props) {
-  return (
-    <div className="mb-5 flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-          {icon}
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-          {description && <p className="mt-0.5 max-w-2xl text-sm text-slate-500">{description}</p>}
-        </div>
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
+/** Legacy adapter: pages import `components/PageHeader`, the markup comes from
+ *  `ui/PageHeader`. One heading pattern everywhere without touching fifteen
+ *  pages at once - the shell phase's rule (docs/ui-ux-implementation-plan.md). */
+export default function PageHeader(props: Props) {
+  const { action, ...rest } = props;
+  return <DesignSystemPageHeader {...rest} actions={action} />;
 }

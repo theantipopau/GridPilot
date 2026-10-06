@@ -1,22 +1,15 @@
 import type { ReactNode } from "react";
+import { EmptyState as DesignSystemEmptyState } from "../ui/EmptyState";
 
 interface Props {
   icon: ReactNode;
   title: string;
   description?: string;
   tone?: "neutral" | "positive";
+  action?: ReactNode;
 }
 
-export default function EmptyState({ icon, title, description, tone = "neutral" }: Props) {
-  const toneClasses =
-    tone === "positive" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500";
-  const iconClasses = tone === "positive" ? "text-emerald-500" : "text-slate-300";
-
-  return (
-    <div className={`flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center ${toneClasses}`}>
-      <div className={iconClasses}>{icon}</div>
-      <p className="text-sm font-medium">{title}</p>
-      {description && <p className="max-w-sm text-xs opacity-80">{description}</p>}
-    </div>
-  );
+/** Legacy adapter over `ui/EmptyState` - same props, one implementation. */
+export default function EmptyState(props: Props) {
+  return <DesignSystemEmptyState {...props} />;
 }

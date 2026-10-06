@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { uploadImport } from "../api";
-import { IconCheckCircle, IconSpinner, IconUpload } from "./icons";
+import { IconCheckCircle, IconUpload } from "./icons";
+import { Button } from "../ui/Button";
+import { Dialog } from "../ui/Overlay";
 import type { IngestUploadResult } from "../types";
 
 interface Props {
@@ -99,21 +101,16 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
           )}
 
-          <div className="flex items-center justify-between gap-3">
-            {variant === "modal" && (
-              <button type="button" onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700">
-                Cancel
-              </button>
-            )}
-            <button
-              type="button"
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="primary"
               disabled={!tfxFile || submitting}
+              loading={submitting}
               onClick={handleSubmit}
-              className="ml-auto flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              iconLeft={submitting ? undefined : <IconUpload className="h-4 w-4" />}
             >
-              {submitting && <IconSpinner className="h-4 w-4" />}
               {submitting ? "Importing…" : "Import"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -127,19 +124,25 @@ export default function ImportPanel({ variant, onImported, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center bg-slate-900/40 px-6 py-16 backdrop-blur-[2px]">
-      <div className="w-full max-w-xl animate-panel-in">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Import a timetable</h2>
-          {!submitting && (
-            <button type="button" onClick={onClose} className="text-sm text-slate-200 hover:text-white">
-              ✕ Close
-            </button>
+    <Dialog
+      open
+      onClose={onClose ?? (() => {})}
+      busy={submitting}
+      title="Import a timetable"
+      description="Nothing is sent anywhere - the files are read locally and stored in the local database."
+      size="md"
+      footer={
+        <>
+          {variant === "modal" && !submitting && (
+            <Button size="sm" onClick={onClose}>
+              Cancel
+            </Button>
           )}
-        </div>
-        {body}
-      </div>
-    </div>
+        </>
+      }
+    >
+      {body}
+    </Dialog>
   );
 }
 

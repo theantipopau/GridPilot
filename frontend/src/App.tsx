@@ -11,6 +11,7 @@ import {
   fetchTeacherCapabilityCandidates,
   fetchTeachingRequirementCandidates,
 } from "./api";
+import { Alert, Button } from "./ui";
 import CommandPalette from "./components/CommandPalette";
 import ImportPanel from "./components/ImportPanel";
 import LoadingState from "./components/LoadingState";
@@ -45,40 +46,57 @@ import TeachingRequirementsPage from "./pages/TeachingRequirementsPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
 
-// Grouped per docs/full-timetabler-plan.md §7.1 - the flat list stops
-// scaling around 10 items, and this mirrors the school's own mental model
-// (structure vs people vs places vs the grid itself vs quality control).
+// Navigation is ordered by the workflow the product actually follows
+// (docs/ui-ux-audit.md §1.1): read the grid, investigate what the rules
+// engine found, test proposals, then approve and keep the audit trail.
+// Specialist analysis pages are still here - they just stop competing with
+// the main path by sitting in their own group at the bottom.
 const SIDEBAR_GROUPS: SidebarGroup[] = [
-  { title: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} /> }] },
-  { title: "Structure", items: [{ id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> }] },
+  { title: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: (c) => <IconHome className={c} />, description: "What is loaded and what needs attention" }] },
   {
-    title: "People",
+    title: "Review timetable",
     items: [
+      { id: "timetable", label: "Master grid", icon: (c) => <IconCalendar className={c} />, description: "Inspect the whole school's lessons" },
       { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
       { id: "teacher-loads", label: "Teacher loads", icon: (c) => <IconBarChart className={c} /> },
-      { id: "staffing-policy", label: "Staffing Policy", icon: (c) => <IconClipboardList className={c} /> },
-    ],
-  },
-  { title: "Places", items: [{ id: "rooms", label: "Rooms", icon: (c) => <IconBuilding className={c} /> }] },
-  { title: "Timetable", items: [{ id: "timetable", label: "Master grid", icon: (c) => <IconCalendar className={c} /> }] },
-  {
-    title: "Quality",
-    items: [
-      { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} /> },
-      { id: "composites", label: "Composite Review", icon: (c) => <IconLayers className={c} /> },
-      { id: "room-constraints", label: "Room Constraints", icon: (c) => <IconDoor className={c} /> },
-      { id: "teacher-capabilities", label: "Teacher Capabilities", icon: (c) => <IconCheckCircle className={c} /> },
-      { id: "teaching-requirements", label: "Teaching Requirements", icon: (c) => <IconClipboardList className={c} /> },
+      { id: "rooms", label: "Rooms", icon: (c) => <IconBuilding className={c} /> },
     ],
   },
   {
-    title: "Changes",
+    title: "Investigate findings",
     items: [
-      { id: "changes", label: "Change Sets", icon: (c) => <IconGitBranch className={c} /> },
-      { id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> },
+      { id: "findings", label: "Findings", icon: (c) => <IconAlertTriangle className={c} />, description: "Everything the rules engine flagged" },
+      { id: "composites", label: "Composite review", icon: (c) => <IconLayers className={c} /> },
+      { id: "room-constraints", label: "Room constraints", icon: (c) => <IconDoor className={c} /> },
+      { id: "teacher-capabilities", label: "Teacher capabilities", icon: (c) => <IconCheckCircle className={c} /> },
+      { id: "teaching-requirements", label: "Teaching requirements", icon: (c) => <IconClipboardList className={c} /> },
+    ],
+  },
+  {
+    title: "Test & approve changes",
+    items: [{ id: "changes", label: "Change sets", icon: (c) => <IconGitBranch className={c} />, description: "Compare, validate, approve or reject" }],
+  },
+  { title: "Export & audit", items: [{ id: "audit", label: "Audit", icon: (c) => <IconClipboardList className={c} /> }] },
+  {
+    title: "Specialist",
+    items: [
+      { id: "blocking", label: "Blocking", icon: (c) => <IconColumns className={c} /> },
+      { id: "staffing-policy", label: "Staffing policy", icon: (c) => <IconClipboardList className={c} /> },
     ],
   },
 ];
+
+const KNOWN_TABS = new Set<string>(SIDEBAR_GROUPS.flatMap((g) => g.items.map((i) => i.id)));
+
+/** Deep links: `#/findings` opens the findings queue. The hash is the one
+ *  piece of location state a hash-router-free app can keep honest - it gives
+ *  Back/Forward, refresh-safe state and linkable queues without adding a
+ *  router dependency. Non-route hashes (the skip link's `#main-content`) are
+ *  ignored rather than treated as navigation. */
+function tabFromHash(): Tab | null {
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  return KNOWN_TABS.has(raw) ? (raw as Tab) : null;
+}
 
 function buildProposeFixContext(finding: Finding): ProposeFixContext {
   const byType = (type: string) => finding.entity_refs.find((r) => r.type === type)?.code;
@@ -107,7 +125,30 @@ export default function App() {
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTabState] = useState<Tab>(() => tabFromHash() ?? "dashboard");
+
+  // Navigation writes to the hash so Back/Forward move between pages and a
+  // queue can be linked to directly. Unknown hashes (the skip link's
+  // #main-content) are ignored instead of teleporting the user.
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    const target = `#/${next}`;
+    if (window.location.hash !== target) window.location.hash = target;
+  };
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const raw = window.location.hash;
+      if (raw === "" || raw === "#") {
+        setTabState("dashboard");
+        return;
+      }
+      const t = tabFromHash();
+      if (t) setTabState(t);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
   const [proposeFixContext, setProposeFixContext] = useState<ProposeFixContext | null>(null);
   const [openChangeSetId, setOpenChangeSetId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -190,9 +231,24 @@ export default function App() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-600">
-        Failed to load: {error}. Is the backend running (
-        <code>python -m uvicorn app.api.main:app --port 8000</code> from <code>backend/</code>)?
+      <div className="flex min-h-dvh items-center justify-center bg-canvas p-6">
+        <div className="w-full max-w-xl">
+          <Alert
+            tone="critical"
+            title="GridPilot could not reach the local API"
+            action={
+              <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            }
+          >
+            <p>{error}</p>
+            <p className="mt-1">
+              Is the backend running? <code className="text-code rounded bg-surface px-1">python -m uvicorn app.api.main:app --port 8000</code>{" "}
+              from <code className="text-code rounded bg-surface px-1">backend/</code>.
+            </p>
+          </Alert>
+        </div>
       </div>
     );
   }
@@ -220,7 +276,14 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 print:block print:h-auto">
+    <div className="flex h-dvh bg-canvas print:block print:h-auto">
+      {/* Keyboard users otherwise meet ~30 nav stops before any content. */}
+      <a
+        href="#main-content"
+        className="sr-only z-[70] rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-lg focus:not-sr-only focus:absolute focus:left-3 focus:top-3"
+      >
+        Skip to content
+      </a>
       <Sidebar
         groups={SIDEBAR_GROUPS}
         activeTab={tab}
@@ -249,7 +312,11 @@ export default function App() {
           the browser: without it, a long Findings page grew main to
           12905px and the whole body scrolled underneath a "fixed"
           sidebar that was never actually fixed). */}
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto print:h-auto print:overflow-visible">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto outline-none print:h-auto print:overflow-visible"
+      >
         {showImportModal && (
           <ImportPanel variant="modal" onImported={handleImported} onClose={() => setShowImportModal(false)} />
         )}

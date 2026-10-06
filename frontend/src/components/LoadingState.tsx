@@ -14,9 +14,9 @@ interface Props {
 export default function LoadingState({ label = "Loading…", variant = "page" }: Props) {
   if (variant === "screen") {
     return (
-      <div role="status" className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50">
+      <div role="status" className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-canvas">
         <img src={gridPilotLogo} alt="" className="h-9 w-auto animate-pulse" />
-        <p className="text-sm text-ink-muted">{label}</p>
+        <p className="text-sm text-text-muted">{label}</p>
       </div>
     );
   }
