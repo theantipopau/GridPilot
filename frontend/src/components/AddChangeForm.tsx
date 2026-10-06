@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { findTimetableEntries } from "../api";
 import type { ReferenceData, TimetableEntryLookup } from "../types";
+import { Button, Input, RadioGroup, Select } from "../ui";
 
 interface Prefill {
   day_code?: string;
@@ -96,66 +97,99 @@ export default function AddChangeForm({ reference, prefill, onSubmit }: Props) {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Propose a change</h3>
+    <section className="rounded-lg border border-border bg-surface-sunken p-4">
+      <h3 className="text-section-title">Propose a change</h3>
+      <p className="mt-0.5 text-meta">Find the lesson to move, then set only the fields that should change.</p>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <input placeholder="Day code" value={dayCode} onChange={(e) => setDayCode(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-        <input placeholder="Period code" value={periodCode} onChange={(e) => setPeriodCode(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-        <input placeholder="Teacher code" value={teacherCode} onChange={(e) => setTeacherCode(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-        <input placeholder="Room code" value={roomCode} onChange={(e) => setRoomCode(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-        <input placeholder="Class code" value={classCode} onChange={(e) => setClassCode(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <Input size="sm" aria-label="Day code" placeholder="Day code" value={dayCode} onChange={(e) => setDayCode(e.target.value)} />
+        <Input size="sm" aria-label="Period code" placeholder="Period code" value={periodCode} onChange={(e) => setPeriodCode(e.target.value)} />
+        <Input size="sm" aria-label="Teacher code" placeholder="Teacher code" value={teacherCode} onChange={(e) => setTeacherCode(e.target.value)} />
+        <Input size="sm" aria-label="Room code" placeholder="Room code" value={roomCode} onChange={(e) => setRoomCode(e.target.value)} />
+        <Input size="sm" aria-label="Class code" placeholder="Class code" value={classCode} onChange={(e) => setClassCode(e.target.value)} />
       </div>
-      <button type="button" onClick={search} disabled={searching} className="rounded-md bg-slate-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">
+      <Button size="sm" variant="secondary" loading={searching} className="mt-2" onClick={search}>
         {searching ? "Searching…" : "Find lesson"}
-      </button>
+      </Button>
 
       {matches && (
         <div className="mt-3">
           {matches.length === 0 ? (
-            <p className="text-xs text-ink-muted">No matching lessons.</p>
+            <p className="text-meta">No matching lessons.</p>
           ) : (
-            <div className="flex flex-col gap-1">
-              {matches.map((m) => (
-                <label key={m.entry_id} className="flex items-center gap-2 rounded border border-slate-200 bg-white p-2 text-xs">
-                  <input type="radio" name="entry" checked={selectedEntryId === m.entry_id} onChange={() => setSelectedEntryId(m.entry_id)} />
-                  <span>
-                    {m.day_code} {m.period_code} - {m.class_code ?? "(no class)"} - {m.teacher_code ?? "no teacher"} - {m.room_code ?? "no room"} - roll {m.roll_class_code}
+            <RadioGroup
+              legend="Matching lessons"
+              name="entry"
+              className="max-h-56 overflow-y-auto"
+              value={selectedEntryId != null ? String(selectedEntryId) : ""}
+              onChange={(v) => setSelectedEntryId(Number(v))}
+              options={matches.map((m) => ({
+                value: String(m.entry_id),
+                label: (
+                  <span className="nums text-code">
+                    {m.day_code} {m.period_code} &middot; {m.class_code ?? "(no class)"} &middot;{" "}
+                    {m.teacher_code ?? "no teacher"} &middot; {m.room_code ?? "no room"} &middot; roll{" "}
+                    {m.roll_class_code}
                   </span>
-                </label>
-              ))}
-            </div>
+                ),
+              }))}
+            />
           )}
         </div>
       )}
 
       {selectedEntryId && (
-        <div className="mt-4 border-t border-slate-200 pt-3">
-          <p className="mb-2 text-xs font-medium text-slate-600">Move to (leave blank to keep unchanged):</p>
-          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <select value={afterDay} onChange={(e) => setAfterDay(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
-              <option value="">Day (unchanged)</option>
-              {reference.days.map((d) => <option key={d.code} value={d.code}>{d.code}</option>)}
-            </select>
-            <select value={afterPeriod} onChange={(e) => setAfterPeriod(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
-              <option value="">Period (unchanged)</option>
-              {periodCodes.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={afterRoom} onChange={(e) => setAfterRoom(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
-              <option value="">Room (unchanged)</option>
-              {reference.rooms.map((r) => <option key={r.code} value={r.code}>{r.code}</option>)}
-            </select>
-            <select value={afterTeacher} onChange={(e) => setAfterTeacher(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
-              <option value="">Teacher (unchanged)</option>
-              {reference.teachers.map((t) => <option key={t.code} value={t.code}>{t.code}</option>)}
-            </select>
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="text-label">Move to (leave blank to keep unchanged)</p>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Select
+              size="sm"
+              label="Day"
+              value={afterDay}
+              onChange={setAfterDay}
+              options={[{ value: "", label: "Day (unchanged)" }, ...reference.days.map((d) => ({ value: d.code, label: d.code }))]}
+            />
+            <Select
+              size="sm"
+              label="Period"
+              value={afterPeriod}
+              onChange={setAfterPeriod}
+              options={[{ value: "", label: "Period (unchanged)" }, ...periodCodes.map((c) => ({ value: c, label: c }))]}
+            />
+            <Select
+              size="sm"
+              label="Room"
+              value={afterRoom}
+              onChange={setAfterRoom}
+              options={[{ value: "", label: "Room (unchanged)" }, ...reference.rooms.map((r) => ({ value: r.code, label: r.code }))]}
+            />
+            <Select
+              size="sm"
+              label="Teacher"
+              value={afterTeacher}
+              onChange={setAfterTeacher}
+              options={[{ value: "", label: "Teacher (unchanged)" }, ...reference.teachers.map((t) => ({ value: t.code, label: t.code }))]}
+            />
           </div>
-          <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="mb-2 w-full rounded border border-slate-300 px-2 py-1 text-xs" />
-          <button type="button" onClick={submit} disabled={submitting} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">
+          <Input
+            size="sm"
+            containerClassName="mt-2"
+            aria-label="Reason"
+            placeholder="Reason (optional)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="accent"
+            loading={submitting}
+            className="mt-2"
+            onClick={submit}
+          >
             {submitting ? "Adding…" : "Add proposed change"}
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </section>
   );
 }

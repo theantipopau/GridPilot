@@ -10,9 +10,12 @@ import {
   validateChangeSet,
 } from "../api";
 import ChangeSetDetail, { type AddChangeParams } from "../components/ChangeSetDetail";
+import { ApprovalBadge } from "../components/ChangeSetStatus";
 import EmptyState from "../components/EmptyState";
-import PageHeader from "../components/PageHeader";
+import LoadingState from "../components/LoadingState";
 import { IconGitBranch, IconInbox } from "../components/icons";
+import { Alert, Button, Input, PageHeader } from "../ui";
+import { cx } from "../ui/cx";
 import type { ChangeSetDetail as ChangeSetDetailType, ChangeSetSummary, ReferenceData } from "../types";
 
 export interface ProposeFixContext {
@@ -32,21 +35,18 @@ interface Props {
   openChangeSetId?: number | null;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-slate-200 text-slate-700",
-  APPROVED: "bg-emerald-600 text-white",
-  REJECTED: "bg-slate-400 text-white",
-};
-
 export default function ChangeSetsPage({ reference, proposeFixContext, onConsumeProposeFixContext, openChangeSetId }: Props) {
   const [list, setList] = useState<ChangeSetSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<ChangeSetDetailType | null>(null);
   const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadList = () => {
-    fetchChangeSets().then((r) => setList(r.change_sets)).catch((e) => setError(String(e)));
+    fetchChangeSets()
+      .then((r) => setList(r.change_sets))
+      .catch((e) => setError(String(e)));
   };
 
   useEffect(loadList, []);
@@ -74,7 +74,9 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
   }, [openChangeSetId]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || creating) return;
+    setCreating(true);
+    setError(null);
     try {
       const { id } = await createChangeSet(newName.trim(), undefined, "you");
       setNewName("");
@@ -83,6 +85,8 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
       if (proposeFixContext) onConsumeProposeFixContext();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -96,8 +100,6 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
     await addProposedChange(selectedId, params);
     await refreshDetail();
   };
-
-  if (error) return <div className="p-6 text-red-600">{error}</div>;
 
   const prefill = proposeFixContext
     ? {
@@ -117,91 +119,121 @@ export default function ChangeSetsPage({ reference, proposeFixContext, onConsume
         title="Change Sets"
         description="Proposed edits, validated against the clash rules before approval. The imported timetable is never mutated - approving a change set only creates a durable record."
       />
-      <div className="flex gap-6">
-      <div className="w-72 shrink-0">
-        {proposeFixContext && !detail && (
-          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm">
-            <p className="mb-2 text-sky-800">Create a change set to propose a fix for this finding:</p>
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="mb-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-            />
-            <button type="button" onClick={handleCreate} className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white">
-              Create
-            </button>
-          </div>
-        )}
 
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Change sets</h3>
-        </div>
-        {!proposeFixContext && (
-          <div className="mb-3 flex gap-1">
-            <input
+      {error && (
+        <Alert tone="critical" className="mb-4" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {proposeFixContext && !detail && (
+        <Alert tone="info" className="mb-4" title="Create a change set to propose a fix for this finding">
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <Input
+              size="sm"
+              containerClassName="w-64"
+              aria-label="New change set name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="New change set name"
-              className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
             />
-            <button type="button" onClick={handleCreate} className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-white">
-              +
-            </button>
+            <Button size="sm" variant="primary" loading={creating} onClick={handleCreate}>
+              Create
+            </Button>
           </div>
-        )}
-        <div className="flex flex-col gap-1">
-          {list?.map((cs) => (
-            <button
-              key={cs.id}
-              type="button"
-              onClick={() => setSelectedId(cs.id)}
-              className={`rounded border p-2 text-left text-xs shadow-sm transition-all duration-150 hover:shadow-md ${
-                selectedId === cs.id ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-800">{cs.name}</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${STATUS_COLORS[cs.approval_status]}`}>
-                  {cs.approval_status}
-                </span>
-              </div>
-              <div className="text-ink-muted">{cs.change_count} change(s)</div>
-            </button>
-          ))}
-          {list?.length === 0 && (
-            <EmptyState icon={<IconInbox className="h-7 w-7" />} title="No change sets yet" />
+        </Alert>
+      )}
+
+      <div className="flex flex-col items-start gap-6 lg:flex-row">
+        <aside className="w-full shrink-0 lg:w-72">
+          {!proposeFixContext && (
+            <div className="mb-3 flex items-end gap-1.5">
+              <Input
+                size="sm"
+                containerClassName="flex-1"
+                label="New change set"
+                placeholder="Name it, e.g. Mass repair (8 moves)"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreate();
+                }}
+              />
+              <Button size="sm" variant="primary" loading={creating} onClick={handleCreate} disabled={!newName.trim()}>
+                Create
+              </Button>
+            </div>
+          )}
+
+          {list == null ? (
+            <LoadingState label="Loading change sets…" />
+          ) : list.length === 0 ? (
+            <EmptyState
+              icon={<IconInbox className="h-7 w-7" />}
+              title="No change sets yet"
+              description="Create one to propose and validate timetable moves."
+            />
+          ) : (
+            <ul className="flex flex-col gap-1.5" aria-label="Change sets">
+              {list.map((cs) => (
+                <li key={cs.id}>
+                  <button
+                    type="button"
+                    aria-current={selectedId === cs.id ? "true" : undefined}
+                    onClick={() => setSelectedId(cs.id)}
+                    className={cx(
+                      "w-full rounded-lg border p-2.5 text-left transition-colors duration-150",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                      selectedId === cs.id
+                        ? "border-brand bg-brand-surface"
+                        : "border-border bg-surface hover:border-border-strong hover:bg-hovered",
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium text-text-primary">{cs.name}</span>
+                      <ApprovalBadge status={cs.approval_status} />
+                    </span>
+                    <span className="nums mt-0.5 block text-meta">
+                      {cs.change_count} change{cs.change_count === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          {detail ? (
+            <ChangeSetDetail
+              changeSet={detail}
+              reference={reference}
+              prefill={prefill}
+              onAddChange={handleAddChange}
+              onRemoveChange={async (changeId) => {
+                await removeProposedChange(detail.id, changeId);
+                await refreshDetail();
+              }}
+              onValidate={async () => {
+                await validateChangeSet(detail.id);
+                await refreshDetail();
+              }}
+              onApprove={async (reviewedBy) => {
+                await approveChangeSet(detail.id, reviewedBy);
+                await refreshDetail();
+              }}
+              onReject={async (reviewedBy) => {
+                await rejectChangeSet(detail.id, reviewedBy);
+                await refreshDetail();
+              }}
+            />
+          ) : (
+            <EmptyState
+              icon={<IconGitBranch className="h-7 w-7" />}
+              title="Select a change set"
+              description="Pick one from the list, or create one to propose a fix."
+            />
           )}
         </div>
-      </div>
-
-      <div className="flex-1">
-        {detail ? (
-          <ChangeSetDetail
-            changeSet={detail}
-            reference={reference}
-            prefill={prefill}
-            onAddChange={handleAddChange}
-            onRemoveChange={async (changeId) => {
-              await removeProposedChange(detail.id, changeId);
-              await refreshDetail();
-            }}
-            onValidate={async () => {
-              await validateChangeSet(detail.id);
-              await refreshDetail();
-            }}
-            onApprove={async (reviewedBy) => {
-              await approveChangeSet(detail.id, reviewedBy);
-              await refreshDetail();
-            }}
-            onReject={async (reviewedBy) => {
-              await rejectChangeSet(detail.id, reviewedBy);
-              await refreshDetail();
-            }}
-          />
-        ) : (
-          <p className="text-sm text-ink-muted">Select a change set, or create one to propose a fix.</p>
-        )}
-      </div>
       </div>
     </div>
   );
