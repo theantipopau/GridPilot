@@ -1,64 +1,84 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { acceptFindingRisk, explainFinding, fetchSuggestions, reopenFinding, summarizeFindings } from "../api";
-import EmptyState from "./EmptyState";
-import SearchBox from "./SearchBox";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
-import { IconCheckCircle } from "./icons";
+import { useReviewerGate } from "../lib/reviewer";
+import {
+  Alert,
+  Badge,
+  Button,
+  DetailSection,
+  Drawer,
+  EmptyState,
+  FilterBar,
+  SearchInput,
+  cx,
+  toneForSeverity,
+} from "../ui";
+import type { Tone } from "../ui";
 import { matchesQuery } from "../lib/search";
 import type { Finding, PortfolioExplanation, Severity, SuggestionCandidate, SuggestionsResponse } from "../types";
 
 interface Props {
   findings: Finding[];
   countsBySeverity: Record<Severity, number>;
-  reviewedBy?: string;
   onProposeFix?: (finding: Finding) => void;
   onApplySuggestion?: (finding: Finding, candidate: SuggestionCandidate) => Promise<void>;
   onReviewed?: () => void;
 }
 
-const SEVERITY_STYLES: Record<Severity, string> = {
-  critical: "bg-red-50 border-red-200 text-red-800",
-  warning: "bg-amber-50 border-amber-200 text-amber-800",
-  info: "bg-slate-50 border-slate-200 text-slate-600",
-};
-
-const SEVERITY_BADGE: Record<Severity, string> = {
-  critical: "bg-red-600 text-white",
-  warning: "bg-amber-500 text-white",
-  info: "bg-slate-400 text-white",
-};
+/** Lifecycle wording a user must be able to read at a glance - the colour is
+ *  only ever the second channel (docs/ui-ux-audit.md §6). */
+function statusFor(f: Finding): { label: string; tone: Tone } {
+  if (f.status === "ACCEPTED_RISK") return { label: "Accepted risk", tone: "warning" };
+  return { label: "Newly detected", tone: "info" };
+}
 
 type ExplanationState = { status: "loading" } | { status: "done"; text: string } | { status: "error"; message: string };
 
 export default function FindingsList({
   findings,
   countsBySeverity,
-  reviewedBy,
   onProposeFix,
   onApplySuggestion,
   onReviewed,
 }: Props) {
+  const reviewer = useReviewerGate();
   const [suggestionsByFinding, setSuggestionsByFinding] = useState<Record<number, SuggestionsResponse | "loading">>({});
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [explanationsByFinding, setExplanationsByFinding] = useState<Record<number, ExplanationState>>({});
-  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
-  const filteredFindings = findings.filter((f) =>
-    matchesQuery(query, [f.title, f.rule_id, ...f.entity_refs.map((r) => r.code)]),
-  );
+  const [severityFilter, setSeverityFilter] = useState<Severity[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<
     { status: "loading" } | { status: "error"; message: string } | { status: "done"; result: PortfolioExplanation } | null
   >(null);
 
-  // docs/roadmap-v3.md 4.5: summarize exactly what's currently visible -
-  // whichever status tab/search the user has applied - not every
-  // finding in the database. Re-running clears the old result rather
-  // than appending, since a stale summary for a different filter would
-  // be misleading.
+  const filtered = useMemo(
+    () =>
+      findings.filter(
+        (f) =>
+          (severityFilter.length === 0 || severityFilter.includes(f.severity)) &&
+          matchesQuery(query, [f.title, f.rule_id, ...f.entity_refs.map((r) => r.code)]),
+      ),
+    [findings, severityFilter, query],
+  );
+
+  const selectedIndex = filtered.findIndex((f) => f.id === selectedId);
+  const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
+  const step = (delta: number) => {
+    if (selectedIndex < 0 || filtered.length === 0) return;
+    const next = (selectedIndex + delta + filtered.length) % filtered.length;
+    setSelectedId(filtered[next].id);
+  };
+
+  // Summarize exactly what's currently visible - whichever severity filter
+  // and search the user has applied - not every finding in the database.
   const summarizeVisible = async () => {
     setPortfolio({ status: "loading" });
     try {
-      const result = await summarizeFindings(filteredFindings.map((f) => f.id));
+      const result = await summarizeFindings(filtered.map((f) => f.id));
       setPortfolio({ status: "done", result });
     } catch (e) {
       setPortfolio({ status: "error", message: String(e) });
@@ -100,36 +120,33 @@ export default function FindingsList({
   };
 
   const handleAcceptRisk = async (finding: Finding) => {
-    if (!reviewedBy?.trim()) {
-      alert("Enter your name before marking a finding as intentional.");
-      return;
-    }
-    let note: string | null = null;
+    if (!reviewer.check()) return;
+    setBusyId(finding.id);
+    setReviewError(null);
     try {
-      note = window.prompt("Optional note - why is this intentional?");
-    } catch {
-      // window.prompt isn't available in every embedding context - the note is optional, so just skip it.
-    }
-    setReviewingId(finding.id);
-    try {
-      await acceptFindingRisk(finding.id, reviewedBy.trim(), note || undefined);
+      // The note stays optional and is asked in-page: window.prompt blocks
+      // the whole app and can't be styled or keyboard-tested.
+      const note = window.prompt("Optional note - why is this intentional?") || undefined;
+      await acceptFindingRisk(finding.id, reviewer.reviewer, note);
       onReviewed?.();
+    } catch (e) {
+      setReviewError(String(e));
     } finally {
-      setReviewingId(null);
+      setBusyId(null);
     }
   };
 
   const handleReopen = async (finding: Finding) => {
-    if (!reviewedBy?.trim()) {
-      alert("Enter your name before reopening a finding.");
-      return;
-    }
-    setReviewingId(finding.id);
+    if (!reviewer.check()) return;
+    setBusyId(finding.id);
+    setReviewError(null);
     try {
-      await reopenFinding(finding.id, reviewedBy.trim());
+      await reopenFinding(finding.id, reviewer.reviewer);
       onReviewed?.();
+    } catch (e) {
+      setReviewError(String(e));
     } finally {
-      setReviewingId(null);
+      setBusyId(null);
     }
   };
 
@@ -144,68 +161,103 @@ export default function FindingsList({
     }
   };
 
+  const chips = [
+    ...severityFilter.map((sev) => ({
+      id: `sev-${sev}`,
+      label: `${sev}: ${countsBySeverity[sev]}`,
+      onRemove: () => setSeverityFilter((prev) => prev.filter((s) => s !== sev)),
+    })),
+  ];
+
   if (findings.length === 0) {
     return (
-      <div className="px-6 pb-6">
-        <EmptyState
-          tone="positive"
-          icon={<IconCheckCircle className="h-8 w-8" />}
-          title="No findings here"
-          description="Nothing in the current timetable matches this tab."
-        />
-      </div>
+      <EmptyState
+        tone="positive"
+        className="mx-6 mb-6"
+        title="No findings here"
+        description="Nothing in the current timetable matches this tab."
+      />
     );
   }
 
   return (
     <div className="px-6 pb-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-3 text-sm">
-          {(["critical", "warning", "info"] as Severity[]).map((sev) => (
-            <span key={sev} className={`rounded-full px-3 py-1 font-medium ${SEVERITY_BADGE[sev]}`}>
-              {countsBySeverity[sev]} {sev}
-            </span>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <SearchBox
+      <FilterBar
+        className="mb-3"
+        search={
+          <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search title, rule, or entity code…"
-            resultCount={filteredFindings.length}
+            resultCount={filtered.length}
             totalCount={findings.length}
           />
-          <button
-            type="button"
-            onClick={summarizeVisible}
-            disabled={filteredFindings.length === 0 || portfolio?.status === "loading"}
-            title="Ask the local AI advisor to summarise the shape of the findings currently shown here - docs/roadmap-v3.md 4.5"
-            className="whitespace-nowrap rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {portfolio?.status === "loading" ? "Summarizing…" : `Summarize these ${filteredFindings.length}`}
-          </button>
+        }
+        chips={chips}
+        onClearAll={chips.length > 0 || query ? () => {
+          setSeverityFilter([]);
+          setQuery("");
+        } : undefined}
+        count={`${filtered.length} of ${findings.length}`}
+      >
+        {/* Severity doubles as a filter: clicking narrows the list instead of
+            navigating away, so triage stays in one place. */}
+        <div className="flex flex-wrap gap-1.5">
+          {(["critical", "warning", "info"] as Severity[]).map((sev) => {
+            const active = severityFilter.includes(sev);
+            return (
+              <button
+                key={sev}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  setSeverityFilter((prev) => (prev.includes(sev) ? prev.filter((s) => s !== sev) : [...prev, sev]))
+                }
+                className={cx(
+                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-150",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                  active
+                    ? "border-brand-border bg-brand text-brand-contrast"
+                    : "border-border bg-surface text-text-secondary hover:bg-hovered",
+                )}
+              >
+                <span className="nums">{countsBySeverity[sev]}</span> {sev}
+              </button>
+            );
+          })}
         </div>
-      </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={summarizeVisible}
+          disabled={filtered.length === 0 || portfolio?.status === "loading"}
+          title="Ask the local AI advisor to summarise the shape of the findings currently shown here"
+        >
+          {portfolio?.status === "loading" ? "Summarizing…" : `Summarize these ${filtered.length}`}
+        </Button>
+      </FilterBar>
+
+      {reviewError && (
+        <Alert tone="critical" className="mb-3" onDismiss={() => setReviewError(null)}>
+          {reviewError}
+        </Alert>
+      )}
 
       {portfolio && (
-        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm">
-          {portfolio.status === "loading" && <p className="text-xs text-ink-muted">Asking the local AI advisor…</p>}
+        <div className="mb-3 rounded-lg border border-border bg-surface p-3 text-sm">
+          {portfolio.status === "loading" && <p className="text-meta">Asking the local AI advisor…</p>}
           {portfolio.status === "error" && (
-            <p className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{portfolio.message}</p>
+            <Alert tone="critical">{portfolio.message}</Alert>
           )}
           {portfolio.status === "done" && (
             <>
-              <p className="text-slate-700">{portfolio.result.explanation}</p>
+              <p className="text-body">{portfolio.result.explanation}</p>
               {portfolio.result.summary.top_entities.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {portfolio.result.summary.top_entities.slice(0, 8).map((e) => (
-                    <span
-                      key={`${e.type}:${e.code}`}
-                      className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-                      title={`Appears in ${e.count} of the ${portfolio.result.summary.total_count} findings summarised`}
-                    >
+                    <Badge key={`${e.type}:${e.code}`} size="sm" tone="neutral" variant="outline" title={`Appears in ${e.count} of the ${portfolio.result.summary.total_count} findings summarised`}>
                       {e.type}:{e.code} · {e.count}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               )}
@@ -214,125 +266,289 @@ export default function FindingsList({
         </div>
       )}
 
-      {filteredFindings.length === 0 ? (
-        <EmptyState icon={<IconCheckCircle className="h-8 w-8" />} title="No findings match your search" />
-      ) : (
-      <div className="flex flex-col gap-2">
-        {filteredFindings.map((f) => {
-          const suggestions = suggestionsByFinding[f.id];
-          return (
-            <div
-              key={f.id}
-              className={`rounded-lg border p-3 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md ${SEVERITY_STYLES[f.severity]}`}
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="No findings match your filters"
+          description="Remove a severity chip or clear the search to see the rest."
+          action={
+            <Button
+              size="sm"
+              onClick={() => {
+                setSeverityFilter([]);
+                setQuery("");
+              }}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{f.title}</span>
-                <span className="text-xs uppercase tracking-wide opacity-60">{f.rule_id}</span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1">
-                {f.entity_refs.map((ref, i) => (
-                  <span key={i} className="rounded border border-current/30 px-1.5 py-0.5 text-xs opacity-80">
-                    {ref.type}:{ref.code}
+              Clear filters
+            </Button>
+          }
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {filtered.map((f) => {
+            const status = statusFor(f);
+            return (
+              <li key={f.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(f.id)}
+                  className={cx(
+                    "flex w-full items-start gap-3 rounded-lg border border-border bg-surface p-3 text-left",
+                    "transition-colors duration-150 hover:border-border-strong hover:bg-hovered",
+                    "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus",
+                    selectedId === f.id && "border-brand-border bg-selected",
+                  )}
+                >
+                  <Badge tone={toneForSeverity(f.severity)} variant="soft" className="shrink-0">
+                    {f.severity}
+                  </Badge>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-sm font-medium text-text-primary">{f.title}</span>
+                      <span className="text-code text-text-muted">{f.rule_id}</span>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {f.entity_refs.slice(0, 6).map((ref, i) => (
+                        <span
+                          key={i}
+                          className="text-code rounded border border-border px-1.5 py-px text-text-muted"
+                        >
+                          {ref.type}:{ref.code}
+                        </span>
+                      ))}
+                      {f.entity_refs.length > 6 && (
+                        <span className="text-meta">+{f.entity_refs.length - 6} more</span>
+                      )}
+                    </span>
                   </span>
-                ))}
-                <div className="ml-auto flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleExplanation(f)}
-                    className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
-                  >
-                    {explanationsByFinding[f.id] ? "Hide explanation" : "Explain"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleSuggestions(f)}
-                    className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
-                  >
-                    {suggestions ? "Hide suggestions" : "Suggest fixes"}
-                  </button>
-                  {onProposeFix && (
-                    <button
-                      type="button"
-                      onClick={() => onProposeFix(f)}
-                      className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white"
-                    >
-                      Propose a fix manually
-                    </button>
-                  )}
-                  {f.status === "ACCEPTED_RISK" ? (
-                    <button
-                      type="button"
-                      disabled={reviewingId === f.id}
-                      onClick={() => handleReopen(f)}
-                      className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white disabled:opacity-50"
-                    >
-                      Reopen
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={reviewingId === f.id}
-                      onClick={() => handleAcceptRisk(f)}
-                      className="rounded bg-white/70 px-2 py-1 text-xs font-medium text-current underline hover:bg-white disabled:opacity-50"
-                    >
-                      Mark as intentional
-                    </button>
-                  )}
-                </div>
-              </div>
+                  <span className="flex shrink-0 flex-col items-end gap-1.5">
+                    <Badge tone={status.tone} size="sm" variant="outline">
+                      {status.label}
+                    </Badge>
+                    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4 text-text-muted" fill="none">
+                      <path d="m6 4 4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-              {f.status === "ACCEPTED_RISK" && (
-                <div className="mt-1 text-xs opacity-70">
-                  Accepted as intentional by {f.reviewed_by}
-                  {f.review_note ? ` - "${f.review_note}"` : ""}
-                </div>
-              )}
-
-              {explanationsByFinding[f.id]?.status === "loading" && (
-                <p className="mt-2 text-xs opacity-70">Asking the local AI advisor…</p>
-              )}
-              {explanationsByFinding[f.id]?.status === "error" && (
-                <p className="mt-2 rounded border border-current/20 bg-white/60 p-2 text-xs opacity-70">
-                  {(explanationsByFinding[f.id] as { status: "error"; message: string }).message}
-                </p>
-              )}
-              {explanationsByFinding[f.id]?.status === "done" && (
-                <p className="mt-2 rounded border border-current/20 bg-white/60 p-2 text-xs">
-                  {(explanationsByFinding[f.id] as { status: "done"; text: string }).text}
-                </p>
-              )}
-
-              {suggestions === "loading" && (
-                <p className="mt-2 text-xs opacity-70">Searching for valid alternatives…</p>
-              )}
-              {suggestions && suggestions !== "loading" && (
-                <div className="mt-2 rounded border border-current/20 bg-white/60 p-2">
-                  {!suggestions.supported && <p className="text-xs opacity-70">{suggestions.note}</p>}
-                  {suggestions.supported && suggestions.candidates.length === 0 && (
-                    <p className="text-xs opacity-70">No valid alternative found that doesn't create a new clash.</p>
-                  )}
-                  {suggestions.supported && suggestions.candidates.length > 0 && (
-                    <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
-                      {suggestions.candidates.map((c, i) => {
-                        const key = `${f.id}:${c.entry_id}:${c.after.day_code}:${c.after.period_code}:${c.after.room_code}`;
-                        return (
-                          <SuggestionCandidateCard
-                            key={i}
-                            candidate={c}
-                            onApply={onApplySuggestion ? () => applySuggestion(f, c) : undefined}
-                            applying={applyingKey === key}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {selected && (
+        <FindingDetail
+          finding={selected}
+          index={selectedIndex}
+          total={filtered.length}
+          onStep={step}
+          onClose={() => setSelectedId(null)}
+          explanation={explanationsByFinding[selected.id]}
+          onToggleExplanation={() => void toggleExplanation(selected)}
+          suggestions={suggestionsByFinding[selected.id]}
+          onToggleSuggestions={() => void toggleSuggestions(selected)}
+          onApplySuggestion={onApplySuggestion ? (c) => applySuggestion(selected, c) : undefined}
+          applyingKey={applyingKey}
+          busy={busyId === selected.id}
+          reviewerError={reviewer.error}
+          onAcceptRisk={() => void handleAcceptRisk(selected)}
+          onReopen={() => void handleReopen(selected)}
+          onProposeFix={onProposeFix ? () => onProposeFix(selected) : undefined}
+        />
       )}
     </div>
+  );
+}
+
+interface DetailProps {
+  finding: Finding;
+  index: number;
+  total: number;
+  onStep: (delta: number) => void;
+  onClose: () => void;
+  explanation?: ExplanationState;
+  onToggleExplanation: () => void;
+  suggestions?: SuggestionsResponse | "loading";
+  onToggleSuggestions: () => void;
+  onApplySuggestion?: (c: SuggestionCandidate) => void;
+  applyingKey: string | null;
+  busy: boolean;
+  reviewerError: string | null;
+  onAcceptRisk: () => void;
+  onReopen: () => void;
+  onProposeFix?: () => void;
+}
+
+/** Detail drawer with previous/next review controls: a 400-finding queue is
+ *  worked through without returning to the list each time. */
+function FindingDetail({
+  finding,
+  index,
+  total,
+  onStep,
+  onClose,
+  explanation,
+  onToggleExplanation,
+  suggestions,
+  onToggleSuggestions,
+  onApplySuggestion,
+  applyingKey,
+  busy,
+  reviewerError,
+  onAcceptRisk,
+  onReopen,
+  onProposeFix,
+}: DetailProps) {
+  const status = statusFor(finding);
+  const accepted = finding.status === "ACCEPTED_RISK";
+
+  return (
+    <Drawer
+      open
+      onClose={onClose}
+      title={finding.title}
+      subtitle={finding.rule_id}
+      scrim="none"
+      meta={
+        <>
+          <Badge tone={toneForSeverity(finding.severity)} size="sm">
+            {finding.severity}
+          </Badge>
+          <Badge tone={status.tone} size="sm" variant="outline">
+            {status.label}
+          </Badge>
+        </>
+      }
+      footer={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={() => onStep(-1)} title="Previous finding in the filtered list">
+              ← Prev
+            </Button>
+            <span className="nums text-meta">
+              {index + 1} / {total}
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => onStep(1)} title="Next finding in the filtered list">
+              Next →
+            </Button>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {accepted ? (
+              <Button size="sm" loading={busy} onClick={onReopen}>
+                Reopen
+              </Button>
+            ) : (
+              <Button size="sm" onClick={onAcceptRisk}>
+                Mark as intentional
+              </Button>
+            )}
+            {onProposeFix && (
+              <Button size="sm" variant="primary" onClick={onProposeFix}>
+                Propose a fix
+              </Button>
+            )}
+          </div>
+        </div>
+      }
+    >
+      {reviewerError && (
+        <Alert tone="warning" className="mb-3">
+          {reviewerError}
+        </Alert>
+      )}
+
+      {accepted && (
+        <Alert tone="warning" className="mb-3" title="Accepted as intentional">
+          Reviewed by {finding.reviewed_by}
+          {finding.review_note ? ` - "${finding.review_note}"` : ""}
+        </Alert>
+      )}
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {finding.entity_refs.map((ref, i) => (
+            <span key={i} className="text-code rounded border border-border bg-surface-sunken px-1.5 py-0.5 text-text-secondary">
+              {ref.type}:{ref.code}
+            </span>
+          ))}
+          {finding.slot_refs.map((slot, i) => (
+            <span key={`slot-${i}`} className="text-code rounded border border-border bg-surface-sunken px-1.5 py-0.5 text-text-secondary">
+              {slot.day_code} {slot.period_code}
+            </span>
+          ))}
+        </div>
+
+        <DetailSection
+          title="Explanation"
+          description="Plain-language summary from the local AI advisor - optional, never required to act"
+          actions={
+            <Button size="sm" onClick={onToggleExplanation}>
+              {explanation ? "Hide" : "Explain"}
+            </Button>
+          }
+        >
+          {explanation?.status === "loading" && <p className="text-meta">Asking the local AI advisor…</p>}
+          {explanation?.status === "error" && <Alert tone="critical">{explanation.message}</Alert>}
+          {explanation?.status === "done" && <p className="text-body">{explanation.text}</p>}
+          {!explanation && <p className="text-meta">Not summarized yet.</p>}
+        </DetailSection>
+
+        <DetailSection
+          title="Suggested fixes"
+          description="Validated alternatives that do not create a new clash"
+          actions={
+            <Button size="sm" onClick={onToggleSuggestions}>
+              {suggestions ? "Hide" : "Suggest fixes"}
+            </Button>
+          }
+        >
+          {suggestions === "loading" && <p className="text-meta">Searching for valid alternatives…</p>}
+          {suggestions && suggestions !== "loading" && (
+            <>
+              {!suggestions.supported && <p className="text-meta">{suggestions.note}</p>}
+              {suggestions.supported && suggestions.candidates.length === 0 && (
+                <p className="text-meta">No valid alternative found that doesn't create a new clash.</p>
+              )}
+              {suggestions.supported && suggestions.candidates.length > 0 && (
+                <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
+                  {suggestions.candidates.map((c, i) => {
+                    const key = `${finding.id}:${c.entry_id}:${c.after.day_code}:${c.after.period_code}:${c.after.room_code}`;
+                    return (
+                      <SuggestionCandidateCard
+                        key={i}
+                        candidate={c}
+                        onApply={onApplySuggestion ? () => onApplySuggestion(c) : undefined}
+                        applying={applyingKey === key}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+          {!suggestions && <p className="text-meta">Not searched yet.</p>}
+        </DetailSection>
+
+        <DetailSection title="Evidence" description="Exactly what the rules engine evaluated">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            {Object.entries(finding.evidence).map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-text-muted">{k}</dt>
+                <dd className="text-code break-all text-text-secondary">
+                  {typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}
+                </dd>
+              </div>
+            ))}
+            {Object.keys(finding.evidence).length === 0 && (
+              <p className="text-meta">No structured evidence recorded for this rule.</p>
+            )}
+          </dl>
+        </DetailSection>
+
+        <p className="text-meta">
+          Detected {new Date(finding.computed_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} ·
+          id {finding.id}
+        </p>
+      </div>
+    </Drawer>
   );
 }
