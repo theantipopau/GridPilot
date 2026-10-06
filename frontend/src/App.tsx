@@ -327,6 +327,8 @@ export default function App() {
             <DashboardPage
               onNavigate={(t) => setTab(t)}
               onImportClick={() => setShowImportModal(true)}
+              ingestStatus={ingestStatus}
+              queueCounts={badgeCounts}
             />
           )}
           {tab === "timetable" && (
