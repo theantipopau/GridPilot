@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchTeacherLoads } from "../api";
-import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
-import PageHeader from "../components/PageHeader";
-import SearchBox from "../components/SearchBox";
 import { IconInbox, IconUsers } from "../components/icons";
 import { matchesQuery } from "../lib/search";
 import { useFlip } from "../lib/useFlip";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  DetailSection,
+  EmptyState,
+  FilterBar,
+  PageHeader,
+  SearchInput,
+  Select,
+  SummaryMetric,
+  type FilterChip,
+} from "../ui";
+import { cx } from "../ui/cx";
 import type { TeacherLoad, TeacherLoadsResponse } from "../types";
 
 type SortKey = "most" | "least" | "remaining" | "subjects" | "name";
@@ -89,9 +100,11 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
   const [bucket, setBucket] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     fetchTeacherLoads().then(setData).catch((e) => setError(String(e)));
-  }, []);
+  };
+
+  useEffect(load, []);
 
   const scopeRows = useMemo(
     () => (data ? data.teachers.filter((t) => scope === "everyone" || t.staff_category === "TEACHER") : []),
@@ -143,7 +156,15 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
     };
   }, [data]);
 
-  if (error) return <div className="p-6 text-red-600">Failed to load teacher loads: {error}</div>;
+  if (error) {
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={load}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load teacher loads: {error}
+        </Alert>
+      </div>
+    );
+  }
   if (!data) return <LoadingState label="Loading teacher loads…" />;
 
   const withPct = timetabled.filter((t) => t.percent_of_contract != null);
@@ -153,6 +174,11 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
   const tallest = Math.max(1, ...bucketCounts);
   const filtersActive = Boolean(faculty || overOnly || bucket !== null || query.trim());
 
+  const chips: FilterChip[] = [];
+  if (faculty) chips.push({ id: "faculty", label: `Faculty: ${faculty}`, onRemove: () => setFaculty("") });
+  if (overOnly) chips.push({ id: "over", label: "Over contract only", onRemove: () => setOverOnly(false) });
+  if (bucket !== null) chips.push({ id: "bucket", label: `Load: ${bucketLabel(bucket)}`, onRemove: () => setBucket(null) });
+
   return (
     <div className="p-6">
       <PageHeader
@@ -161,40 +187,42 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
         description={`Minutes timetabled per teacher against their contracted load, across the ${data.days.length}-day cycle. Counts ${data.contact_entry_types.join(", ").toLowerCase()} periods only, and a composite lesson counts once.`}
       />
 
-      <dl className="mb-5 grid grid-cols-2 divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm sm:grid-cols-4 sm:divide-x">
-        <SummaryFigure
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryMetric
           label="Timetabled"
           value={`${timetabled.length} of ${scopeRows.length}`}
-          note={scope === "teachers" ? "teaching staff" : "all staff"}
+          hint={scope === "teachers" ? "teaching staff" : "all staff"}
         />
-        <SummaryFigure
+        <SummaryMetric
           label="Median load"
           value={medianPct === null ? "-" : `${Math.round(medianPct)}%`}
-          note="of contracted load"
+          hint="of contracted load"
         />
-        <SummaryFigure
+        <SummaryMetric
           label="Most loaded"
           value={heaviest ? `${Math.round(heaviest.percent_of_contract ?? 0)}%` : "-"}
-          note={heaviest ? displayName(heaviest) : "no one timetabled yet"}
+          hint={heaviest ? displayName(heaviest) : "no one timetabled yet"}
         />
-        <SummaryFigure
+        <SummaryMetric
           label="Over contract"
           value={String(overCount)}
-          note={overCount === 0 ? "no one over their load" : overCount === 1 ? "teacher" : "teachers"}
           tone={overCount > 0 ? "critical" : "neutral"}
+          hint={overCount === 0 ? "no one over their load" : overCount === 1 ? "teacher" : "teachers"}
         />
-      </dl>
+      </div>
 
-      <div className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-700">How loads are spread</h2>
-          <p className="text-xs text-ink-muted">
-            {bucket === null ? "Click a bar to list just those teachers" : `Showing ${bucketLabel(bucket)} of contracted load`}
-          </p>
-        </div>
+      <DetailSection
+        className="mb-5"
+        title="How loads are spread"
+        headingLevel={2}
+        aside={
+          bucket === null ? "Click a bar to list just those teachers" : `Showing ${bucketLabel(bucket)} of contracted load`
+        }
+      >
         <div className="flex items-end gap-1.5" role="group" aria-label="Teachers by percent of contracted load">
           {bucketCounts.map((count, i) => {
             const selected = bucket === i;
+            const isTop = i === BUCKET_COUNT - 1;
             return (
               <button
                 key={i}
@@ -207,108 +235,111 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
                 className="group flex flex-1 flex-col items-center gap-1 disabled:cursor-default"
               >
                 <span className="flex h-[4.75rem] w-full flex-col items-center justify-end gap-0.5">
-                  <span className="text-xs font-medium tabular-nums text-slate-600">{count > 0 ? count : ""}</span>
+                  <span className="nums text-xs font-medium text-text-secondary">{count > 0 ? count : ""}</span>
                   <span
-                    className={`w-full rounded-t transition-[height,background-color] duration-700 ease-[var(--ease-out-expo)] ${
+                    className={cx(
+                      "w-full rounded-t transition-[height,background-color] duration-700 ease-[var(--ease-out-expo)]",
                       count === 0
-                        ? "bg-slate-100"
-                        : i === BUCKET_COUNT - 1
-                          ? selected ? "bg-severity-critical" : "bg-severity-critical/60 group-hover:bg-severity-critical"
-                          : selected ? "bg-sky-600" : "bg-sky-300 group-hover:bg-sky-500"
-                    }`}
+                        ? "bg-surface-sunken"
+                        : isTop
+                          ? selected
+                            ? "bg-critical"
+                            : "bg-critical/55 group-hover:bg-critical"
+                          : selected
+                            ? "bg-brand"
+                            : "bg-brand/40 group-hover:bg-brand",
+                    )}
                     style={{ height: grown ? Math.max(count === 0 ? 2 : 6, (count / tallest) * 52) : 2 }}
                   />
                 </span>
-                <span className={`text-[10px] tabular-nums ${selected ? "font-semibold text-sky-700" : "text-ink-muted"}`}>
-                  {i === BUCKET_COUNT - 1 ? "100+" : i * 10}
+                <span className={cx("nums text-[10px]", selected ? "font-semibold text-brand" : "text-text-muted")}>
+                  {isTop ? "100+" : i * 10}
                 </span>
               </button>
             );
           })}
         </div>
-        <p className="mt-1 text-center text-[11px] text-ink-muted">% of contracted load</p>
-      </div>
+        <p className="mt-1 text-center text-meta">% of contracted load</p>
+      </DetailSection>
 
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="inline-flex overflow-hidden rounded-md border border-slate-300 text-sm" role="group" aria-label="Which staff">
-          {([["teachers", "Teaching staff"], ["everyone", "All staff"]] as const).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setScope(value);
-                setFaculty("");
-              }}
-              aria-pressed={scope === value}
-              className={`px-3 py-1.5 font-medium ${
-                scope === value ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <label className="flex items-center gap-1.5 text-sm text-slate-600">
-          Faculty
-          <select
-            value={faculty}
-            onChange={(e) => setFaculty(e.target.value)}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
-          >
-            <option value="">All</option>
-            {facultyOptions.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex items-center gap-1.5 text-sm text-slate-600">
-          Sort
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
-          >
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-              <option key={k} value={k}>
-                {SORT_LABELS[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-600">
-          <input type="checkbox" checked={overOnly} onChange={(e) => setOverOnly(e.target.checked)} />
-          Over contract only
-        </label>
-
-        <div className="ml-auto flex items-center gap-3">
-          {filtersActive && (
-            <button
-              type="button"
-              onClick={() => {
-                setFaculty("");
-                setOverOnly(false);
-                setBucket(null);
-                setQuery("");
-              }}
-              className="text-sm font-medium text-sky-700 hover:text-sky-900"
-            >
-              Clear filters
-            </button>
-          )}
-          <SearchBox
+      <FilterBar
+        className="mb-3"
+        search={
+          <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search name, code or faculty…"
             resultCount={visible.length}
             totalCount={scopeRows.length}
           />
+        }
+        chips={chips}
+        onClearAll={
+          filtersActive
+            ? () => {
+                setFaculty("");
+                setOverOnly(false);
+                setBucket(null);
+                setQuery("");
+              }
+            : undefined
+        }
+        count={`${visible.length} of ${scopeRows.length}`}
+      >
+        <div
+          className="inline-flex overflow-hidden rounded-md border border-border-strong"
+          role="group"
+          aria-label="Which staff"
+        >
+          {([
+            ["teachers", "Teaching staff"],
+            ["everyone", "All staff"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={scope === value}
+              onClick={() => {
+                setScope(value);
+                setFaculty("");
+              }}
+              className={cx(
+                "px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+                scope === value
+                  ? "bg-brand text-brand-contrast"
+                  : "bg-surface text-text-secondary hover:bg-hovered hover:text-text-primary",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </div>
+
+        <Select
+          size="sm"
+          containerClassName="w-36"
+          label="Faculty"
+          value={faculty}
+          onChange={setFaculty}
+          options={[{ value: "", label: "All" }, ...facultyOptions.map((f) => ({ value: f, label: f }))]}
+        />
+
+        <Select
+          size="sm"
+          containerClassName="w-48"
+          label="Sort"
+          value={sort}
+          onChange={(v) => setSort(v as SortKey)}
+          options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({ value: k, label: SORT_LABELS[k] }))}
+        />
+
+        <Checkbox
+          label="Over contract only"
+          checked={overOnly}
+          onChange={(e) => setOverOnly(e.target.checked)}
+          className="self-end pb-1"
+        />
+      </FilterBar>
 
       {scopeRows.length === 0 ? (
         <EmptyState icon={<IconInbox className="h-8 w-8" />} title="No staff loaded" description="Import a timetable first." />
@@ -319,8 +350,8 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
           description="Clear a filter or change the search to see more of the staff."
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[minmax(10rem,14rem)_1fr_7rem_10rem] items-center gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-ink-muted md:grid">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="hidden grid-cols-[minmax(10rem,14rem)_1fr_7rem_10rem] items-center gap-4 border-b border-border bg-surface-sunken px-4 py-2 text-left text-label md:grid">
             <span>Teacher</span>
             <span>Scheduled against contracted load</span>
             <span className="text-right">Remaining</span>
@@ -344,33 +375,11 @@ export default function TeacherLoadsPage({ onOpenTimetable }: Props) {
         </div>
       )}
 
-      <p className="mt-4 max-w-3xl text-xs text-ink-muted">
+      <p className="mt-4 max-w-3xl text-meta">
         Remaining is contracted load minus scheduled minutes. It isn't the same as time available to teach more: part-time
         staff, leadership release, duties, meetings and yard duty aren't counted here, because the school hasn't confirmed
         whether they count toward load. Where a teacher has no contracted figure of their own, the school default applies.
       </p>
-    </div>
-  );
-}
-
-function SummaryFigure({
-  label,
-  value,
-  note,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  note: string;
-  tone?: "neutral" | "critical";
-}) {
-  return (
-    <div className="px-4 py-3">
-      <dt className="text-xs text-ink-muted">{label}</dt>
-      <dd className={`mt-0.5 text-xl font-semibold tabular-nums ${tone === "critical" ? "text-severity-critical" : "text-slate-900"}`}>
-        {value}
-      </dd>
-      <dd className="truncate text-xs text-slate-500">{note}</dd>
     </div>
   );
 }
@@ -401,16 +410,16 @@ function LoadRow({
   const tickLeft = (100 / AXIS_MAX_PCT) * 100;
 
   return (
-    <div ref={flipRef} className="border-b border-slate-100 last:border-b-0">
+    <div ref={flipRef} className="border-b border-border last:border-b-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="grid w-full grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors duration-150 hover:bg-slate-50 md:grid-cols-[minmax(10rem,14rem)_1fr_7rem_10rem]"
+        className="grid w-full grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 text-left transition-colors duration-150 hover:bg-hovered focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus md:grid-cols-[minmax(10rem,14rem)_1fr_7rem_10rem]"
       >
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-slate-900">{displayName(t)}</span>
-          <span className="block truncate text-xs text-ink-muted">
+          <span className="block truncate text-sm font-medium text-text-primary">{displayName(t)}</span>
+          <span className="block truncate text-meta">
             {t.code}
             {t.faculty_codes.length > 0 && ` · ${t.faculty_codes.slice(0, 3).join(", ")}`}
           </span>
@@ -418,44 +427,46 @@ function LoadRow({
 
         <span className="order-3 col-span-2 md:order-none md:col-span-1">
           {t.contracted_minutes == null ? (
-            <span className="text-xs text-ink-muted">
+            <span className="text-meta">
               {fmt(t.scheduled_minutes)} min scheduled · no contracted figure
             </span>
           ) : (
             <>
-              <span className="relative block h-2.5 rounded-full bg-slate-100">
+              <span className="relative block h-2.5 rounded-full bg-surface-sunken">
                 {!noLessons && (
                   <span
-                    className={`absolute inset-y-0 left-0 block origin-left rounded-full ${
-                      animateIn ? "animate-bar-grow" : ""
-                    } ${over ? "bg-severity-critical" : "bg-sky-600"}`}
+                    className={cx(
+                      "absolute inset-y-0 left-0 block origin-left rounded-full",
+                      animateIn && "animate-bar-grow",
+                      over ? "bg-critical" : "bg-brand",
+                    )}
                     style={{ width: `${fillWidth}%`, animationDelay: `${Math.min(index, 14) * 30}ms` }}
                   />
                 )}
                 <span
                   aria-hidden="true"
-                  className="absolute -inset-y-1 w-px bg-slate-400"
+                  className="absolute -inset-y-1 w-px bg-border-strong"
                   style={{ left: `${tickLeft}%` }}
                   title="Contracted load"
                 />
               </span>
-              <span className="mt-1 flex justify-between text-xs tabular-nums text-slate-500">
+              <span className="nums mt-1 flex justify-between text-xs text-text-muted">
                 <span>
                   {noLessons ? "No lessons timetabled" : `${fmt(t.scheduled_minutes)} of ${fmt(t.contracted_minutes)} min`}
                 </span>
-                {!noLessons && <span className="font-medium text-slate-700">{Math.round(pct ?? 0)}%</span>}
+                {!noLessons && <span className="font-medium text-text-secondary">{Math.round(pct ?? 0)}%</span>}
               </span>
             </>
           )}
         </span>
 
-        <span className="hidden text-right text-sm tabular-nums md:block">
+        <span className="nums hidden text-right text-sm md:block">
           {t.remaining_minutes == null ? (
-            <span className="text-ink-muted">-</span>
+            <span className="text-text-muted">-</span>
           ) : over ? (
-            <span className="font-medium text-severity-critical">{fmt(-t.remaining_minutes)} over</span>
+            <span className="font-medium text-critical">{fmt(-t.remaining_minutes)} over</span>
           ) : (
-            <span className="text-slate-700">{fmt(t.remaining_minutes)} min</span>
+            <span className="text-text-secondary">{fmt(t.remaining_minutes)} min</span>
           )}
         </span>
 
@@ -464,7 +475,7 @@ function LoadRow({
             <span
               key={d.day_code}
               title={`${d.day_code}: ${d.periods} ${d.periods === 1 ? "period" : "periods"}, ${fmt(d.minutes)} min`}
-              className={`block w-2 rounded-sm bg-slate-400 ${i === 5 ? "ml-2" : ""} ${d.minutes === 0 ? "bg-slate-200" : ""}`}
+              className={cx("block w-2 rounded-sm bg-brand/60", i === 5 && "ml-2", d.minutes === 0 && "bg-surface-sunken")}
               style={{ height: d.minutes === 0 ? 3 : Math.max(4, (d.minutes / maxDayMinutes) * 28) }}
             />
           ))}
@@ -472,12 +483,13 @@ function LoadRow({
       </button>
 
       <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)] ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
+        className={cx(
+          "grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)]",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
       >
         <div className="overflow-hidden" inert={!open}>
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border bg-surface-sunken px-4 py-3 text-sm">
             <Fact label="Teaching periods" value={String(t.teaching_periods)} />
             <Fact label="Classes" value={String(t.class_count)} />
             <Fact label="Subjects" value={String(t.subject_count)} />
@@ -492,13 +504,9 @@ function LoadRow({
             />
             {t.fte != null && <Fact label="FTE" value={String(t.fte)} />}
             {t.release_minutes_per_cycle != null && <Fact label="Release" value={`${fmt(t.release_minutes_per_cycle)} min`} />}
-            <button
-              type="button"
-              onClick={onOpenTimetable}
-              className="ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-            >
+            <Button size="sm" className="ml-auto" onClick={onOpenTimetable}>
               View timetable
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -509,8 +517,8 @@ function LoadRow({
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs text-ink-muted">{label}</div>
-      <div className="font-medium tabular-nums text-slate-900">{value}</div>
+      <div className="text-meta">{label}</div>
+      <div className="nums font-medium text-text-primary">{value}</div>
     </div>
   );
 }
