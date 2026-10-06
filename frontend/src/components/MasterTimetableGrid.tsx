@@ -1,8 +1,12 @@
 import type { KeyboardEvent } from "react";
 import { facultyColor } from "../lib/facultyColors";
-import { HIGHLIGHT_RING, highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
+import { highlightForEntry, type CellHighlight } from "../lib/findingHighlights";
 import type { Density } from "../lib/density";
 import { useGridKeyboardNav } from "../lib/gridKeyboardNav";
+import type { GhostEntry } from "../lib/pendingMoves";
+import { cellState } from "../lib/cellStates";
+import { CellStateMarker } from "./CellStateMarker";
+import { cx } from "../ui/cx";
 import type { Day, Period, ReferenceData, TimetableEntry, ViewType } from "../types";
 
 interface RowSpec {
@@ -18,6 +22,14 @@ interface Props {
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
+  /** Entries with a proposed move, shown in their ORIGINAL slot as a ghost. */
+  ghostEntries?: GhostEntry[];
+  /** entry_id -> how many originating findings the pending move resolves. */
+  resolvingCounts?: Map<number, number>;
+  selectedEntryId?: number | null;
+  /** Filter to rows that actually have an open finding - the 51 x 50 grid is
+   *  dense; this is how a timetabler finds the rows that need work. */
+  onlyRowsWithFindings?: boolean;
 }
 
 const AXIS_FIELD: Record<ViewType, (e: TimetableEntry) => string | null> = {
@@ -48,9 +60,19 @@ function dedupePeriodsByNumber(periods: Period[]): Period[] {
 }
 
 export default function MasterTimetableGrid({
-  axis, reference, entries, density = "comfortable", pendingEntryIds, findingHighlights, onSelectLesson,
+  axis,
+  reference,
+  entries,
+  density = "comfortable",
+  pendingEntryIds,
+  findingHighlights,
+  onSelectLesson,
+  ghostEntries,
+  resolvingCounts,
+  selectedEntryId,
+  onlyRowsWithFindings,
 }: Props) {
-  const rows = rowsForAxis(reference, axis);
+  const allRows = rowsForAxis(reference, axis);
   const canonicalPeriods = dedupePeriodsByNumber(reference.periods);
   const weekA = reference.days.filter((d) => d.week_label === "A").sort((a, b) => a.day_no - b.day_no);
   const weekB = reference.days.filter((d) => d.week_label === "B").sort((a, b) => a.day_no - b.day_no);
@@ -66,39 +88,78 @@ export default function MasterTimetableGrid({
     entriesByRowKey.set(key, list);
   }
 
-  // A single scrolling region for both weeks, not one independent max-h
-  // box per table - a shared ancestor is what lets each table's own
-  // `sticky top-0` header hand off to the next as you scroll from Week A
-  // into Week B, instead of the whole page scrolling AND each table
-  // scrolling internally at the same time (docs/roadmap-v2.md 4.3).
+  const ghostsByRowKey = new Map<string, GhostEntry[]>();
+  for (const g of ghostEntries ?? []) {
+    const rowCode = axisField(g.entry);
+    if (!rowCode) continue;
+    const key = `${rowCode}|${g.entry.day_code}|${g.entry.period_no}`;
+    const list = ghostsByRowKey.get(key) ?? [];
+    list.push(g);
+    ghostsByRowKey.set(key, list);
+  }
+
+  // "Rows with findings" is computed from the same highlight index the cells
+  // use - a row qualifies when any of its cells would show a conflict marker,
+  // so the filter can never disagree with what's on screen.
+  const rows = onlyRowsWithFindings
+    ? allRows.filter((row) => {
+        for (const [key, list] of entriesByRowKey) {
+          if (!key.startsWith(`${row.code}|`)) continue;
+          for (const e of list) {
+            if (findingHighlights && highlightForEntry(findingHighlights, e)) return true;
+          }
+        }
+        return false;
+      })
+    : allRows;
+
   return (
     <div className="h-full overflow-auto p-6 print:h-auto print:overflow-visible print:p-0">
-      <div className="flex flex-col gap-8">
-        <MasterWeekTable
-          label="Week A"
-          weekDays={weekA}
-          periods={canonicalPeriods}
-          rows={rows}
-          axis={axis}
-          density={density}
-          entriesByRowKey={entriesByRowKey}
-          pendingEntryIds={pendingEntryIds}
-          findingHighlights={findingHighlights}
-          onSelectLesson={onSelectLesson}
-        />
-        <MasterWeekTable
-          label="Week B"
-          weekDays={weekB}
-          periods={canonicalPeriods}
-          rows={rows}
-          axis={axis}
-          density={density}
-          entriesByRowKey={entriesByRowKey}
-          pendingEntryIds={pendingEntryIds}
-          findingHighlights={findingHighlights}
-          onSelectLesson={onSelectLesson}
-        />
-      </div>
+      {rows.length === 0 ? (
+        <div className="mx-auto max-w-lg pt-10">
+          <div className="rounded-lg border border-dashed border-border bg-surface px-6 py-10 text-center">
+            <p className="text-sm font-medium text-text-primary">No rows match this filter</p>
+            <p className="mt-1 text-meta">
+              {onlyRowsWithFindings
+                ? "No row on this axis currently carries an open finding. Clear the filter to see the whole timetable."
+                : "Nothing to show for this axis."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-8">
+          <MasterWeekTable
+            label="Week A"
+            weekDays={weekA}
+            periods={canonicalPeriods}
+            rows={rows}
+            axis={axis}
+            density={density}
+            entriesByRowKey={entriesByRowKey}
+            ghostsByRowKey={ghostsByRowKey}
+            pendingEntryIds={pendingEntryIds}
+            findingHighlights={findingHighlights}
+            onSelectLesson={onSelectLesson}
+            selectedEntryId={selectedEntryId}
+            resolvingCounts={resolvingCounts}
+          />
+          <MasterWeekTable
+            label="Week B"
+            weekDays={weekB}
+            periods={canonicalPeriods}
+            rows={rows}
+            axis={axis}
+            density={density}
+            entriesByRowKey={entriesByRowKey}
+            ghostsByRowKey={ghostsByRowKey}
+            pendingEntryIds={pendingEntryIds}
+            findingHighlights={findingHighlights}
+            onSelectLesson={onSelectLesson}
+            selectedEntryId={selectedEntryId}
+            resolvingCounts={resolvingCounts}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -111,9 +172,12 @@ function MasterWeekTable({
   axis,
   density,
   entriesByRowKey,
+  ghostsByRowKey,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
+  selectedEntryId,
+  resolvingCounts,
 }: {
   label: string;
   weekDays: Day[];
@@ -122,15 +186,18 @@ function MasterWeekTable({
   axis: ViewType;
   density: Density;
   entriesByRowKey: Map<string, TimetableEntry[]>;
+  ghostsByRowKey: Map<string, GhostEntry[]>;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
+  selectedEntryId?: number | null;
+  resolvingCounts?: Map<number, number>;
 }) {
   const compact = density === "compact";
   const totalCols = weekDays.length * periods.length;
   // Called unconditionally, before the weekDays.length===0 early return -
   // React Hooks must run in the same order on every render.
-  const { focus, registerCell, move, focusDefault } = useGridKeyboardNav(rows.length, totalCols);
+  const { focus, registerCell, move, focusDefault, setFocus } = useGridKeyboardNav(rows.length, totalCols);
 
   if (weekDays.length === 0) return null;
 
@@ -155,9 +222,9 @@ function MasterWeekTable({
 
   return (
     <div>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
+      <h2 className="mb-2 text-section-title">{label}</h2>
       <div
-        className="rounded-lg border border-slate-300 shadow-sm"
+        className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm"
         tabIndex={0}
         role="grid"
         aria-label={`${label} timetable grid - arrow keys to move, Enter to open a lesson`}
@@ -168,7 +235,10 @@ function MasterWeekTable({
           <thead className="sticky top-0 z-10">
             <tr>
               <th
-                className={`sticky left-0 z-20 w-44 border-b-2 border-r border-slate-300 bg-slate-100 text-left font-semibold text-slate-600 ${compact ? "p-1" : "p-2"}`}
+                className={cx(
+                  "sticky left-0 z-20 w-44 border-b-2 border-r border-border-strong bg-surface-sunken text-left text-label",
+                  compact ? "p-1" : "p-2",
+                )}
               >
                 {axis === "teacher" ? "Teacher" : axis === "room" ? "Room" : "Roll class"}
               </th>
@@ -176,24 +246,27 @@ function MasterWeekTable({
                 <th
                   key={d.code}
                   colSpan={periods.length}
-                  className={`border-b-2 border-l border-slate-300 bg-slate-100 text-center font-semibold text-slate-600 ${compact ? "p-1" : "p-1.5"}`}
+                  className={cx(
+                    "border-b-2 border-l border-border-strong bg-surface-sunken text-center text-label",
+                    compact ? "p-1" : "p-1.5",
+                  )}
                 >
                   {d.code.replace(/ [AB]$/, "")}
                 </th>
               ))}
             </tr>
             <tr>
-              <th className="sticky left-0 z-20 border-b border-r border-slate-300 bg-slate-50 p-1"></th>
+              <th className="sticky left-0 z-20 border-b border-r border-border-strong bg-surface p-1" />
               {weekDays.map((d) =>
                 periods.map((p, pIdx) => (
                   <th
                     key={`${d.code}-${p.period_no}`}
-                    // slate-400 on slate-50 is ~3:1 - under WCAG AA even for
-                    // secondary text. slate-500 clears it without making the
-                    // period numbers compete with the lesson content.
-                    className={`border-b bg-slate-50 p-1 text-center font-normal text-slate-500 ${
-                      pIdx === 0 ? "border-l-2 border-l-slate-300" : "border-l border-l-slate-200"
-                    }`}
+                    // Group separators (day boundaries) are border weight, not
+                    // hue: readable without colour perception.
+                    className={cx(
+                      "nums border-b bg-surface p-1 text-center font-normal text-text-muted",
+                      pIdx === 0 ? "border-l-2 border-l-border-strong" : "border-l border-l-border",
+                    )}
                     title={p.name}
                   >
                     {p.name.length > 4 ? p.period_no : p.name}
@@ -204,15 +277,17 @@ function MasterWeekTable({
           </thead>
           <tbody>
             {rows.map((row, rowIdx) => (
-              <tr key={row.code} className="group even:bg-slate-50/60">
+              <tr key={row.code} className="group even:bg-surface-sunken/40">
                 {/* The frozen label column needs its own opaque surface (it
-                    scrolls over content) but a plain bg-white erases the row
-                    striping right where the eye needs it most - at the label -
-                    on a wide horizontal scroll. Inherit the stripe instead, and
-                    use a real shadow rather than a 1px border so the frozen
-                    edge reads as a layer, not a cell divider. */}
+                    scrolls over content) but a plain surface erases the row
+                    striping right where the eye needs it most - at the label.
+                    Inherit the stripe instead, and use a real shadow rather
+                    than a 1px border so the frozen edge reads as a layer. */}
                 <td
-                  className={`sticky-col-edge sticky left-0 z-10 max-w-[11rem] truncate border-b border-slate-200 bg-white font-medium text-slate-700 group-even:bg-slate-50 ${compact ? "p-1" : "p-2"}`}
+                  className={cx(
+                    "sticky-col-edge sticky left-0 z-10 max-w-[11rem] truncate border-b border-border bg-surface font-medium text-text-secondary group-even:bg-surface-sunken/40",
+                    compact ? "p-1" : "p-2",
+                  )}
                   title={row.label}
                 >
                   {row.label}
@@ -221,19 +296,24 @@ function MasterWeekTable({
                   periods.map((p, pIdx) => {
                     const key = `${row.code}|${d.code}|${p.period_no}`;
                     const cellEntries = entriesByRowKey.get(key) ?? [];
+                    const cellGhosts = ghostsByRowKey.get(key) ?? [];
                     const colIdx = dIdx * periods.length + pIdx;
                     return (
                       <MasterCell
                         key={`${d.code}-${p.period_no}`}
                         axis={axis}
                         entries={cellEntries}
+                        ghosts={cellGhosts}
                         firstOfDay={pIdx === 0}
                         compact={compact}
                         focused={focus?.r === rowIdx && focus?.c === colIdx}
                         registerCell={(el) => registerCell(rowIdx, colIdx, el)}
+                        onCellFocus={() => setFocus({ r: rowIdx, c: colIdx })}
                         pendingEntryIds={pendingEntryIds}
                         findingHighlights={findingHighlights}
                         onSelectLesson={onSelectLesson}
+                        selectedEntryId={selectedEntryId}
+                        resolvingCounts={resolvingCounts}
                       />
                     );
                   }),
@@ -249,50 +329,54 @@ function MasterWeekTable({
 
 // A shared physical space (a hall, an "Assisi Centre"-style multi-purpose
 // room) can host a dozen+ parallel classes in one slot. Rendering all of
-// them stacked would balloon that one cell's height - and every other
-// cell in the same table row, since a <tr> takes the height of its
-// tallest <td> - dragging the whole row's height along with it (measured
-// on real data: one such cell alone forced a 350px row, next to ~40px
-// rows either side). Capping what renders inline and summarising the
-// rest keeps every row a predictable height regardless of how packed any
-// single cell in it is.
+// them stacked would balloon that one cell's height - and every other cell
+// in the same table row - so what renders inline is capped and the rest is
+// summarised. Row heights stay predictable however packed a cell is.
 const MAX_VISIBLE_PER_CELL = 4;
 
 function MasterCell({
   axis,
   entries,
+  ghosts,
   firstOfDay,
   compact,
   focused,
   registerCell,
+  onCellFocus,
   pendingEntryIds,
   findingHighlights,
   onSelectLesson,
+  selectedEntryId,
+  resolvingCounts,
 }: {
   axis: ViewType;
   entries: TimetableEntry[];
+  ghosts: GhostEntry[];
   firstOfDay: boolean;
   compact: boolean;
   focused: boolean;
   registerCell: (el: HTMLTableCellElement | null) => void;
+  /** Focus arrived inside this cell - record the keyboard position so arrow
+   *  keys continue from where the user clicked. */
+  onCellFocus: () => void;
   pendingEntryIds?: Set<number>;
   findingHighlights?: Map<string, CellHighlight>;
   onSelectLesson?: (entry: TimetableEntry) => void;
+  selectedEntryId?: number | null;
+  resolvingCounts?: Map<number, number>;
 }) {
-  const borderClass = firstOfDay ? "border-l-2 border-l-slate-200" : "border-l border-l-slate-100";
-  // Keyboard focus ring - distinct from the amber pending ring and the
-  // severity rings applied to individual lesson buttons inside the cell,
-  // since this marks the whole cell as the current keyboard position, not
-  // a lesson's state. tabIndex=-1 keeps every cell out of normal Tab
-  // order - only reachable via the grid wrapper's arrow-key handler
-  // (lib/gridKeyboardNav.ts), which imperatively focuses it.
-  const focusRingClass = focused ? "ring-2 ring-inset ring-sky-500" : "";
+  const borderClass = firstOfDay ? "border-l-2 border-l-border-strong" : "border-l border-l-border";
+  // Keyboard focus ring - distinct from the conflict/proposed markers applied
+  // to individual lesson buttons inside the cell, since this marks the whole
+  // cell as the current keyboard position, not a lesson's state. tabIndex=-1
+  // keeps every cell out of normal Tab order - only reachable via the grid
+  // wrapper's arrow-key handler (lib/gridKeyboardNav.ts).
+  const focusRingClass = focused ? "ring-2 ring-inset ring-focus" : "";
 
   // An empty cell is left genuinely empty. A "·" repeated across ~2,000
-  // free slots (51 rows x 50 columns) is noise competing with the lessons
-  // that actually matter - absence reads better than a glyph for absence.
-  if (entries.length === 0) {
-    return <td ref={registerCell} tabIndex={-1} className={`border-b p-1 ${borderClass} ${focusRingClass}`} />;
+  // free slots is noise competing with the lessons that actually matter.
+  if (entries.length === 0 && ghosts.length === 0) {
+    return <td ref={registerCell} tabIndex={-1} onFocus={onCellFocus} className={cx("border-b p-1", borderClass, focusRingClass)} />;
   }
 
   const visible = entries.slice(0, MAX_VISIBLE_PER_CELL);
@@ -302,38 +386,45 @@ function MasterCell({
     <td
       ref={registerCell}
       tabIndex={-1}
-      className={`border-b align-top ${borderClass} ${compact ? "p-px" : "p-[3px]"} ${focusRingClass}`}
+      onFocus={onCellFocus}
+      className={cx("border-b align-top", borderClass, compact ? "p-px" : "p-[3px]", focusRingClass)}
     >
-      <div className={`flex flex-col ${compact ? "gap-px" : "gap-[3px]"}`}>
+      <div className={cx("flex flex-col", compact ? "gap-px" : "gap-[3px]")}>
         {visible.map((e, i) => {
           const primary = cellPrimary(e);
-          // Compact mode drops the secondary line entirely - the point of
-          // the toggle is maximum rows-in-view, and the full detail is
-          // still one click away via the tooltip/inspector.
+          // Compact mode drops the secondary line entirely - the point of the
+          // toggle is maximum rows-in-view, and the full detail is still one
+          // click away via the tooltip/inspector.
           const secondary = compact ? null : cellSecondary(axis, e);
           const editable = e.entry_type === "LESSON" && !!onSelectLesson;
           const pending = pendingEntryIds?.has(e.entry_id);
           const highlight = findingHighlights ? highlightForEntry(findingHighlights, e) : null;
+          const state = cellState({
+            highlight,
+            pending: !!pending,
+            resolvingCount: resolvingCounts?.get(e.entry_id) ?? 0,
+          });
           const color = e.entry_type === "LESSON" ? facultyColor(e.faculty_code) : null;
-          // Pending takes the ring when both apply - the user is actively
-          // working this lesson, so that's the more relevant signal in the
-          // moment, but the finding is still named in the tooltip either way.
-          const ringClass = pending ? "ring-2 ring-amber-400" : highlight ? HIGHLIGHT_RING[highlight.severity] : "";
+          const selected = selectedEntryId === e.entry_id;
           const paddingClass = compact ? "py-px pl-1 pr-0.5" : "py-1 pl-1.5 pr-1";
-          const className = `relative w-full truncate rounded-sm text-left leading-tight ${paddingClass} ${
-            e.entry_type === "LESSON" ? "text-slate-900" : "bg-slate-100 text-slate-500"
-          } ${editable ? "cursor-pointer hover:brightness-95" : ""} ${ringClass}`;
+          const className = cx(
+            "relative w-full truncate rounded-sm text-left leading-tight transition-[box-shadow,outline-color] duration-150",
+            paddingClass,
+            e.entry_type === "LESSON" ? "text-text-primary" : "bg-surface-sunken text-text-muted",
+            editable ? "cursor-pointer hover:brightness-95" : "",
+            selected ? "ring-2 ring-inset ring-focus" : state.className,
+          );
           const style = color
             ? { backgroundColor: `${color}1f`, borderLeft: `3px solid ${color}` }
             : undefined;
           const content = (
             <>
+              <CellStateMarker state={state} />
               <div className="truncate font-medium">{primary}</div>
               {secondary && <div className="truncate text-[11px] opacity-75">{secondary}</div>}
             </>
           );
-          const title =
-            cellTitle(e) + (pending ? " · pending move" : "") + (highlight ? ` · ${highlight.titles.join("; ")}` : "");
+          const title = cellTitle(e) + (pending ? " - proposed move" : "") + state.titleSuffix;
           return editable ? (
             <button key={i} type="button" className={className} style={style} onClick={() => onSelectLesson!(e)} title={title}>
               {content}
@@ -344,9 +435,31 @@ function MasterCell({
             </div>
           );
         })}
+        {ghosts.map((g, i) => {
+          const label = cellPrimary(g.entry);
+          const target = `${g.after.day_code ?? g.entry.day_code} ${g.after.period_code ?? g.entry.period_code}`;
+          const title = `${label} is proposed to move to ${target}. The imported timetable still has it here - the move applies only when the change set is approved.`;
+          const body = (
+            <div className={cx("relative truncate", compact ? "py-px pl-1 pr-0.5" : "py-1 pl-1.5 pr-1")}>
+              <div className="truncate font-medium text-text-muted">{label}</div>
+              <div className="nums truncate text-[10px] text-timetable-proposed">&rarr; {target} proposed</div>
+            </div>
+          );
+          const ghostClass =
+            "relative w-full cursor-pointer rounded-sm border border-dashed border-timetable-proposed bg-timetable-proposed-surface text-left leading-tight text-text-muted hover:shadow-sm";
+          return onSelectLesson ? (
+            <button key={`ghost-${i}`} type="button" className={ghostClass} title={title} onClick={() => onSelectLesson(g.entry)}>
+              {body}
+            </button>
+          ) : (
+            <div key={`ghost-${i}`} className={ghostClass} title={title}>
+              {body}
+            </div>
+          );
+        })}
         {overflow.length > 0 && (
           <div
-            className="truncate rounded-sm bg-slate-200 py-0.5 pl-1.5 pr-1 text-left text-[10px] font-semibold text-slate-500"
+            className="truncate rounded-sm bg-surface-sunken py-0.5 pl-1.5 pr-1 text-left text-[10px] font-semibold text-text-muted"
             title={`Also here: ${overflow.map((e) => cellPrimary(e)).join(", ")}`}
           >
             +{overflow.length} more

@@ -88,14 +88,19 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
 
 const KNOWN_TABS = new Set<string>(SIDEBAR_GROUPS.flatMap((g) => g.items.map((i) => i.id)));
 
-/** Deep links: `#/findings` opens the findings queue. The hash is the one
- *  piece of location state a hash-router-free app can keep honest - it gives
+/** Deep links: `#/findings` opens the findings queue, `#/timetable?scenario=6`
+ *  opens the master grid rendering draft change set 6. The hash is the one
+ *  piece of location state a router-free app can keep honest - it gives
  *  Back/Forward, refresh-safe state and linkable queues without adding a
  *  router dependency. Non-route hashes (the skip link's `#main-content`) are
  *  ignored rather than treated as navigation. */
-function tabFromHash(): Tab | null {
+function parseHash(): { tab: Tab | null; scenario: number | null } {
   const raw = window.location.hash.replace(/^#\/?/, "");
-  return KNOWN_TABS.has(raw) ? (raw as Tab) : null;
+  const [tabPart, query] = raw.split("?");
+  const tab = KNOWN_TABS.has(tabPart) ? (tabPart as Tab) : null;
+  const scenarioRaw = new URLSearchParams(query ?? "").get("scenario");
+  const scenario = scenarioRaw && /^\d+$/.test(scenarioRaw) ? Number(scenarioRaw) : null;
+  return { tab, scenario };
 }
 
 function buildProposeFixContext(finding: Finding): ProposeFixContext {
@@ -125,15 +130,28 @@ export default function App() {
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTabState] = useState<Tab>(() => tabFromHash() ?? "dashboard");
+  const [tab, setTabState] = useState<Tab>(() => parseHash().tab ?? "dashboard");
+  const [gridChangeSetId, setGridChangeSetIdState] = useState<number | null>(() => parseHash().scenario);
+
+  /** One writer for the URL so address bar, Back button and app state can't
+   *  drift apart: the active tab is always `#/tab`, and the timetable keeps
+   *  an active scenario in `?scenario=`. */
+  const writeHash = (nextTab: Tab, scenario: number | null) => {
+    const target = scenario != null && nextTab === "timetable" ? `#/timetable?scenario=${scenario}` : `#/${nextTab}`;
+    if (window.location.hash !== target) window.location.hash = target;
+  };
 
   // Navigation writes to the hash so Back/Forward move between pages and a
   // queue can be linked to directly. Unknown hashes (the skip link's
   // #main-content) are ignored instead of teleporting the user.
   const setTab = (next: Tab) => {
     setTabState(next);
-    const target = `#/${next}`;
-    if (window.location.hash !== target) window.location.hash = target;
+    writeHash(next, gridChangeSetId);
+  };
+
+  const setGridChangeSetId = (id: number | null) => {
+    setGridChangeSetIdState(id);
+    writeHash(tab, id);
   };
 
   useEffect(() => {
@@ -143,8 +161,9 @@ export default function App() {
         setTabState("dashboard");
         return;
       }
-      const t = tabFromHash();
-      if (t) setTabState(t);
+      const parsed = parseHash();
+      if (parsed.tab) setTabState(parsed.tab);
+      setGridChangeSetIdState(parsed.scenario);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -155,7 +174,6 @@ export default function App() {
   const [badgeCounts, setBadgeCounts] = useState<BadgeCounts>({
     findings: 0, composites: 0, roomConstraints: 0, teacherCapabilities: 0, teachingRequirements: 0, changes: 0,
   });
-  const [gridChangeSetId, setGridChangeSetId] = useState<number | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [jumpTarget, setJumpTarget] = useState<{ view: ViewType; code: string } | null>(null);
 

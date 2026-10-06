@@ -22,7 +22,15 @@ export function useGridKeyboardNav(rowCount: number, colCount: number) {
   const cellRefs = useRef<(HTMLElement | null)[][]>([]);
 
   useEffect(() => {
-    if (focus) cellRefs.current[focus.r]?.[focus.c]?.focus();
+    if (!focus) return;
+    const cell = cellRefs.current[focus.r]?.[focus.c];
+    if (!cell) return;
+    // If focus is already inside this cell (the user clicked a lesson button),
+    // moving it onto the cell itself would steal it from the control they
+    // just activated - which also breaks focus restoration when a drawer
+    // closes. Only jump when focus is elsewhere entirely (Tab-in, arrows).
+    if (cell.contains(document.activeElement)) return;
+    cell.focus();
   }, [focus]);
 
   function registerCell(r: number, c: number, el: HTMLElement | null) {

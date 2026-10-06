@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchFindings, fetchLegalSlots, fetchSuggestions, findTimetableEntries } from "../api";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
+import { Alert, Badge, Button, Drawer, Tabs } from "../ui";
 import type {
   LegalSlot,
   ReferenceData,
@@ -194,19 +195,31 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-96 animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-xl">
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            {entry.class_code ?? entry.subject_name ?? "Lesson"}
-          </h2>
-          <p className="text-xs text-slate-500">{entry.roll_class_code}</p>
-        </div>
-        <button type="button" onClick={onClose} className="text-sm text-ink-muted hover:text-slate-700">
-          ✕
-        </button>
-      </div>
-
+    <Drawer
+      open
+      onClose={onClose}
+      title={entry.class_code ?? entry.subject_name ?? "Lesson"}
+      subtitle={entry.roll_class_code}
+      scrim="none"
+      meta={
+        <>
+          <Badge size="sm" tone="neutral" variant="outline">
+            {entry.day_code} · {entry.period_code}
+          </Badge>
+          <Badge size="sm" tone="neutral" variant="outline">
+            {entry.room_code ?? "no room"}
+          </Badge>
+          <Badge size="sm" tone="neutral" variant="outline">
+            {entry.teacher_code ?? "no teacher"}
+          </Badge>
+          {changeSetName && (
+            <Badge size="sm" tone="accent">
+              draft: {changeSetName}
+            </Badge>
+          )}
+        </>
+      }
+    >
       <dl className="mb-5 grid grid-cols-2 gap-y-2 text-xs">
         <dt className="text-ink-muted">Current slot</dt>
         <dd className="text-slate-700">
@@ -222,33 +235,25 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
 
       {!result && (
         <>
-          <div className="mb-3 flex gap-1 rounded-md bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => setTab("move")}
-              className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                tab === "move" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Move manually
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTab("suggestions");
-                if (suggestions.status === "idle") loadSuggestions();
-              }}
-              className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                tab === "suggestions" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Suggested fixes
-            </button>
-          </div>
+          <Tabs
+            label="Lesson actions"
+            variant="segmented"
+            size="sm"
+            className="mb-3 w-full [&>div]:w-full"
+            value={tab}
+            onChange={(next) => {
+              setTab(next);
+              if (next === "suggestions" && suggestions.status === "idle") void loadSuggestions();
+            }}
+            tabs={[
+              { id: "move", label: "Move manually" },
+              { id: "suggestions", label: "Suggested fixes" },
+            ]}
+          />
 
           {tab === "move" && (
             <>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Move to</h3>
+              <h3 className="mb-2 text-label">Move to</h3>
               <div className="mb-2 grid grid-cols-2 gap-2">
                 <select
                   value={afterDay}
@@ -306,7 +311,7 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
               {legalSlots && (
                 <p
                   className={`mb-3 text-xs ${
-                    currentSlot && (!currentSlot.legal || !roomIsLegal) ? "text-amber-700" : "text-emerald-700"
+                    currentSlot && (!currentSlot.legal || !roomIsLegal) ? "text-warning" : "text-success"
                   }`}
                   title="Cheap check: teacher/student availability and room type/pool/capacity - Propose this move still runs the real, authoritative check"
                 >
@@ -318,27 +323,33 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                 </p>
               )}
               <input
+                aria-label="Reason (optional)"
                 placeholder="Reason (optional)"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="mb-3 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                className="mb-3 h-8.5 w-full rounded-md border border-border-strong bg-surface px-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-focus focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-focus)_22%,transparent)] focus:outline-none"
               />
-              {error && <p className="mb-3 rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>}
-              <button
-                type="button"
+              {error && (
+                <Alert tone="critical" className="mb-3">
+                  {error}
+                </Alert>
+              )}
+              <Button
+                variant="primary"
+                block
                 onClick={submit}
-                disabled={!hasChange || submitting}
-                className="w-full rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled={!hasChange}
+                loading={submitting}
               >
                 {submitting ? "Checking…" : "Propose this move"}
-              </button>
-              {!hasChange && <p className="mt-2 text-center text-xs text-ink-muted">Change something to propose a move.</p>}
+              </Button>
+              {!hasChange && <p className="mt-2 text-center text-meta">Change something to propose a move.</p>}
             </>
           )}
 
           {tab === "suggestions" && (
             <>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested fixes</h3>
+              <h3 className="mb-2 text-label">Suggested fixes</h3>
               {suggestions.status === "loading" && <p className="text-xs text-ink-muted">Searching for valid alternatives…</p>}
               {suggestions.status === "not_applicable" && (
                 <p className="text-xs text-ink-muted">
@@ -356,21 +367,25 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                   ))}
                 </div>
               )}
-              {error && <p className="mt-3 rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>}
+              {error && (
+                <Alert tone="critical" className="mt-3">
+                  {error}
+                </Alert>
+              )}
             </>
           )}
         </>
       )}
 
       {result && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p className={`mb-2 font-medium ${result.valid ? "text-emerald-700" : "text-amber-700"}`}>
+        <div className="rounded-lg border border-border bg-surface p-3 text-sm">
+          <p className={`mb-2 font-medium ${result.valid ? "text-success" : "text-warning"}`}>
             {result.valid ? "No new clashes introduced." : result.reason}
           </p>
           {result.introduced_findings.length > 0 && (
             <>
-              <p className="text-xs font-medium text-red-700">Introduces:</p>
-              <ul className="mb-2 list-disc pl-4 text-xs text-red-700">
+              <p className="text-xs font-medium text-critical">Introduces:</p>
+              <ul className="mb-2 list-disc pl-4 text-xs text-critical">
                 {result.introduced_findings.map((f, i) => (
                   <li key={i}>{f.title}</li>
                 ))}
@@ -379,36 +394,28 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
           )}
           {result.resolved_findings.length > 0 && (
             <>
-              <p className="text-xs font-medium text-emerald-700">Resolves:</p>
-              <ul className="mb-2 list-disc pl-4 text-xs text-emerald-700">
+              <p className="text-xs font-medium text-success">Resolves:</p>
+              <ul className="mb-2 list-disc pl-4 text-xs text-success">
                 {result.resolved_findings.map((f, i) => (
                   <li key={i}>{f.title}</li>
                 ))}
               </ul>
             </>
           )}
-          <p className="mb-3 text-xs text-slate-500">
+          <p className="mb-3 text-meta">
             Added to change set "{changeSetName}" - not written to the timetable until approved.
           </p>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onOpenChangeSet}
-              className="flex-1 rounded-md bg-slate-700 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
-            >
+            <Button size="sm" variant="primary" className="flex-1" onClick={onOpenChangeSet}>
               Review in Change Sets
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-600 hover:bg-slate-100"
-            >
+            </Button>
+            <Button size="sm" onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </Drawer>
   );
 }
 
