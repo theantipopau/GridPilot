@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { assignTeacherRole, createRole, fetchRoles, fetchTeachers, updateTeacherProfile } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { addAuthoredTeacher, assignTeacherRole, createRole, fetchRoles, fetchTeachers, updateAuthoredTeacher, updateTeacherProfile } from "../api";
 import LoadingState from "../components/LoadingState";
 import { ReviewerField } from "../components/ReviewShell";
 import { IconUsers } from "../components/icons";
@@ -28,6 +28,28 @@ const REGISTRATION_STATUS_OPTIONS: RegistrationStatus[] = ["PROVISIONAL", "FULL"
 
 /** Compact control inside a table cell: same focus ring, same border tokens,
  *  but sized to sit on one line with the row text. */
+/** Inline-edit state for one authored teacher row (or null). Exported
+ *  rows never enter this state - editing an exported teacher fact means
+ *  GridPilot disagreeing with the source export, which is a TTS-export
+ *  correction, not something this app writes. */
+interface EditTeacherState {
+  first_name: string;
+  last_name: string;
+  staff_category: string;
+  contracted_load_minutes: string;
+  faculty_codes: string[];
+}
+
+function teacherToEditState(t: TeacherSummary): EditTeacherState {
+  return {
+    first_name: t.first_name ?? "",
+    last_name: t.last_name ?? "",
+    staff_category: t.staff_category ?? "",
+    contracted_load_minutes: t.contracted_load_minutes != null ? String(t.contracted_load_minutes) : "",
+    faculty_codes: t.faculty_codes,
+  };
+}
+
 const CELL_SELECT =
   "max-w-[9.5rem] rounded-md border border-border-strong bg-surface px-1.5 py-1 text-xs text-text-primary " +
   "transition-[border-color,box-shadow] duration-150 focus:border-focus focus:outline-none " +
@@ -47,13 +69,86 @@ export default function TeachersPage() {
   const [savingRole, setSavingRole] = useState(false);
   const [assigningCode, setAssigningCode] = useState<string | null>(null);
   const [savingProfileCode, setSavingProfileCode] = useState<string | null>(null);
+  const [showTeacherForm, setShowTeacherForm] = useState(false);
+  const [newTeacherCode, setNewTeacherCode] = useState("");
+  const [newTeacherFirst, setNewTeacherFirst] = useState("");
+  const [newTeacherLast, setNewTeacherLast] = useState("");
+  const [newTeacherCategory, setNewTeacherCategory] = useState("");
+  const [newTeacherLoad, setNewTeacherLoad] = useState("");
+  const [newTeacherFaculties, setNewTeacherFaculties] = useState<string[]>([]);
+  const [savingTeacher, setSavingTeacher] = useState(false);
+  const [saveEdit, setSaveEdit] = useState(false);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditTeacherState | null>(null);
 
   const load = () => {
     fetchTeachers().then((r) => setTeachers(r.teachers)).catch((e) => setError(String(e)));
     fetchRoles().then((r) => setRoles(r.roles)).catch((e) => setError(String(e)));
   };
 
+  // Faculties available for the add-teacher form - derived from loaded
+  // teachers (ReferenceData carries no faculty list). Kept above the
+  // loading early-return so the hook order is unconditional.
+  const facultyOptions = useMemo(
+    () => [...new Set((teachers ?? []).flatMap((t) => t.faculty_codes))].sort(),
+    [teachers],
+  );
+
   useEffect(load, []);
+
+  const handleAddTeacher = async () => {
+    if (!newTeacherCode.trim() || !newTeacherLast.trim()) return;
+    if (!reviewer.check()) return;
+    setSavingTeacher(true);
+    setActionError(null);
+    try {
+      await addAuthoredTeacher({
+        code: newTeacherCode.trim(),
+        first_name: newTeacherFirst.trim() || null,
+        last_name: newTeacherLast.trim(),
+        staff_category: (newTeacherCategory || null) as never,
+        contracted_load_minutes: newTeacherLoad ? Number(newTeacherLoad) : null,
+        faculty_codes: newTeacherFaculties,
+        entered_by: reviewer.reviewer,
+      });
+      setNewTeacherCode("");
+      setNewTeacherFirst("");
+      setNewTeacherLast("");
+      setNewTeacherCategory("");
+      setNewTeacherLoad("");
+      setNewTeacherFaculties([]);
+      setShowTeacherForm(false);
+      load();
+    } catch (e) {
+      setActionError(String(e));
+    } finally {
+      setSavingTeacher(false);
+    }
+  };
+
+  const handleSaveTeacherEdit = async (code: string) => {
+    if (!editState || !editState.last_name.trim()) return;
+    if (!reviewer.check()) return;
+    setSaveEdit(true);
+    setActionError(null);
+    try {
+      await updateAuthoredTeacher(code, {
+        first_name: editState.first_name.trim() || null,
+        last_name: editState.last_name.trim(),
+        staff_category: (editState.staff_category || null) as never,
+        contracted_load_minutes: editState.contracted_load_minutes ? Number(editState.contracted_load_minutes) : null,
+        faculty_codes: editState.faculty_codes,
+        updated_by: reviewer.reviewer,
+      });
+      setEditingCode(null);
+      setEditState(null);
+      load();
+    } catch (e) {
+      setActionError(String(e));
+    } finally {
+      setSaveEdit(false);
+    }
+  };
 
   const handleCreateRole = async () => {
     if (!newRoleName.trim()) return;
@@ -134,6 +229,7 @@ export default function TeachersPage() {
     );
   }
 
+
   const name = (t: TeacherSummary) => `${t.last_name}, ${t.first_name}`.toLowerCase();
   const sorted = sort
     ? [...teachers].sort((a, b) => {
@@ -151,19 +247,138 @@ export default function TeachersPage() {
 
   const columns: DataTableColumn<TeacherSummary>[] = [
     {
+      key: "actions",
+      header: "",
+      hideBelow: "sm",
+      render: (t) =>
+        t.source !== "AUTHORED" ? null : editingCode === t.code ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={saveEdit}
+              disabled={!editState?.last_name.trim()}
+              onClick={() => handleSaveTeacherEdit(t.code)}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setEditingCode(null);
+                setEditState(null);
+              }}
+              disabled={saveEdit}
+            >
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`Edit ${t.code}`}
+            onClick={() => {
+              setActionError(null);
+              setEditingCode(t.code);
+              setEditState(teacherToEditState(t));
+            }}
+          >
+            Edit
+          </Button>
+        ),
+    },
+    {
       key: "name",
       header: "Name",
       sortable: true,
-      render: (t) => <span className="font-medium text-text-primary">{t.last_name}, {t.first_name}</span>,
+      render: (t) =>
+        editingCode === t.code && editState ? (
+          <span className="inline-flex items-center gap-1.5">
+            <input
+              aria-label="Last name"
+              value={editState.last_name}
+              onChange={(e) => setEditState({ ...editState, last_name: e.target.value })}
+              className="w-28 rounded-md border border-border-strong bg-surface px-1.5 py-1 text-xs text-text-primary focus:border-focus focus:outline-none"
+            />
+            <input
+              aria-label="First name"
+              value={editState.first_name}
+              onChange={(e) => setEditState({ ...editState, first_name: e.target.value })}
+              className="w-28 rounded-md border border-border-strong bg-surface px-1.5 py-1 text-xs text-text-primary focus:border-focus focus:outline-none"
+            />
+            <Badge tone="accent" size="sm" title="Added in GridPilot - not yet in any exported timetable">
+              added
+            </Badge>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-medium text-text-primary">{t.last_name}, {t.first_name}</span>
+            {t.source === "AUTHORED" && (
+              <Badge tone="accent" size="sm" title="Added in GridPilot - not yet in any exported timetable">
+                added
+              </Badge>
+            )}
+          </span>
+        ),
     },
     { key: "code", header: "Code", sortable: true, render: (t) => <span className="text-code">{t.code}</span> },
     {
       key: "faculty",
       header: "Faculty",
       hideBelow: "lg",
-      render: (t) => t.faculty_codes.join(", ") || "—",
+      render: (t) => {
+        if (editingCode !== t.code || !editState) return t.faculty_codes.join(", ") || "—";
+        return (
+          <div className="flex max-w-xs flex-wrap gap-1">
+            {facultyOptions.map((f) => (
+              <button
+                key={f}
+                type="button"
+                aria-pressed={editState.faculty_codes.includes(f)}
+                onClick={() =>
+                  setEditState(
+                    editState.faculty_codes.includes(f)
+                      ? { ...editState, faculty_codes: editState.faculty_codes.filter((x) => x !== f) }
+                      : { ...editState, faculty_codes: [...editState.faculty_codes, f] },
+                  )}
+                className={
+                  "rounded-full border px-1.5 py-0.5 text-[11px] transition-colors " +
+                  (editState.faculty_codes.includes(f)
+                    ? "border-brand bg-brand text-on-brand"
+                    : "border-border bg-surface text-text-secondary hover:border-border-strong")
+                }
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        );
+      },
     },
-    { key: "category", header: "Category", hideBelow: "lg", render: (t) => t.staff_category ?? "—" },
+    {
+      key: "category",
+      header: "Category",
+      hideBelow: "lg",
+      render: (t) =>
+        editingCode === t.code && editState ? (
+          <select
+            aria-label="Staff category"
+            value={editState.staff_category}
+            onChange={(e) => setEditState({ ...editState, staff_category: e.target.value })}
+            className={CELL_SELECT}
+          >
+            <option value="">— not set —</option>
+            <option value="TEACHER">TEACHER</option>
+            <option value="GUIDANCE_COUNSELLOR">GUIDANCE_COUNSELLOR</option>
+            <option value="SUPPORT_OFFICER">SUPPORT_OFFICER</option>
+            <option value="COLLEGE_LEADERSHIP">COLLEGE_LEADERSHIP</option>
+          </select>
+        ) : (
+          t.staff_category ?? "—"
+        ),
+    },
     {
       key: "contracted",
       header: "Contracted load",
@@ -171,7 +386,19 @@ export default function TeachersPage() {
       numeric: true,
       align: "right",
       hideBelow: "sm",
-      render: (t) => formatMinutes(t.contracted_load_minutes),
+      render: (t) =>
+        editingCode === t.code && editState ? (
+          <input
+            type="number"
+            min={0}
+            aria-label="Contracted load minutes per cycle"
+            value={editState.contracted_load_minutes}
+            onChange={(e) => setEditState({ ...editState, contracted_load_minutes: e.target.value })}
+            className={cx(CELL_SELECT, "w-20 text-right")}
+          />
+        ) : (
+          formatMinutes(t.contracted_load_minutes)
+        ),
     },
     {
       key: "scheduled",
@@ -204,7 +431,7 @@ export default function TeachersPage() {
       render: (t) => (
         <select
           value={t.role?.id ?? ""}
-          disabled={assigningCode === t.code}
+          disabled={assigningCode === t.code || editingCode === t.code}
           aria-label={`Role for ${t.code}`}
           onChange={(e) => handleAssign(t.code, e.target.value)}
           className={CELL_SELECT}
@@ -226,7 +453,7 @@ export default function TeachersPage() {
       render: (t) => (
         <select
           value={t.profile?.career_stage ?? ""}
-          disabled={savingProfileCode === t.code}
+          disabled={savingProfileCode === t.code || editingCode === t.code}
           aria-label={`Career stage for ${t.code}`}
           onChange={(e) => handleProfileChange(t, { career_stage: (e.target.value || null) as never })}
           className={cx(
@@ -251,7 +478,7 @@ export default function TeachersPage() {
       render: (t) => (
         <select
           value={t.profile?.registration_status ?? ""}
-          disabled={savingProfileCode === t.code}
+          disabled={savingProfileCode === t.code || editingCode === t.code}
           aria-label={`Registration status for ${t.code}`}
           onChange={(e) => handleProfileChange(t, { registration_status: (e.target.value || null) as never })}
           className={CELL_SELECT}
@@ -277,7 +504,7 @@ export default function TeachersPage() {
           max={1}
           step={0.1}
           defaultValue={t.profile?.fte ?? ""}
-          disabled={savingProfileCode === t.code}
+          disabled={savingProfileCode === t.code || editingCode === t.code}
           placeholder="1.0"
           aria-label={`FTE for ${t.code}`}
           onBlur={(e) => {
@@ -299,8 +526,8 @@ export default function TeachersPage() {
           and career-stage profile are the only things entered here in GridPilot - neither has a source in any
           Timetabling Solutions export, and both survive a re-ingest because they're keyed by teacher code, not an
           internal id."
-        meta={<span className="nums text-meta">{teachers.length} teachers · {roles.length} roles</span>}
         actions={<ReviewerField error={reviewer.error} />}
+        meta={<span className="nums text-meta">{teachers.length} teachers · {roles.length} roles</span>}
       />
 
       {(error || actionError) && (
@@ -315,6 +542,99 @@ export default function TeachersPage() {
           {actionError ?? error}
         </Alert>
       )}
+
+      <DetailSection
+        className="mb-4"
+        title="Add a new staff member"
+        description="For a teacher who joins between exports. They appear in every dropdown straight away (marked 'added'),
+          survive a re-ingest, and - like added students - hand over to the export's own row automatically once a
+          future export includes their code."
+        actions={
+          <Button size="sm" variant="secondary" onClick={() => setShowTeacherForm((v) => !v)}>
+            {showTeacherForm ? "Cancel" : "+ New teacher"}
+          </Button>
+        }
+      >
+        {showTeacherForm && (
+          <div className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-4">
+            <Input
+              size="sm"
+              aria-label="Teacher code"
+              placeholder="Teacher code (e.g. JSMI)"
+              value={newTeacherCode}
+              onChange={(e) => setNewTeacherCode(e.target.value)}
+            />
+            <Input
+              size="sm"
+              aria-label="Last name"
+              placeholder="Last name"
+              value={newTeacherLast}
+              onChange={(e) => setNewTeacherLast(e.target.value)}
+            />
+            <Input
+              size="sm"
+              aria-label="First name"
+              placeholder="First name"
+              value={newTeacherFirst}
+              onChange={(e) => setNewTeacherFirst(e.target.value)}
+            />
+            <select
+              aria-label="Staff category"
+              value={newTeacherCategory}
+              onChange={(e) => setNewTeacherCategory(e.target.value)}
+              className="h-8.5 rounded-md border border-border-strong bg-surface px-2.5 text-sm text-text-primary focus:border-focus focus:outline-none"
+            >
+              <option value="">— category (optional) —</option>
+              <option value="TEACHER">TEACHER</option>
+              <option value="GUIDANCE_COUNSELLOR">GUIDANCE_COUNSELLOR</option>
+              <option value="SUPPORT_OFFICER">SUPPORT_OFFICER</option>
+              <option value="COLLEGE_LEADERSHIP">COLLEGE_LEADERSHIP</option>
+            </select>
+            <Input
+              size="sm"
+              type="number"
+              min={0}
+              aria-label="Contracted load minutes per cycle"
+              placeholder="Contracted load min/cycle (optional)"
+              value={newTeacherLoad}
+              onChange={(e) => setNewTeacherLoad(e.target.value)}
+            />
+            <div className="sm:col-span-2">
+              <div className="mb-1 text-xs text-text-muted">Faculties</div>
+              <div className="flex flex-wrap gap-1.5">
+                {facultyOptions.length === 0 && <span className="text-meta text-text-muted">No faculties in the current export.</span>}
+                {facultyOptions.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={newTeacherFaculties.includes(f)}
+                    onClick={() =>
+                      setNewTeacherFaculties((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]))
+                    }
+                    className={
+                      "rounded-full border px-2 py-0.5 text-xs transition-colors " +
+                      (newTeacherFaculties.includes(f)
+                        ? "border-brand bg-brand text-on-brand"
+                        : "border-border bg-surface text-text-secondary hover:border-border-strong")
+                    }
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              loading={savingTeacher}
+              disabled={!newTeacherCode.trim() || !newTeacherLast.trim()}
+              className="sm:col-span-4"
+              onClick={handleAddTeacher}
+            >
+              {savingTeacher ? "Saving…" : "Save teacher"}
+            </Button>
+          </div>
+        )}
+      </DetailSection>
 
       <DetailSection
         className="mb-4"

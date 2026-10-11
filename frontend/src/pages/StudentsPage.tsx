@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { addAuthoredStudent, fetchStudents } from "../api";
+import { addAuthoredStudent, fetchStudents, updateAuthoredStudent } from "../api";
 import LoadingState from "../components/LoadingState";
 import { ReviewerField } from "../components/ReviewShell";
 import { IconUsers } from "../components/icons";
@@ -15,8 +15,35 @@ function emptyOrNull(v: string): string | null {
   return t.length ? t : null;
 }
 
+function studentToEditState(s: StudentSummary): EditStudentState {
+  return {
+    code: s.code,
+    first_name: s.first_name ?? "",
+    last_name: s.last_name ?? "",
+    preferred_name: s.preferred_name ?? "",
+    roll_class_code: s.roll_class_code ?? "",
+    year_level_code: s.year_level_code ?? "",
+    house: s.house ?? "",
+    home_group: s.home_group ?? "",
+  };
+}
+
 interface AddStudentFormState {
   open: boolean;
+  code: string;
+  first_name: string;
+  last_name: string;
+  preferred_name: string;
+  roll_class_code: string;
+  year_level_code: string;
+  house: string;
+  home_group: string;
+}
+
+/** Inline-edit form state for one authored student row (or `null` when
+ *  nothing is being edited). Exported rows never enter this state - they
+ *  stay read-only because the export is the source of truth. */
+interface EditStudentState {
   code: string;
   first_name: string;
   last_name: string;
@@ -55,6 +82,8 @@ export default function StudentsPage({ reference }: { reference: ReferenceData }
   const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState<AddStudentFormState>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editing, setEditing] = useState<EditStudentState | null>(null);
   const [search, setSearch] = useState("");
   const [rollClassFilter, setRollClassFilter] = useState("");
   const [page, setPage] = useState(0);
@@ -139,42 +168,198 @@ export default function StudentsPage({ reference }: { reference: ReferenceData }
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!editing || !editing.last_name.trim()) return;
+    if (!reviewer.check()) return;
+    setSavingEdit(true);
+    setActionError(null);
+    try {
+      await updateAuthoredStudent(editing.code, {
+        first_name: emptyOrNull(editing.first_name),
+        last_name: emptyOrNull(editing.last_name),
+        preferred_name: emptyOrNull(editing.preferred_name),
+        roll_class_code: emptyOrNull(editing.roll_class_code),
+        year_level_code: emptyOrNull(editing.year_level_code),
+        house: emptyOrNull(editing.house),
+        home_group: emptyOrNull(editing.home_group),
+        updated_by: reviewer.reviewer,
+      });
+      setEditing(null);
+      setNotice(`Student ${editing.code} updated.`);
+      load();
+    } catch (e) {
+      setActionError(String(e));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const columns: DataTableColumn<StudentSummary>[] = [
+    {
+      key: "actions",
+      header: "",
+      hideBelow: "sm",
+      render: (s) =>
+        s.source !== "AUTHORED" ? null : editing?.code === s.code ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={savingEdit}
+              disabled={!editing.last_name.trim()}
+              onClick={handleSaveEdit}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setEditing(null)}
+              disabled={savingEdit}
+            >
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setNotice(null);
+              setEditing(studentToEditState(s));
+            }}
+          >
+            Edit
+          </Button>
+        ),
+    },
     {
       key: "name",
       header: "Name",
       sortable: true,
-      render: (s) => (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="font-medium text-text-primary">
-            {s.last_name ?? "—"}, {s.first_name ?? "—"}
-            {s.preferred_name ? ` (${s.preferred_name})` : ""}
-          </span>
-          {s.source === "AUTHORED" && (
+      render: (s) =>
+        editing?.code === s.code ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Input
+              size="sm"
+              aria-label="Last name"
+              placeholder="Last name"
+              value={editing.last_name}
+              onChange={(e) => setEditing({ ...editing, last_name: e.target.value })}
+              className="w-32"
+            />
+            <Input
+              size="sm"
+              aria-label="First name"
+              placeholder="First name"
+              value={editing.first_name}
+              onChange={(e) => setEditing({ ...editing, first_name: e.target.value })}
+              className="w-32"
+            />
+            <Input
+              size="sm"
+              aria-label="Preferred name"
+              placeholder="Preferred (optional)"
+              value={editing.preferred_name}
+              onChange={(e) => setEditing({ ...editing, preferred_name: e.target.value })}
+              className="w-32"
+            />
             <Badge tone="accent" size="sm" title="Added in GridPilot - not yet in any exported timetable">
               added
             </Badge>
-          )}
-        </span>
-      ),
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-medium text-text-primary">
+              {s.last_name ?? "—"}, {s.first_name ?? "—"}
+              {s.preferred_name ? ` (${s.preferred_name})` : ""}
+            </span>
+            {s.source === "AUTHORED" && (
+              <Badge tone="accent" size="sm" title="Added in GridPilot - not yet in any exported timetable">
+                added
+              </Badge>
+            )}
+          </span>
+        ),
     },
-    { key: "code", header: "Code", sortable: true, render: (s) => <span className="text-code">{s.code}</span> },
+    {
+      key: "code",
+      header: "Code",
+      sortable: true,
+      render: (s) => <span className="text-code">{s.code}</span>,
+    },
     {
       key: "roll_class",
       header: "Roll class",
       sortable: true,
       hideBelow: "sm",
-      render: (s) => s.roll_class_code ?? "—",
+      render: (s) =>
+        editing?.code === s.code ? (
+          <Select
+            size="sm"
+            aria-label="Roll class"
+            value={editing.roll_class_code}
+            options={[{ value: "", label: "— none —" }, ...rollClassOptions]}
+            onChange={(v) => setEditing({ ...editing, roll_class_code: v })}
+          />
+        ) : (
+          s.roll_class_code ?? "—"
+        ),
     },
     {
       key: "year_level",
       header: "Year",
       sortable: true,
       hideBelow: "lg",
-      render: (s) => s.year_level_code ?? "—",
+      render: (s) =>
+        editing?.code === s.code ? (
+          <Select
+            size="sm"
+            aria-label="Year level"
+            value={editing.year_level_code}
+            options={[{ value: "", label: "— none —" }, ...yearLevelOptions]}
+            onChange={(v) => setEditing({ ...editing, year_level_code: v })}
+          />
+        ) : (
+          s.year_level_code ?? "—"
+        ),
     },
-    { key: "house", header: "House", hideBelow: "md", render: (s) => s.house ?? "—" },
-    { key: "home_group", header: "Home group", hideBelow: "lg", render: (s) => s.home_group ?? "—" },
+    {
+      key: "house",
+      header: "House",
+      hideBelow: "md",
+      render: (s) =>
+        editing?.code === s.code ? (
+          <Input
+            size="sm"
+            aria-label="House"
+            placeholder="House"
+            value={editing.house}
+            onChange={(e) => setEditing({ ...editing, house: e.target.value })}
+            className="w-24"
+          />
+        ) : (
+          s.house ?? "—"
+        ),
+    },
+    {
+      key: "home_group",
+      header: "Home group",
+      hideBelow: "lg",
+      render: (s) =>
+        editing?.code === s.code ? (
+          <Input
+            size="sm"
+            aria-label="Home group"
+            placeholder="Home group"
+            value={editing.home_group}
+            onChange={(e) => setEditing({ ...editing, home_group: e.target.value })}
+            className="w-24"
+          />
+        ) : (
+          s.home_group ?? "—"
+        ),
+    },
   ];
 
   return (
