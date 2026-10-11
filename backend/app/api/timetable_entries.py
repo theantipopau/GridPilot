@@ -2,6 +2,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.advisor.room import AdvisorError, OLLAMA_MODEL, explain_room_choice, room_advice
 from app.analysis.suggestions import legal_slots_for_entry
 from app.api.deps import get_db
 
@@ -66,3 +67,20 @@ def get_legal_slots(entry_id: int, conn: sqlite3.Connection = Depends(get_db)) -
     if result is None:
         raise HTTPException(status_code=404, detail=f"No LESSON entry {entry_id}")
     return result
+
+
+@router.post("/timetable-entries/{entry_id}/room-advice")
+async def get_room_advice(entry_id: int, conn: sqlite3.Connection = Depends(get_db)) -> dict:
+    """AI-assisted room allocation, same local-Ollama, explain-never-decide
+    boundary as /findings/{id}/explain: the deterministic layer computes
+    which slots/rooms are genuinely legal for this lesson (the same
+    legal_slots_for_entry computation the dropdowns shade), and the model
+    only explains the trade-off. Never proposes or applies anything."""
+    facts = room_advice(conn, entry_id)
+    if facts is None:
+        raise HTTPException(status_code=404, detail=f"No LESSON entry {entry_id}")
+    try:
+        explanation = await explain_room_choice(facts["facts"])
+    except AdvisorError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return {"entry_id": entry_id, "facts": facts["facts"], "explanation": explanation, "model": OLLAMA_MODEL}

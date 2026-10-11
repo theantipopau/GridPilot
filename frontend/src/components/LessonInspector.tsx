@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchFindings, fetchLegalSlots, fetchSuggestions, findTimetableEntries } from "../api";
+import { fetchFindings, fetchLegalSlots, fetchRoomAdvice, fetchSuggestions, findTimetableEntries } from "../api";
 import SuggestionCandidateCard from "./SuggestionCandidateCard";
 import { Alert, Badge, Button, Drawer, Tabs } from "../ui";
 import type {
   LegalSlot,
   ReferenceData,
+  RoomAdviceResponse,
   SuggestionCandidate,
   TimetableEntry,
   TimetableEntryLookup,
@@ -48,7 +49,7 @@ function uniquePeriodCodes(reference: ReferenceData): string[] {
 }
 
 export default function LessonInspector({ entry, reference, changeSetName, onClose, onPropose, onOpenChangeSet }: Props) {
-  const [tab, setTab] = useState<"move" | "suggestions">("move");
+  const [tab, setTab] = useState<"move" | "suggestions" | "ai">("move");
   const [afterDay, setAfterDay] = useState(entry.day_code);
   const [afterPeriod, setAfterPeriod] = useState(entry.period_code);
   const [afterRoom, setAfterRoom] = useState(entry.room_code ?? "");
@@ -60,6 +61,9 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   const [occurrences, setOccurrences] = useState<TimetableEntryLookup[] | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionsState>({ status: "idle" });
   const [legalSlots, setLegalSlots] = useState<Map<string, LegalSlot> | null>(null);
+  const [aiAdvice, setAiAdvice] = useState<RoomAdviceResponse | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     setOccurrences(null);
@@ -86,7 +90,21 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
   useEffect(() => {
     setTab("move");
     setSuggestions({ status: "idle" });
+    setAiAdvice(null);
+    setAiError(null);
   }, [entry.entry_id]);
+
+  const loadAiAdvice = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      setAiAdvice(await fetchRoomAdvice(entry.entry_id));
+    } catch (e) {
+      setAiError(String(e));
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const loadSuggestions = async () => {
     setSuggestions({ status: "loading" });
@@ -244,10 +262,12 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
             onChange={(next) => {
               setTab(next);
               if (next === "suggestions" && suggestions.status === "idle") void loadSuggestions();
+              if (next === "ai" && !aiAdvice && !aiLoading) void loadAiAdvice();
             }}
             tabs={[
               { id: "move", label: "Move manually" },
               { id: "suggestions", label: "Suggested fixes" },
+              { id: "ai", label: "AI advice" },
             ]}
           />
 
@@ -344,6 +364,42 @@ export default function LessonInspector({ entry, reference, changeSetName, onClo
                 {submitting ? "Checking…" : "Propose this move"}
               </Button>
               {!hasChange && <p className="mt-2 text-center text-meta">Change something to propose a move.</p>}
+            </>
+          )}
+
+          {tab === "ai" && (
+            <>
+              <h3 className="mb-2 text-label">AI room advice</h3>
+              {aiLoading && <p className="text-xs text-ink-muted">Asking the local advisor…</p>}
+              {aiError && (
+                <Alert tone="warning" className="mb-2">
+                  {aiError}
+                </Alert>
+              )}
+              {aiAdvice && (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border border-border bg-surface-sunken p-3 text-sm">
+                    <p className="text-text-secondary">{aiAdvice.explanation}</p>
+                  </div>
+                  <details className="rounded-lg border border-border bg-surface p-3">
+                    <summary className="cursor-pointer text-label">Facts behind this (computed, not generated)</summary>
+                    <ul className="mt-2 flex flex-col gap-1 text-xs text-text-secondary">
+                      <li>
+                        {aiAdvice.facts.legal_slots_with_rooms.length} legal slot(s) where this lesson could go, with the
+                        rooms free in each.
+                      </li>
+                      {aiAdvice.facts.class_room_usage_this_cycle.length > 1 && (
+                        <li>
+                          This class already use(s) {aiAdvice.facts.class_room_usage_this_cycle.length} different room(s)
+                          across the cycle.
+                        </li>
+                      )}
+                      <li>Advice is explanation only - applying a move always goes through the normal propose/validate flow.</li>
+                    </ul>
+                  </details>
+                  <p className="text-meta text-text-muted">Model: {aiAdvice.model}</p>
+                </div>
+              )}
             </>
           )}
 

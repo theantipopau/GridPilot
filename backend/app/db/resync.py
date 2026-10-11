@@ -38,6 +38,7 @@ import sqlite3
 from typing import Callable
 
 from app.audit import log_event
+from app.analysis.authored_people import remove_superseded_authored_people
 
 # Tables that are entirely rebuilt from the source export every ingest,
 # deleted in an order that respects every foreign key among them (a child
@@ -452,6 +453,18 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
     # Must follow _restore_composite_groups - see that function's docstring.
     teaching_requirement_result = _restore_teaching_requirements(conn, teaching_requirement_snapshot)
     proposed_result = _restore_proposed_changes(conn, proposed_change_snapshot)
+
+    # An authored student/teacher the school added between exports is
+    # redundant the moment a fresh export carries that same code - the
+    # export wins (it's the source of truth for everything it knows
+    # about), the authored row is dropped, and the fact is logged to the
+    # audit trail. Runs after ingest_fn so the export's rows actually
+    # exist to compare against. Must run under _rebuild_source_tables'
+    # committed pass (authored_student/authored_teacher are deliberately
+    # NOT part of its delete list, but their non-FK code references into
+    # roll_class/year_level are only validated at write time, so nothing
+    # here can fail a FK constraint).
+    superseded = remove_superseded_authored_people(conn)
     conn.commit()
 
     log_event(
@@ -463,7 +476,8 @@ def resync_source_tables(conn: sqlite3.Connection, ingest_fn: Callable[[], None]
         f"({teaching_requirement_result['dropped']} dropped), and {proposed_result['restored']} "
         f"proposed change(s) ({proposed_result['dropped']} dropped).",
         detail={"composite_groups": composite_result, "room_type_constraints": room_type_result,
-                "teaching_requirements": teaching_requirement_result, "proposed_changes": proposed_result},
+                "teaching_requirements": teaching_requirement_result, "proposed_changes": proposed_result,
+                "superseded_authored_people": superseded},
     )
     conn.commit()
 

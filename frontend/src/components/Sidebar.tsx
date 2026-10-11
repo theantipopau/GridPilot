@@ -11,6 +11,7 @@ export type Tab =
   | "timetable"
   | "blocking"
   | "teachers"
+  | "students"
   | "teacher-loads"
   | "staffing-policy"
   | "rooms"

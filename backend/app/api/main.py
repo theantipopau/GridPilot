@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import PROJECT_ROOT
 from app.api import (
     audit,
+    authored_people,
     blocking,
     change_sets,
     composites,
@@ -44,6 +45,7 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(teachers.router, prefix="/api")
+app.include_router(authored_people.router, prefix="/api")
 app.include_router(blocking.router, prefix="/api")
 app.include_router(room_constraints.router, prefix="/api")
 app.include_router(rooms.router, prefix="/api")

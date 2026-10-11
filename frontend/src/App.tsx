@@ -42,6 +42,7 @@ import StaffingPolicyPage from "./pages/StaffingPolicyPage";
 import TeacherCapabilitiesPage from "./pages/TeacherCapabilitiesPage";
 import TeacherLoadsPage from "./pages/TeacherLoadsPage";
 import TeachersPage from "./pages/TeachersPage";
+import StudentsPage from "./pages/StudentsPage";
 import TeachingRequirementsPage from "./pages/TeachingRequirementsPage";
 import TimetablePage from "./pages/TimetablePage";
 import type { Finding, IngestStatus, ReferenceData, SuggestionCandidate, ViewType } from "./types";
@@ -58,6 +59,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: "timetable", label: "Master grid", icon: (c) => <IconCalendar className={c} />, description: "Inspect the whole school's lessons" },
       { id: "teachers", label: "Teachers", icon: (c) => <IconUsers className={c} /> },
+      { id: "students", label: "Students", icon: (c) => <IconUsers className={c} />, description: "Enrolments and students added between exports" },
       { id: "teacher-loads", label: "Teacher loads", icon: (c) => <IconBarChart className={c} /> },
       { id: "rooms", label: "Rooms", icon: (c) => <IconBuilding className={c} /> },
     ],
@@ -361,6 +363,7 @@ export default function App() {
           )}
           {tab === "blocking" && <BlockingPage />}
           {tab === "teachers" && <TeachersPage />}
+          {tab === "students" && <StudentsPage reference={reference} />}
           {tab === "teacher-loads" && (
             <TeacherLoadsPage
               onOpenTimetable={(code) => {

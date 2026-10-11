@@ -25,7 +25,9 @@ import type {
   RepairResult,
   ReviewStatus,
   RoomSummary,
+  RoomAdviceResponse,
   RoomTypeConstraintCandidate,
+  StudentsResponse,
   SolverRunDetail,
   SolverRunSummary,
   StaffRole,
@@ -249,6 +251,76 @@ export function fetchExportPreview(changeSetId: number): Promise<ExportPreview> 
 
 export function fetchTeachers(): Promise<{ teachers: TeacherSummary[] }> {
   return getJson(`${BASE}/teachers`);
+}
+
+export function addAuthoredTeacher(params: {
+  code: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  staff_category?: "TEACHER" | "GUIDANCE_COUNSELLOR" | "SUPPORT_OFFICER" | "COLLEGE_LEADERSHIP" | null;
+  contracted_load_minutes?: number | null;
+  faculty_codes?: string[];
+  entered_by: string;
+}): Promise<{ id: number; code: string }> {
+  return postJson(`${BASE}/authored-teachers`, params);
+}
+
+export function updateAuthoredTeacher(
+  code: string,
+  params: {
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    staff_category?: "TEACHER" | "GUIDANCE_COUNSELLOR" | "SUPPORT_OFFICER" | "COLLEGE_LEADERSHIP" | null;
+    contracted_load_minutes?: number | null;
+    faculty_codes?: string[] | null;
+    updated_by: string;
+  },
+): Promise<{ code: string }> {
+  return postJson(`${BASE}/authored-teachers/${encodeURIComponent(code)}`, params);
+}
+
+export function fetchStudents(): Promise<StudentsResponse> {
+  return getJson(`${BASE}/students`);
+}
+
+export function addAuthoredStudent(params: {
+  code: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  preferred_name?: string | null;
+  gender?: string | null;
+  roll_class_code?: string | null;
+  year_level_code?: string | null;
+  house?: string | null;
+  home_group?: string | null;
+  email?: string | null;
+  entered_by: string;
+}): Promise<{ id: number; code: string }> {
+  return postJson(`${BASE}/authored-students`, params);
+}
+
+export function updateAuthoredStudent(
+  code: string,
+  params: {
+    first_name?: string | null;
+    last_name?: string | null;
+    preferred_name?: string | null;
+    gender?: string | null;
+    roll_class_code?: string | null;
+    year_level_code?: string | null;
+    house?: string | null;
+    home_group?: string | null;
+    email?: string | null;
+    updated_by: string;
+  },
+): Promise<{ code: string }> {
+  return postJson(`${BASE}/authored-students/${encodeURIComponent(code)}`, params);
+}
+
+export function fetchRoomAdvice(entryId: number): Promise<RoomAdviceResponse> {
+  return postJson(`${BASE}/timetable-entries/${entryId}/room-advice`, {});
 }
 
 export function fetchTeacherLoads(): Promise<TeacherLoadsResponse> {

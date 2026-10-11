@@ -8,6 +8,7 @@ teacher_profile for why all three are keyed by teacher code, not
 teacher.id."""
 
 import datetime as dt
+import json
 import sqlite3
 from collections import defaultdict
 from typing import Literal
@@ -90,22 +91,47 @@ def list_teachers(conn: sqlite3.Connection = Depends(get_db)) -> dict:
         ORDER BY t.last_name, t.first_name
         """
     ).fetchall()
-    return {
-        "teachers": [
-            {
-                "code": r["code"],
-                "first_name": r["first_name"],
-                "last_name": r["last_name"],
-                "staff_category": r["staff_category"],
-                "faculty_codes": r["faculty_codes"].split(",") if r["faculty_codes"] else [],
-                "contracted_load_minutes": r["contracted_load_minutes"],
-                "scheduled_load_minutes": scheduled.get(r["id"]),
-                "role": roles.get(r["code"]),
-                "profile": profiles.get(r["code"]),
-            }
-            for r in rows
-        ]
-    }
+    teachers = [
+        {
+            "code": r["code"],
+            "first_name": r["first_name"],
+            "last_name": r["last_name"],
+            "staff_category": r["staff_category"],
+            "faculty_codes": r["faculty_codes"].split(",") if r["faculty_codes"] else [],
+            "contracted_load_minutes": r["contracted_load_minutes"],
+            "scheduled_load_minutes": scheduled.get(r["id"]),
+            "role": roles.get(r["code"]),
+            "profile": profiles.get(r["code"]),
+            "source": "EXPORTED",
+        }
+        for r in rows
+    ]
+
+    # Authored teachers (added here between exports) ride along in the same
+    # list, flagged so the UI can mark them "added in GridPilot, not yet in
+    # any export". They have no timetable_entry rows yet (the export has
+    # never scheduled them), so scheduled_load_minutes is None the same way
+    # an exported teacher with no lessons is.
+    authored = conn.execute(
+        "SELECT code, first_name, last_name, staff_category, contracted_load_minutes, faculty_codes_json "
+        "FROM authored_teacher ORDER BY last_name, first_name"
+    ).fetchall()
+    teachers += [
+        {
+            "code": r["code"],
+            "first_name": r["first_name"],
+            "last_name": r["last_name"],
+            "staff_category": r["staff_category"],
+            "faculty_codes": json.loads(r["faculty_codes_json"] or "[]"),
+            "contracted_load_minutes": r["contracted_load_minutes"],
+            "scheduled_load_minutes": None,
+            "role": roles.get(r["code"]),
+            "profile": profiles.get(r["code"]),
+            "source": "AUTHORED",
+        }
+        for r in authored
+    ]
+    return {"teachers": teachers}
 
 
 @router.get("/teachers/{code}")
@@ -115,7 +141,25 @@ def get_teacher(code: str, conn: sqlite3.Connection = Depends(get_db)) -> dict:
         (code,),
     ).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail=f"No teacher {code!r}")
+        authored = conn.execute(
+            "SELECT code, first_name, last_name, staff_category, contracted_load_minutes, faculty_codes_json "
+            "FROM authored_teacher WHERE code = ?",
+            (code,),
+        ).fetchone()
+        if authored is None:
+            raise HTTPException(status_code=404, detail=f"No teacher {code!r}")
+        return {
+            "code": authored["code"],
+            "first_name": authored["first_name"],
+            "last_name": authored["last_name"],
+            "staff_category": authored["staff_category"],
+            "faculty_codes": json.loads(authored["faculty_codes_json"] or "[]"),
+            "contracted_load_minutes": authored["contracted_load_minutes"],
+            "scheduled_load_minutes": None,
+            "role": _role_by_teacher_code(conn).get(code),
+            "profile": _profile_by_teacher_code(conn).get(code),
+            "source": "AUTHORED",
+        }
 
     faculties = [
         r["code"] for r in conn.execute(
@@ -134,6 +178,7 @@ def get_teacher(code: str, conn: sqlite3.Connection = Depends(get_db)) -> dict:
         "scheduled_load_minutes": _scheduled_minutes_by_teacher(conn).get(row["id"]),
         "role": _role_by_teacher_code(conn).get(code),
         "profile": _profile_by_teacher_code(conn).get(code),
+        "source": "EXPORTED",
     }
 
 

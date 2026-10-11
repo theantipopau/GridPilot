@@ -22,6 +22,19 @@ def get_reference(conn: sqlite3.Connection = Depends(get_db)) -> dict:
     teachers = [dict(r) for r in conn.execute(
         "SELECT code, first_name, last_name, staff_category FROM teacher ORDER BY last_name, first_name"
     )]
+    # Authored teachers (added here between exports) ride along so they
+    # appear in every teacher dropdown (LessonInspector, AddChangeForm,
+    # CommandPalette) the same way exported teachers do - flagged so a UI
+    # that cares can show "added in GridPilot".
+    teachers += [
+        dict(r) | {"source": "AUTHORED"}
+        for r in conn.execute(
+            "SELECT code, first_name, last_name, staff_category FROM authored_teacher "
+            "ORDER BY last_name, first_name"
+        )
+    ]
+    for t in teachers:
+        t.setdefault("source", "EXPORTED")
     roll_classes = [dict(r) for r in conn.execute(
         "SELECT rc.code, yl.code AS year_level_code, rc.is_support_roll_class FROM roll_class rc "
         "LEFT JOIN year_level yl ON yl.id = rc.year_level_id ORDER BY yl.code IS NULL, yl.code, rc.code"

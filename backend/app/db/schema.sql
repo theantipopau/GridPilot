@@ -627,6 +627,66 @@ CREATE TABLE IF NOT EXISTS teacher_role_assignment (
     assigned_by TEXT NOT NULL
 );
 
+-- Authored people (the "add a new student / new staff member between
+-- exports" flow the UI mockups ask for). App-owned, same reasoning as
+-- staff_role/teacher_profile above: `student` and `teacher` are in
+-- app/db/resync.py's SOURCE_TABLES_IN_DELETE_ORDER and are rebuilt from
+-- scratch (fresh surrogate ids) on every re-ingest, so a new student
+-- added directly to `student` would be silently wiped by the next
+-- import. Both tables are keyed by the school's own short code (the one
+-- thing each person keeps across terms), never by internal id.
+--
+-- A row here means "this person is NOT in the last export". When a later
+-- export gains that code, app/analysis/authored_people.py's
+-- remove_superseded_authored_people() deletes the authored row on re-ingest
+-- (the export is source of truth for a code it now carries) and the fact
+-- is written to the audit trail.
+--
+-- Authored rows never carry a source_guid: no export has ever issued one
+-- for them, and minting a GUID is the still-open experiment every
+-- entity-authoring item in docs/full-timetabler-plan.md §5 is gated on.
+-- roll_class_code/year_level_code/faculty_codes are stored by code rather
+-- than id, for the same re-ingest-stability reason teacher_role_
+-- assignment/teacher_capability use codes. Deliberately NOT declared as
+-- real FOREIGN KEYs: roll_class and year_level are themselves in
+-- resync.py's delete pass, and a live FK would make "DELETE FROM
+-- roll_class" fail the moment any authored row referenced one (PRAGMA
+-- foreign_keys = ON). Referential validity is checked in application code
+-- at write time (app/analysis/authored_people.py), which is also strictly
+-- more useful here — it can give the UI a clear "no such roll class in
+-- the current export" message instead of a bare constraint error.
+
+CREATE TABLE IF NOT EXISTS authored_student (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    first_name TEXT,
+    last_name TEXT,
+    preferred_name TEXT,
+    gender TEXT,
+    roll_class_code TEXT,
+    year_level_code TEXT,
+    house TEXT,
+    home_group TEXT,
+    email TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS authored_teacher (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT,
+    staff_category TEXT CHECK (staff_category IN ('TEACHER', 'GUIDANCE_COUNSELLOR', 'SUPPORT_OFFICER', 'COLLEGE_LEADERSHIP')),
+    contracted_load_minutes REAL,
+    faculty_codes_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT NOT NULL
+);
+
 -- Registration / career-stage profile (docs/roadmap-v2.md 2.4). App-owned,
 -- same reasoning as staff_role/teacher_role_assignment above: none of
 -- registration_status, career_stage, commenced_teaching_date, or fte
