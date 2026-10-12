@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchAuditEvents } from "../api";
-import EmptyState from "../components/EmptyState";
 import LoadingState from "../components/LoadingState";
-import PageHeader from "../components/PageHeader";
 import { IconClipboardList, IconInbox } from "../components/icons";
+import { Alert, Button, EmptyState, PageHeader } from "../ui";
 import type { AuditEvent } from "../types";
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -22,11 +21,21 @@ export default function AuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     fetchAuditEvents().then((r) => setEvents(r.events)).catch((e) => setError(String(e)));
-  }, []);
+  };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load audit trail: {error}</div>;
+  useEffect(load, []);
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={load}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load audit trail: {error}
+        </Alert>
+      </div>
+    );
+  }
   if (!events) return <LoadingState label="Loading audit trail…" />;
 
   return (
@@ -39,43 +48,47 @@ export default function AuditPage() {
           'approvals/rejections. This is a single-user local tool - "actor" is a free-text name entered at the ' +
           "time, not an authenticated identity."
         }
+        meta={<span className="nums text-meta">{events.length} events</span>}
       />
       {events.length === 0 ? (
         <EmptyState icon={<IconInbox className="h-8 w-8" />} title="No audit events yet" />
       ) : (
-        <div className="flex flex-col gap-1">
+        <ol className="flex flex-col gap-1.5">
           {events.map((e) => (
-            <div
+            <li
               key={e.id}
-              className="rounded-lg border border-slate-200 bg-white p-2 text-sm shadow-sm transition-shadow duration-150 hover:shadow-md"
+              className="rounded-lg border border-border bg-surface p-3 transition-colors duration-150 hover:border-border-strong"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-slate-800">{EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}</span>
-                  <span className="ml-2 text-slate-500">{e.summary}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-text-primary">
+                    {EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}
+                  </span>
+                  <span className="ml-2 text-sm text-text-secondary">{e.summary}</span>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-ink-muted">
-                  <span>{e.actor}</span>
-                  <span>{e.occurred_at}</span>
+                <div className="flex items-center gap-3 text-meta">
+                  <span className="text-code">{e.actor}</span>
+                  <span className="nums">{e.occurred_at}</span>
                   {e.detail && (
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-expanded={expandedId === e.id}
                       onClick={() => setExpandedId(expandedId === e.id ? null : e.id)}
-                      className="rounded bg-slate-100 px-2 py-0.5 transition-colors duration-150 hover:bg-slate-200"
                     >
                       {expandedId === e.id ? "Hide detail" : "Detail"}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
               {expandedId === e.id && e.detail && (
-                <pre className="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-600">
+                <pre className="text-code mt-2 overflow-x-auto rounded-md border border-border bg-surface-sunken p-2.5">
                   {JSON.stringify(e.detail, null, 2)}
                 </pre>
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       )}
     </div>
   );

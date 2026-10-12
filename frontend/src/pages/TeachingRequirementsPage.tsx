@@ -3,6 +3,7 @@ import { fetchTeachingRequirementCandidates, reviewTeachingRequirementCandidate 
 import TeachingRequirementQueue from "../components/TeachingRequirementQueue";
 import LoadingState from "../components/LoadingState";
 import { useToast } from "../components/Toast";
+import { Alert, Button } from "../ui";
 import type { ReviewStatus, TeachingRequirementCandidate } from "../types";
 
 export default function TeachingRequirementsPage() {
@@ -27,7 +28,14 @@ export default function TeachingRequirementsPage() {
     load(reviewStatus);
   };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load teaching-requirement candidates: {error}</div>;
+  if (error)
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={() => load(reviewStatus)}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load teaching-requirement candidates: {error}
+        </Alert>
+      </div>
+    );
   if (!candidates) return <LoadingState label="Loading teaching-requirement candidates…" />;
 
   return (

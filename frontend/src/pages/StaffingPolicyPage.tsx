@@ -10,8 +10,20 @@ import {
   fetchReleaseReconciliation,
 } from "../api";
 import LoadingState from "../components/LoadingState";
-import PageHeader from "../components/PageHeader";
+import { ReviewerField } from "../components/ReviewShell";
 import { IconClipboardList } from "../components/icons";
+import { useReviewerName } from "../lib/reviewer";
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  DataTable,
+  Input,
+  PageHeader,
+  Select,
+  type DataTableColumn,
+} from "../ui";
 import type {
   AgreementSector,
   EnrolmentDeclaration,
@@ -67,6 +79,7 @@ function AgreementCard({
       return;
     }
     setBusy(true);
+    setError(null);
     try {
       await confirmAgreement(agreement.id, reviewerName.trim());
       onChanged();
@@ -80,6 +93,7 @@ function AgreementCard({
   const handleAddLoadRule = async () => {
     if (!ordinaryHours || !maxContactHours) return;
     setBusy(true);
+    setError(null);
     try {
       await addLoadRule(agreement.id, {
         sector,
@@ -104,6 +118,7 @@ function AgreementCard({
   const handleAddBand = async () => {
     if (!enrolMin || !enrolMax) return;
     setBusy(true);
+    setError(null);
     try {
       await addLeadershipBand(agreement.id, {
         tier,
@@ -130,11 +145,11 @@ function AgreementCard({
   };
 
   return (
-    <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-2 flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-800">{agreement.name}</h3>
-          <p className="text-xs text-ink-muted">
+    <section className="mb-4 rounded-lg border border-border bg-surface p-4">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-section-title">{agreement.name}</h3>
+          <p className="text-meta">
             Effective {agreement.effective_from}
             {agreement.effective_to ? ` – ${agreement.effective_to}` : ""}
             {agreement.source_reference && (
@@ -148,45 +163,46 @@ function AgreementCard({
           </p>
         </div>
         {agreement.confirmed_by ? (
-          <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+          <Badge tone="success" className="shrink-0">
             Confirmed by {agreement.confirmed_by}
-          </span>
+          </Badge>
         ) : (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0 border-warning-border bg-warning-surface text-warning hover:bg-warning-surface"
+            loading={busy}
             onClick={handleConfirm}
-            disabled={busy}
-            className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 transition-colors duration-150 hover:bg-amber-100 disabled:opacity-50"
           >
             Unconfirmed - confirm
-          </button>
+          </Button>
         )}
       </div>
 
-      {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+      {error && (
+        <Alert tone="critical" className="mb-3" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contact-time load rules</h4>
-            <button
-              type="button"
-              onClick={() => setShowLoadForm((v) => !v)}
-              className="text-xs font-medium text-sky-600 hover:underline"
-            >
+          <div className="mb-1.5 flex items-center justify-between">
+            <h4 className="text-label">Contact-time load rules</h4>
+            <Button size="sm" variant="ghost" onClick={() => setShowLoadForm((v) => !v)}>
               {showLoadForm ? "Cancel" : "+ Add"}
-            </button>
+            </Button>
           </div>
           {agreement.load_rules.length === 0 && !showLoadForm && (
-            <p className="text-xs text-ink-muted">None entered yet.</p>
+            <p className="text-meta">None entered yet.</p>
           )}
           <ul className="mb-2 flex flex-col gap-1">
             {agreement.load_rules.map((r) => (
-              <li key={r.id} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                <span className="font-medium text-slate-800">{r.sector}</span> — max{" "}
+              <li key={r.id} className="rounded-md border border-border bg-surface-sunken px-2.5 py-1.5 text-xs">
+                <span className="font-medium text-text-primary">{r.sector}</span> — max{" "}
                 {r.max_contact_hours_per_week}h contact of {r.ordinary_hours_per_week}h ordinary/week
-                {r.clause_reference && <span className="text-ink-muted"> ({r.clause_reference})</span>}
-                <div className="mt-0.5 text-ink-muted">
+                {r.clause_reference && <span className="text-text-muted"> ({r.clause_reference})</span>}
+                <div className="mt-0.5 text-meta">
                   Counts as contact:{" "}
                   {r.contact_entry_types ? r.contact_entry_types.join(", ") : "LESSON only (app default)"}
                 </div>
@@ -194,78 +210,80 @@ function AgreementCard({
             ))}
           </ul>
           {showLoadForm && (
-            <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
-              <select
+            <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
+              <Select
+                size="sm"
+                label="Sector"
                 value={sector}
-                onChange={(e) => setSector(e.target.value as AgreementSector)}
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
-              >
-                <option value="SECONDARY">Secondary</option>
-                <option value="PRIMARY">Primary</option>
-              </select>
-              <input
+                onChange={(v) => setSector(v as AgreementSector)}
+                options={[
+                  { value: "SECONDARY", label: "Secondary" },
+                  { value: "PRIMARY", label: "Primary" },
+                ]}
+              />
+              <Input
+                size="sm"
+                type="number"
+                aria-label="Ordinary hours per week"
+                placeholder="Ordinary hours/week (e.g. 30.5)"
                 value={ordinaryHours}
                 onChange={(e) => setOrdinaryHours(e.target.value)}
-                placeholder="Ordinary hours/week (e.g. 30.5)"
-                type="number"
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
-              <input
+              <Input
+                size="sm"
+                type="number"
+                aria-label="Max contact hours per week"
+                placeholder="Max contact hours/week (e.g. 21.5)"
                 value={maxContactHours}
                 onChange={(e) => setMaxContactHours(e.target.value)}
-                placeholder="Max contact hours/week (e.g. 21.5)"
-                type="number"
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
-              <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
-                  Counts as contact time
-                </p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <fieldset>
+                <legend className="text-label">Counts as contact time</legend>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                   {["LESSON", "REGISTRATION", "ASSEMBLY", "GENERAL_PURPOSE"].map((t) => (
-                    <label key={t} className="flex items-center gap-1 text-xs text-slate-600">
-                      <input type="checkbox" checked={contactTypes.has(t)} onChange={() => toggleContactType(t)} />
-                      {t}
-                    </label>
+                    <Checkbox
+                      key={t}
+                      label={t}
+                      checked={contactTypes.has(t)}
+                      onChange={() => toggleContactType(t)}
+                      className="text-xs"
+                    />
                   ))}
                 </div>
-              </div>
-              <input
+              </fieldset>
+              <Input
+                size="sm"
+                aria-label="Clause reference"
+                placeholder="Clause reference (e.g. S3.3.2, optional)"
                 value={clauseRef}
                 onChange={(e) => setClauseRef(e.target.value)}
-                placeholder="Clause reference (e.g. S3.3.2, optional)"
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
-              <button
-                type="button"
+              <Button
+                size="sm"
+                loading={busy}
+                disabled={!ordinaryHours || !maxContactHours}
                 onClick={handleAddLoadRule}
-                disabled={busy || !ordinaryHours || !maxContactHours}
-                className="rounded-md bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
               >
                 Save load rule
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Leadership release bands</h4>
-            <button
-              type="button"
-              onClick={() => setShowBandForm((v) => !v)}
-              className="text-xs font-medium text-sky-600 hover:underline"
-            >
+          <div className="mb-1.5 flex items-center justify-between">
+            <h4 className="text-label">Leadership release bands</h4>
+            <Button size="sm" variant="ghost" onClick={() => setShowBandForm((v) => !v)}>
               {showBandForm ? "Cancel" : "+ Add"}
-            </button>
+            </Button>
           </div>
           {agreement.leadership_bands.length === 0 && !showBandForm && (
-            <p className="text-xs text-ink-muted">None entered yet.</p>
+            <p className="text-meta">None entered yet.</p>
           )}
           <ul className="mb-2 flex flex-col gap-1">
             {agreement.leadership_bands.map((b) => (
-              <li key={b.id} className="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                <span className="font-medium text-slate-800">{b.tier}</span> {b.enrolment_min}–{b.enrolment_max}{" "}
+              <li key={b.id} className="rounded-md border border-border bg-surface-sunken px-2.5 py-1.5 text-xs">
+                <span className="font-medium text-text-primary">{b.tier}</span> {b.enrolment_min}–{b.enrolment_max}{" "}
                 enrolled: {b.units != null && `${b.units} units, `}
                 {b.hours_per_year != null && `${b.hours_per_year} h/yr`}
                 {b.release_fte != null && `${b.release_fte} FTE`}
@@ -273,76 +291,83 @@ function AgreementCard({
             ))}
           </ul>
           {showBandForm && (
-            <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2">
-              <select
+            <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
+              <Select
+                size="sm"
+                label="Tier"
                 value={tier}
-                onChange={(e) => setTier(e.target.value as LeadershipTier)}
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
-              >
-                <option value="MIDDLE">Middle</option>
-                <option value="SENIOR">Senior</option>
-              </select>
+                onChange={(v) => setTier(v as LeadershipTier)}
+                options={[
+                  { value: "MIDDLE", label: "Middle" },
+                  { value: "SENIOR", label: "Senior" },
+                ]}
+              />
               <div className="flex gap-1.5">
-                <input
+                <Input
+                  size="sm"
+                  type="number"
+                  containerClassName="w-1/2"
+                  aria-label="Enrolment min"
+                  placeholder="Enrolment min"
                   value={enrolMin}
                   onChange={(e) => setEnrolMin(e.target.value)}
-                  placeholder="Enrolment min"
-                  type="number"
-                  className="w-1/2 rounded border border-slate-300 px-2 py-1 text-xs"
                 />
-                <input
+                <Input
+                  size="sm"
+                  type="number"
+                  containerClassName="w-1/2"
+                  aria-label="Enrolment max"
+                  placeholder="Enrolment max"
                   value={enrolMax}
                   onChange={(e) => setEnrolMax(e.target.value)}
-                  placeholder="Enrolment max"
-                  type="number"
-                  className="w-1/2 rounded border border-slate-300 px-2 py-1 text-xs"
                 />
               </div>
               {tier === "MIDDLE" ? (
                 <div className="flex gap-1.5">
-                  <input
+                  <Input
+                    size="sm"
+                    type="number"
+                    containerClassName="w-1/2"
+                    aria-label="Units"
+                    placeholder="Units"
                     value={units}
                     onChange={(e) => setUnits(e.target.value)}
-                    placeholder="Units"
-                    type="number"
-                    className="w-1/2 rounded border border-slate-300 px-2 py-1 text-xs"
                   />
-                  <input
+                  <Input
+                    size="sm"
+                    type="number"
+                    containerClassName="w-1/2"
+                    aria-label="Hours per year"
+                    placeholder="Hours/year"
                     value={hoursPerYear}
                     onChange={(e) => setHoursPerYear(e.target.value)}
-                    placeholder="Hours/year"
-                    type="number"
-                    className="w-1/2 rounded border border-slate-300 px-2 py-1 text-xs"
                   />
                 </div>
               ) : (
-                <input
+                <Input
+                  size="sm"
+                  type="number"
+                  aria-label="Release FTE"
+                  placeholder="Release FTE (e.g. 0.6)"
                   value={releaseFte}
                   onChange={(e) => setReleaseFte(e.target.value)}
-                  placeholder="Release FTE (e.g. 0.6)"
-                  type="number"
-                  className="rounded border border-slate-300 px-2 py-1 text-xs"
                 />
               )}
-              <input
+              <Input
+                size="sm"
+                aria-label="Clause reference"
+                placeholder="Clause reference (optional)"
                 value={bandClauseRef}
                 onChange={(e) => setBandClauseRef(e.target.value)}
-                placeholder="Clause reference (optional)"
-                className="rounded border border-slate-300 px-2 py-1 text-xs"
               />
-              <button
-                type="button"
-                onClick={handleAddBand}
-                disabled={busy || !enrolMin || !enrolMax}
-                className="rounded-md bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-              >
+              <Button size="sm" loading={busy} disabled={!enrolMin || !enrolMax} onClick={handleAddBand}>
                 Save band
-              </button>
+              </Button>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -352,25 +377,25 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
     { label: "Senior leadership", pool: data.senior_pool },
   ];
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {pools.map(({ label, pool }) => (
-        <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label} pool</h4>
+        <div key={label} className="rounded-lg border border-border bg-surface p-4">
+          <h4 className="mb-1 text-label">{label} pool</h4>
           {pool.agreement_name == null ? (
-            <p className="text-xs text-ink-muted">No confirmed agreement.</p>
+            <p className="text-meta">No confirmed agreement.</p>
           ) : pool.enrolment == null ? (
-            <p className="text-xs text-ink-muted">No enrolment declared for this year.</p>
+            <p className="text-meta">No enrolment declared for this year.</p>
           ) : pool.units == null && pool.hours_per_year == null && pool.release_fte == null ? (
-            <p className="text-xs text-ink-muted">No band covers {pool.enrolment} students.</p>
+            <p className="text-meta">No band covers {pool.enrolment} students.</p>
           ) : (
-            <div className="text-sm text-slate-700">
+            <div className="text-sm text-text-secondary">
               {pool.hours_per_year != null && (
-                <div className="text-2xl font-semibold text-slate-900">{pool.hours_per_year} h/yr</div>
+                <div className="nums text-2xl font-semibold text-text-primary">{pool.hours_per_year} h/yr</div>
               )}
               {pool.release_fte != null && (
-                <div className="text-2xl font-semibold text-slate-900">{pool.release_fte} FTE</div>
+                <div className="nums text-2xl font-semibold text-text-primary">{pool.release_fte} FTE</div>
               )}
-              <p className="text-xs text-ink-muted">
+              <p className="text-meta">
                 {pool.units != null && `${pool.units} units · `}band {pool.band_min}–{pool.band_max} · enrolment{" "}
                 {pool.enrolment}
               </p>
@@ -378,10 +403,12 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
           )}
         </div>
       ))}
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Allocated (GridPilot roles)</h4>
-        <div className="text-2xl font-semibold text-slate-900">{data.total_allocated_minutes_per_cycle} min/cycle</div>
-        <p className="text-xs text-ink-muted">
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h4 className="mb-1 text-label">Allocated (GridPilot roles)</h4>
+        <div className="nums text-2xl font-semibold text-text-primary">
+          {data.total_allocated_minutes_per_cycle} min/cycle
+        </div>
+        <p className="text-meta">
           {data.allocated.length} role assignment{data.allocated.length === 1 ? "" : "s"} carry release time. Not
           converted to hours/year - see the Teachers page for who holds what.
         </p>
@@ -391,21 +418,23 @@ function ReconciliationPanel({ data }: { data: ReleaseReconciliation }) {
 }
 
 export default function StaffingPolicyPage() {
+  const [reviewerName] = useReviewerName();
   const [agreements, setAgreements] = useState<IndustrialAgreement[] | null>(null);
   const [declarations, setDeclarations] = useState<EnrolmentDeclaration[] | null>(null);
   const [reconciliation, setReconciliation] = useState<ReleaseReconciliation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reviewerName, setReviewerName] = useState("");
 
   const [showNewAgreement, setShowNewAgreement] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSource, setNewSource] = useState("");
   const [newFrom, setNewFrom] = useState("");
   const [newTo, setNewTo] = useState("");
+  const [savingAgreement, setSavingAgreement] = useState(false);
 
   const [showNewDeclaration, setShowNewDeclaration] = useState(false);
   const [declYear, setDeclYear] = useState("");
   const [declCount, setDeclCount] = useState("");
+  const [savingDeclaration, setSavingDeclaration] = useState(false);
 
   const load = () => {
     fetchAgreements().then((r) => setAgreements(r.agreements)).catch((e) => setError(String(e)));
@@ -421,6 +450,8 @@ export default function StaffingPolicyPage() {
       setError("Enter your name (top right) before adding an agreement.");
       return;
     }
+    setSavingAgreement(true);
+    setError(null);
     try {
       await createAgreement({
         name: newName.trim(),
@@ -437,6 +468,8 @@ export default function StaffingPolicyPage() {
       load();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSavingAgreement(false);
     }
   };
 
@@ -446,6 +479,8 @@ export default function StaffingPolicyPage() {
       setError("Enter your name (top right) before declaring enrolment.");
       return;
     }
+    setSavingDeclaration(true);
+    setError(null);
     try {
       await declareEnrolment({
         planning_year: declYear.trim(),
@@ -458,11 +493,30 @@ export default function StaffingPolicyPage() {
       load();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSavingDeclaration(false);
     }
   };
 
-  if (error) return <div className="p-6 text-red-600">{error}</div>;
-  if (!agreements || !declarations || !reconciliation) return <LoadingState label="Loading staffing policy…" />;
+  if (!agreements || !declarations || !reconciliation) {
+    return (
+      <div className="p-6">
+        {error && !agreements ? (
+          <Alert tone="critical" action={<Button size="sm" onClick={load}>Retry</Button>} onDismiss={() => setError(null)}>
+            {error}
+          </Alert>
+        ) : (
+          <LoadingState label="Loading staffing policy…" />
+        )}
+      </div>
+    );
+  }
+
+  const declarationColumns: DataTableColumn<EnrolmentDeclaration>[] = [
+    { key: "year", header: "Year", render: (d) => <span className="font-medium text-text-primary">{d.planning_year}</span> },
+    { key: "enrolment", header: "Official enrolment", numeric: true, align: "right", render: (d) => fmt(d.official_enrolment) },
+    { key: "entered", header: "Entered by", render: (d) => <span className="text-code">{d.entered_by}</span> },
+  ];
 
   return (
     <div className="p-6">
@@ -473,143 +527,129 @@ export default function StaffingPolicyPage() {
           enrolment-banded tables the app can compute against. Every figure here is entered and confirmed by the
           school; GridPilot never asserts a real number on its own (docs/roadmap-v2.md 0 and 2.1) - an unconfirmed
           agreement still shows in full, marked as such, until someone with authority to do so confirms it."
-        action={
-          <input
-            value={reviewerName}
-            onChange={(e) => setReviewerName(e.target.value)}
-            placeholder="Your name (for confirming/entering policy)"
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          />
-        }
+        actions={<ReviewerField />}
       />
 
-      <div className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Release reconciliation</h2>
-        <ReconciliationPanel data={reconciliation} />
-      </div>
+      {error && (
+        <Alert tone="critical" className="mb-4" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
-      <div className="mb-6">
+      <section className="mb-6">
+        <h2 className="mb-2 text-section-title">Release reconciliation</h2>
+        <ReconciliationPanel data={reconciliation} />
+      </section>
+
+      <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Industrial agreements</h2>
-          <button
-            type="button"
-            onClick={() => setShowNewAgreement((v) => !v)}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-          >
+          <h2 className="text-section-title">Industrial agreements</h2>
+          <Button size="sm" variant="secondary" onClick={() => setShowNewAgreement((v) => !v)}>
             {showNewAgreement ? "Cancel" : "+ New agreement"}
-          </button>
+          </Button>
         </div>
 
         {showNewAgreement && (
-          <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-4">
-            <input
+          <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-border bg-surface p-4 sm:grid-cols-4">
+            <Input
+              size="sm"
+              containerClassName="sm:col-span-2"
+              aria-label="Agreement name"
+              placeholder="Agreement name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Agreement name"
-              className="rounded border border-slate-300 px-2 py-1 text-sm sm:col-span-2"
             />
-            <input
+            <Input
+              size="sm"
+              containerClassName="sm:col-span-2"
+              aria-label="Source URL"
+              placeholder="Source URL (optional)"
               value={newSource}
               onChange={(e) => setNewSource(e.target.value)}
-              placeholder="Source URL (optional)"
-              className="rounded border border-slate-300 px-2 py-1 text-sm sm:col-span-2"
             />
-            <input
+            <Input
+              size="sm"
+              aria-label="Effective from"
+              placeholder="Effective from (YYYY-MM-DD)"
               value={newFrom}
               onChange={(e) => setNewFrom(e.target.value)}
-              placeholder="Effective from (YYYY-MM-DD)"
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            <input
+            <Input
+              size="sm"
+              aria-label="Effective to"
+              placeholder="Effective to (optional)"
               value={newTo}
               onChange={(e) => setNewTo(e.target.value)}
-              placeholder="Effective to (optional)"
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            <button
-              type="button"
-              onClick={handleCreateAgreement}
+            <Button
+              variant="primary"
+              className="sm:col-span-4"
+              loading={savingAgreement}
               disabled={!newName.trim() || !newFrom.trim()}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 sm:col-span-4"
+              onClick={handleCreateAgreement}
             >
               Save agreement
-            </button>
+            </Button>
           </div>
         )}
 
         {agreements.length === 0 && !showNewAgreement && (
-          <p className="text-sm text-ink-muted">No agreement entered yet.</p>
+          <p className="text-body text-text-secondary">No agreement entered yet.</p>
         )}
         {agreements.map((a) => (
           <AgreementCard key={a.id} agreement={a} onChanged={load} reviewerName={reviewerName} />
         ))}
-      </div>
+      </section>
 
-      <div>
+      <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Declared enrolment (for EA banding)</h2>
-          <button
-            type="button"
-            onClick={() => setShowNewDeclaration((v) => !v)}
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-          >
+          <h2 className="text-section-title">Declared enrolment (for EA banding)</h2>
+          <Button size="sm" variant="secondary" onClick={() => setShowNewDeclaration((v) => !v)}>
             {showNewDeclaration ? "Cancel" : "+ Declare"}
-          </button>
+          </Button>
         </div>
-        <p className="mb-2 text-xs text-ink-muted">
+        <p className="mb-2 text-meta">
           Not derived from the student roll count in the current timetable - a census-date or official figure the
           school declares (docs/roadmap-v2.md 0.4).
         </p>
         {showNewDeclaration && (
-          <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
-            <input
+          <div className="mb-4 grid grid-cols-1 items-end gap-2 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3">
+            <Input
+              size="sm"
+              aria-label="Planning year"
+              placeholder="Planning year (e.g. 2026)"
               value={declYear}
               onChange={(e) => setDeclYear(e.target.value)}
-              placeholder="Planning year (e.g. 2026)"
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            <input
+            <Input
+              size="sm"
+              type="number"
+              aria-label="Official enrolment"
+              placeholder="Official enrolment"
               value={declCount}
               onChange={(e) => setDeclCount(e.target.value)}
-              placeholder="Official enrolment"
-              type="number"
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            <button
-              type="button"
-              onClick={handleDeclareEnrolment}
+            <Button
+              variant="primary"
+              loading={savingDeclaration}
               disabled={!declYear.trim() || !declCount}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              onClick={handleDeclareEnrolment}
             >
               Save
-            </button>
+            </Button>
           </div>
         )}
         {declarations.length === 0 ? (
-          <p className="text-sm text-ink-muted">None declared yet.</p>
+          <p className="text-body text-text-secondary">None declared yet.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
-                  <th className="p-2.5">Year</th>
-                  <th className="p-2.5">Official enrolment</th>
-                  <th className="p-2.5">Entered by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {declarations.map((d) => (
-                  <tr key={d.id} className="border-b border-slate-100 last:border-0">
-                    <td className="p-2.5 font-medium text-slate-800">{d.planning_year}</td>
-                    <td className="p-2.5 tabular-figures text-slate-600">{fmt(d.official_enrolment)}</td>
-                    <td className="p-2.5 text-slate-500">{d.entered_by}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            caption="Declared official enrolment by planning year"
+            columns={declarationColumns}
+            rows={declarations}
+            rowKey={(d) => String(d.id)}
+          />
         )}
-      </div>
+      </section>
     </div>
   );
 }

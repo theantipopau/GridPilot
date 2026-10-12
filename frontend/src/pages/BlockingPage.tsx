@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { fetchBlockingLines } from "../api";
 import BlockingDemand from "../components/BlockingDemand";
 import LoadingState from "../components/LoadingState";
-import PageHeader from "../components/PageHeader";
 import { IconColumns } from "../components/icons";
+import { Alert, Badge, Button, PageHeader } from "../ui";
 import type { BlockingGroup, BlockingLine, BlockingLinesResponse } from "../types";
 
 function rollClassCodesInGroup(group: BlockingGroup): string[] {
@@ -17,18 +17,18 @@ function rollClassCodesInGroup(group: BlockingGroup): string[] {
 function Cell({ line, rollClassCode }: { line: BlockingLine; rollClassCode: string }) {
   const cg = line.class_groups.find((c) => c.roll_class_code === rollClassCode);
   if (!cg) {
-    return <td className="border-b border-l border-slate-100 p-2 text-center text-slate-200">·</td>;
+    return <td className="border-b border-l border-border p-2 text-center text-text-muted">·</td>;
   }
   if (cg.courses.length === 0) {
-    return <td className="border-b border-l border-slate-100 p-2 text-xs text-ink-muted">(no course)</td>;
+    return <td className="border-b border-l border-border p-2 text-xs text-text-muted">(no course)</td>;
   }
   return (
-    <td className="border-b border-l border-slate-100 p-2 align-top text-xs">
+    <td className="border-b border-l border-border p-2 align-top text-xs">
       <div className="flex flex-col gap-1">
         {cg.courses.map((c, i) => (
           <div key={i}>
-            <div className="font-medium text-slate-800">{c.class_name_code ?? "—"}</div>
-            <div className="text-slate-500">
+            <div className="font-medium text-text-primary">{c.class_name_code ?? "—"}</div>
+            <div className="text-meta text-text-muted">
               {c.teacher_code ?? "—"} · {c.room_code ?? "no room"}
               {c.enrolled_count != null && <> · {c.enrolled_count} enrolled</>}
             </div>
@@ -43,34 +43,34 @@ function GroupTable({ group }: { group: BlockingGroup }) {
   const rollClasses = rollClassCodesInGroup(group);
 
   return (
-    <div>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Group {group.group}
-      </h2>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full border-collapse text-sm">
+    <section>
+      <h2 className="mb-2 text-section-title">Group {group.group}</h2>
+      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <table className="w-full border-collapse text-table">
           <thead>
             <tr>
-              <th className="w-24 border-b border-r border-slate-200 bg-slate-50 p-2 text-left text-xs font-medium text-slate-500">
+              <th className="w-24 border-b border-r border-border bg-surface-sunken p-2 text-left text-label">
                 Roll class
               </th>
               {group.lines.map((line) => (
                 <th
                   key={line.id}
-                  className="min-w-[9rem] border-b border-l border-slate-200 bg-slate-50 p-2 text-left text-xs font-medium text-slate-500"
+                  className="min-w-[9rem] border-b border-l border-border bg-surface-sunken p-2 text-left text-label"
                 >
-                  <div className="flex items-center gap-1.5 text-slate-700">
+                  <div className="flex items-center gap-1.5 text-text-primary">
                     Line {line.line}
                     {line.open_finding_count > 0 && (
-                      <span
-                        className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                      <Badge
+                        tone="warning"
+                        size="sm"
+                        className="nums"
                         title={`${line.open_finding_count} open finding${line.open_finding_count === 1 ? "" : "s"} touch a class, teacher, or room on this line`}
                       >
                         {line.open_finding_count}
-                      </span>
+                      </Badge>
                     )}
                   </div>
-                  <div className="font-normal normal-case text-ink-muted">
+                  <div className="font-normal text-text-muted">
                     {line.name ?? line.code ?? "(option line)"}
                   </div>
                 </th>
@@ -80,7 +80,7 @@ function GroupTable({ group }: { group: BlockingGroup }) {
           <tbody>
             {rollClasses.map((rc) => (
               <tr key={rc}>
-                <td className="border-b border-r border-slate-200 p-2 text-xs font-medium text-slate-700">{rc}</td>
+                <td className="border-b border-r border-border p-2 text-xs font-medium text-text-secondary">{rc}</td>
                 {group.lines.map((line) => (
                   <Cell key={line.id} line={line} rollClassCode={rc} />
                 ))}
@@ -89,7 +89,7 @@ function GroupTable({ group }: { group: BlockingGroup }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -97,11 +97,21 @@ export default function BlockingPage() {
   const [data, setData] = useState<BlockingLinesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     fetchBlockingLines().then(setData).catch((e) => setError(String(e)));
-  }, []);
+  };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load blocking lines: {error}</div>;
+  useEffect(load, []);
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={load}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load blocking lines: {error}
+        </Alert>
+      </div>
+    );
+  }
   if (!data) return <LoadingState label="Loading the blocking pattern…" />;
 
   return (
@@ -118,6 +128,7 @@ export default function BlockingPage() {
           class, teacher, or room on it - which structures are actually producing the clashes the Findings page
           reports. Enrolled counts are shown as fact, not a judgement - a course reading 0 isn't necessarily
           under-subscribed, it may mean its roll class is routed through a different offering entirely."
+        meta={<span className="nums text-meta">{data.groups.length} groups</span>}
       />
       <div className="flex flex-col gap-8">
         {data.groups.map((group) => (

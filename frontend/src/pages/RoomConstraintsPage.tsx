@@ -3,6 +3,7 @@ import { bulkApproveRoomConstraintCandidates, fetchRoomConstraintCandidates, rev
 import RoomConstraintQueue from "../components/RoomConstraintQueue";
 import LoadingState from "../components/LoadingState";
 import { useToast } from "../components/Toast";
+import { Alert, Button } from "../ui";
 import type { ReviewStatus, RoomTypeConstraintCandidate } from "../types";
 
 export default function RoomConstraintsPage() {
@@ -34,7 +35,14 @@ export default function RoomConstraintsPage() {
     return result;
   };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load room-constraint candidates: {error}</div>;
+  if (error)
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={() => load(reviewStatus)}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load room-constraint candidates: {error}
+        </Alert>
+      </div>
+    );
   if (!candidates) return <LoadingState label="Loading room-constraint candidates…" />;
 
   return (

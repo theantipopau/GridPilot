@@ -123,11 +123,15 @@ export default function RoomConstraintQueue({ candidates, reviewStatus, onReview
                     <ReviewStatusBadge status={c.review_status} />
                   </span>
                 </div>
-                {c.reviewed_by && (
+                {c.reviewed_by ? (
                   <div className="mt-1 text-meta">
                     Reviewed by {c.reviewed_by}
-                    {c.review_note ? ` - "${c.review_note}"` : ""}
+                    {c.review_note ? ` — "${c.review_note}"` : ""}
                   </div>
+                ) : (
+                  <p className="mt-1 text-xs text-text-muted">
+                    No reviewer recorded for this decision yet.
+                  </p>
                 )}
                 {reviewStatus === "PENDING" && (
                   <div className="mt-2 flex flex-wrap gap-2">

@@ -3,6 +3,7 @@ import { bulkApproveTeacherCapabilityCandidates, fetchTeacherCapabilityCandidate
 import TeacherCapabilityQueue from "../components/TeacherCapabilityQueue";
 import LoadingState from "../components/LoadingState";
 import { useToast } from "../components/Toast";
+import { Alert, Button } from "../ui";
 import type { CapabilityStatus, TeacherCapabilityCandidate } from "../types";
 
 export default function TeacherCapabilitiesPage() {
@@ -34,7 +35,14 @@ export default function TeacherCapabilitiesPage() {
     return result;
   };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load teacher-capability candidates: {error}</div>;
+  if (error)
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={() => load(capabilityStatus)}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load teacher-capability candidates: {error}
+        </Alert>
+      </div>
+    );
   if (!candidates) return <LoadingState label="Loading teacher-capability candidates…" />;
 
   return (

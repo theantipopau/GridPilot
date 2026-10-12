@@ -221,6 +221,47 @@ export interface LegalSlotsResponse {
   slots: LegalSlot[];
 }
 
+// AI room-allocation advice (backend app/advisor/room.py): the same
+// explain-never-decide boundary as findings' explain endpoints - facts are
+// computed deterministically, the model only narrates the trade-off.
+export interface RoomAdviceFacts {
+  entry_id: number;
+  class_code: string | null;
+  subject_code: string | null;
+  current_room_code: string | null;
+  enrolled_students: number;
+  legal_slots_with_rooms: { day_code: string; period_code: string; rooms: string[] }[];
+  class_room_usage_this_cycle: { room_code: string; lessons: number }[];
+  rooms: { code: string; room_type: string | null; seats: number | null; used_lesson_slots: number; total_lesson_slots: number }[];
+}
+
+export interface RoomAdviceResponse {
+  entry_id: number;
+  facts: RoomAdviceFacts;
+  explanation: string;
+  model: string;
+}
+
+// Students roster (merged exported + authored rows, see backend /students).
+export interface StudentSummary {
+  code: string;
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name: string | null;
+  gender: string | null;
+  house: string | null;
+  home_group: string | null;
+  email: string | null;
+  roll_class_code: string | null;
+  year_level_code: string | null;
+  source: "EXPORTED" | "AUTHORED";
+}
+
+export interface StudentsResponse {
+  students: StudentSummary[];
+  authored_count: number;
+}
+
 export type ValidationStatus = "NOT_VALIDATED" | "VALID" | "INVALID";
 export type ApprovalStatus = "DRAFT" | "APPROVED" | "REJECTED";
 
@@ -368,6 +409,10 @@ export interface TeacherSummary {
   scheduled_load_minutes: number | null;
   role: StaffRole | null;
   profile: TeacherProfile | null;
+  /** "EXPORTED" teachers came in on the .tfx; "AUTHORED" ones were added in
+   *  GridPilot between exports and survive a re-ingest until the export
+   *  gains their code (see backend authored_teacher). */
+  source?: "EXPORTED" | "AUTHORED";
 }
 
 export interface DashboardData {

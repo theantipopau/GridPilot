@@ -79,7 +79,6 @@ export function ReviewerField({ error, className }: { error?: string | null; cla
       containerClassName={cx("w-56", className)}
       size="sm"
       label="Reviewing as"
-      placeholder="Your name"
       value={reviewer}
       error={error ?? undefined}
       hint="Recorded in the audit trail"

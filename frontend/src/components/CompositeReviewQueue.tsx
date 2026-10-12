@@ -98,10 +98,14 @@ export default function CompositeReviewQueue({ candidates, reviewStatus, onRevie
                   <ReviewStatusBadge status={c.review_status} />
                 </span>
               </div>
-              {c.reviewed_by && (
+              {c.reviewed_by == null ? (
+                <p className="mt-1 text-xs text-text-muted">
+                  No reviewer recorded for this decision yet.
+                </p>
+              ) : (
                 <div className="mt-1 text-meta">
                   Reviewed by {c.reviewed_by}
-                  {c.review_note ? ` - "${c.review_note}"` : ""}
+                  {c.review_note ? ` — "${c.review_note}"` : ""}
                 </div>
               )}
               {reviewStatus === "PENDING" && (

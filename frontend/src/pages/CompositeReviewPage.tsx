@@ -3,6 +3,7 @@ import { fetchCompositeCandidates, reviewCompositeCandidate } from "../api";
 import CompositeReviewQueue from "../components/CompositeReviewQueue";
 import LoadingState from "../components/LoadingState";
 import { useToast } from "../components/Toast";
+import { Alert, Button } from "../ui";
 import type { CompositeCandidate, ReviewStatus } from "../types";
 
 export default function CompositeReviewPage() {
@@ -27,7 +28,14 @@ export default function CompositeReviewPage() {
     load(reviewStatus);
   };
 
-  if (error) return <div className="p-6 text-red-600">Failed to load composite candidates: {error}</div>;
+  if (error)
+    return (
+      <div className="p-6">
+        <Alert tone="critical" action={<Button size="sm" onClick={() => load(reviewStatus)}>Retry</Button>} onDismiss={() => setError(null)}>
+          Failed to load composite candidates: {error}
+        </Alert>
+      </div>
+    );
   if (!candidates) return <LoadingState label="Loading composite candidates…" />;
 
   return (
